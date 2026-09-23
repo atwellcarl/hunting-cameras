@@ -5,6 +5,7 @@ Commands:
             close-up as WebP, full frame as the original JPEG. Shows the upload size against
             the storage already used and the free-tier limit, and asks before sending.
             --yes skips the question; nothing is sent if it would pass the safety limit.
+            --skip="Poll plot,North Valley 300" holds those cameras back for now.
   backup    Save Supabase crew, bucks, votes and per-photo consensus to data/backups/<timestamp>.json.
 
 Usage: .venv/bin/python -m buckbook.supabase_sync push
@@ -85,10 +86,15 @@ def mb(n):
     return f"{n / 1024 ** 2:,.1f} MB"
 
 
-def push(assume_yes=False):
+def push(assume_yes=False, skip=()):
     conn = connect()
     remote = {r["id"] for r in rest("GET", "cards", query="?select=id")}
-    rows = [r for r in conn.execute("SELECT * FROM cards ORDER BY camera, taken_at") if r["id"] not in remote]
+    rows = [r for r in conn.execute("SELECT * FROM cards ORDER BY camera, taken_at")
+            if r["id"] not in remote and r["camera"] not in skip]
+    held = conn.execute(f"SELECT camera, COUNT(*) FROM cards WHERE camera IN ({','.join('?' * len(skip))}) GROUP BY camera",
+                        tuple(skip)).fetchall() if skip else []
+    for cam, n in held:
+        print(f"Holding back {cam}: {n} cards")
     if not rows:
         print("Supabase already has every local card.")
         return
@@ -151,7 +157,8 @@ def backup():
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if cmd == "push":
-        push(assume_yes="--yes" in sys.argv)
+        skip = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--skip=")), "")
+        push(assume_yes="--yes" in sys.argv, skip={c.strip() for c in skip.split(",") if c.strip()})
     elif cmd == "backup":
         backup()
     else:

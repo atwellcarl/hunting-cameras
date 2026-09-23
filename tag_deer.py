@@ -14,7 +14,10 @@ import time
 import urllib.request
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageFile
+
+# A few downloads came back missing their last bytes; decode what's there instead of crashing.
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
 MODEL = "qwen3.8:27b-mlx"
@@ -101,7 +104,11 @@ def main():
     n = 0
     with out_path.open("a") as out:
         for p in deer:
-            image = Image.open(p["filepath"]).convert("RGB")
+            try:
+                image = Image.open(p["filepath"]).convert("RGB")
+            except OSError as err:
+                print(f"skipped unreadable {Path(p['filepath']).name}: {err}", flush=True)
+                continue
             for i, det in enumerate(p.get("detections", [])):
                 if det["label"] != "animal" or det["conf"] < MIN_DET_CONF:
                     continue
@@ -112,7 +119,18 @@ def main():
                 if min(box[2] - box[0], box[3] - box[1]) < MIN_CROP_PX:
                     continue
                 t0 = time.time()
-                result = ask(img)
+                result = None
+                for attempt in range(3):
+                    try:
+                        result = ask(img)
+                        break
+                    except (OSError, ValueError, KeyError) as err:
+                        # Ollama occasionally stalls or returns bad JSON; retry, then skip this deer.
+                        print(f"retry {attempt + 1} on {key[0]} #{i}: {err}", flush=True)
+                        time.sleep(5)
+                if result is None:
+                    print(f"skipped {key[0]} #{i} after 3 tries", flush=True)
+                    continue
                 rec = {"file": key[0], "det_index": i, "det_conf": det["conf"],
                        "bbox": det["bbox"], "seconds": round(time.time() - t0, 1), **result}
                 out.write(json.dumps(rec) + "\n")
