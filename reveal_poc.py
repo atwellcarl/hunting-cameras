@@ -43,11 +43,17 @@ def load_env(path):
 def request(url, *, method="GET", headers=None, body=None):
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(url, data=data, method=method, headers=headers or {})
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return resp.status, json.loads(resp.read().decode() or "null")
-    except urllib.error.HTTPError as err:
-        return err.code, err.read().decode()[:500]
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                return resp.status, json.loads(resp.read().decode() or "null")
+        except urllib.error.HTTPError as err:
+            return err.code, err.read().decode()[:500]
+        except (urllib.error.URLError, TimeoutError, OSError):
+            # Slow or dropped connection: back off and retry, then give up loudly.
+            if attempt == 2:
+                raise
+            time.sleep(5 * (attempt + 1))
 
 
 def login(email, password):
