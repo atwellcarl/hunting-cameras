@@ -1310,7 +1310,7 @@ function nextInQueue() {
     nameQueue = null;
     closeSheet();
     renderAll();
-    return toast(n ? `Named ${n} · none left` : "Nothing waiting for a name");
+    return toast(n ? `Sorted ${n} · none left` : "Nothing waiting for a name");
   }
   openSheet(left[0], { queued: left.length });
 }
@@ -1717,7 +1717,7 @@ function openViewer(c, mode = "crop", opts = {}) {
     vv.append(st);
     all.forEach((v, i) => {
       const who = document.createElement("b"); who.textContent = v.name || "Someone";
-      const what = v.verdict === "not" ? "not a buck" : v.buckId ? (state.bucks[v.buckId]?.name || "a buck") : "buck, unnamed";
+      const what = v.verdict === "buck" && !v.buckId && !v.cantId ? "buck, unnamed" : answerName(v);
       vv.append(who, document.createTextNode(`: ${what}${v.confidence ? ` (${v.confidence})` : ""}${i < all.length - 1 ? " · " : ""}`));
     });
   }
