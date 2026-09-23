@@ -1,0 +1,1001 @@
+<title>Buck Book</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --ground: #E7EBE0;
+  --surface: #F6F7F1;
+  --ink: #1C2318;
+  --muted: #5A6553;
+  --line: #C8CFBD;
+  --blaze: #E8590C;
+  --blaze-ink: #FFFFFF;
+  --yes: #3C7A34;
+  --no: #9B4632;
+  --unsure: #6E6A55;
+  --well: #0B0E0A;
+  --well-ink: #D9DECF;
+  --shadow: 0 10px 30px rgba(28, 35, 24, .16);
+  --display: "Big Shoulders Display", "Oswald", "Arial Narrow", sans-serif;
+  --body: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #111510;
+    --surface: #1A2018;
+    --ink: #E3E8DA;
+    --muted: #8F9A86;
+    --line: #2D3529;
+    --blaze: #FF7429;
+    --blaze-ink: #1A0D04;
+    --yes: #6BB25F;
+    --no: #D07A62;
+    --unsure: #A7A17F;
+    --shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #111510;
+  --surface: #1A2018;
+  --ink: #E3E8DA;
+  --muted: #8F9A86;
+  --line: #2D3529;
+  --blaze: #FF7429;
+  --blaze-ink: #1A0D04;
+  --yes: #6BB25F;
+  --no: #D07A62;
+  --unsure: #A7A17F;
+  --shadow: 0 10px 30px rgba(0, 0, 0, .45);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font: 16px/1.45 var(--body);
+  padding-inline: 16px;
+  -webkit-tap-highlight-color: transparent;
+}
+.app { max-width: 760px; margin: 0 auto; padding-block: 14px 40px; display: flex; flex-direction: column; gap: 14px; }
+
+/* Header */
+.masthead { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.brand h1 { font: 800 34px/0.9 var(--display); letter-spacing: .01em; margin: 0; text-transform: uppercase; }
+.brand h1 span { color: var(--blaze); }
+.brand p { margin: 4px 0 0; font: 12px/1.3 var(--mono); color: var(--muted); letter-spacing: .02em; }
+.score { text-align: right; }
+.score b { display: block; font: 800 30px/0.9 var(--display); font-variant-numeric: tabular-nums; }
+.score small { font: 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); border: 1.5px solid var(--ink); border-radius: 999px; padding: 3px; }
+.tabs button {
+  appearance: none; border: 0; background: none; color: var(--ink); border-radius: 999px;
+  font: 600 14px var(--body); padding: 8px 0; letter-spacing: .04em; text-transform: uppercase; cursor: pointer;
+}
+.tabs button[aria-selected="true"] { background: var(--ink); color: var(--ground); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); outline-offset: 2px; }
+
+.status { font: 12px var(--mono); color: var(--muted); text-align: center; }
+
+/* Progress */
+.progress { display: flex; flex-direction: column; gap: 6px; }
+.progress-row { display: flex; justify-content: space-between; font: 12px var(--mono); color: var(--muted); }
+.progress-row b { color: var(--ink); font-weight: 500; }
+.bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--blaze); width: 0; transition: width .3s ease; }
+
+/* Card stack */
+.stack { position: relative; touch-action: none; user-select: none; }
+.card {
+  background: var(--surface); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow);
+  position: relative; will-change: transform;
+}
+.card.next { position: absolute; inset: 0; transform: translateY(12px) scale(.955); opacity: .7; pointer-events: none; }
+.card.top { z-index: 2; cursor: grab; }
+.card.top.dragging { cursor: grabbing; }
+.photo { position: relative; aspect-ratio: 1 / 1; max-height: 72vh; width: 100%; background: var(--well); max-width: 100%; cursor: zoom-in; }
+.photo img { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
+.frame-btn {
+  position: absolute; top: 10px; right: 10px; z-index: 3;
+  font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase;
+  background: rgba(11, 14, 10, .72); color: var(--well-ink); border: 1px solid rgba(217, 222, 207, .35);
+  border-radius: 999px; padding: 5px 10px; cursor: pointer;
+}
+.burst-tag {
+  position: absolute; top: 10px; left: 10px; z-index: 3;
+  font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase;
+  background: var(--blaze); color: var(--blaze-ink); border-radius: 999px; padding: 5px 10px;
+}
+.stamp {
+  background: var(--well); color: var(--well-ink); font: 12px/1.5 var(--mono);
+  padding: 7px 12px; display: flex; flex-wrap: wrap; gap: 2px 14px; border-top: 1px solid #222a1f;
+}
+.stamp .dim { color: #8C9682; }
+.ai { padding: 10px 14px 13px; display: flex; flex-direction: column; gap: 2px; }
+.ai-head { font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.ai p { margin: 0; font-size: 14px; color: var(--ink); }
+
+.verdict {
+  position: absolute; top: 34%; z-index: 4; padding: 4px 12px; border: 4px solid currentColor; border-radius: 8px;
+  font: 800 38px/1 var(--display); text-transform: uppercase; letter-spacing: .04em; opacity: 0; pointer-events: none;
+  background: rgba(11, 14, 10, .35);
+}
+.verdict.buck { left: 16px; color: #7BD06C; transform: rotate(-12deg); }
+.verdict.not { right: 16px; color: #F08F74; transform: rotate(12deg); }
+.verdict.unsure { left: 50%; top: 10%; color: #E8E1B8; transform: translateX(-50%); }
+
+/* Actions */
+.actions { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
+.act {
+  appearance: none; border: 2px solid; background: var(--surface); border-radius: 999px; cursor: pointer;
+  font: 600 15px var(--body); padding: 12px 10px; letter-spacing: .02em; display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.act kbd { font: 11px var(--mono); opacity: .7; }
+.act.not { color: var(--no); border-color: var(--no); }
+.act.buck { color: var(--blaze-ink); background: var(--blaze); border-color: var(--blaze); }
+.act.unsure { color: var(--unsure); border-color: var(--unsure); padding-inline: 16px; }
+.act:disabled { opacity: .4; cursor: default; }
+.hint { font: 12px var(--mono); color: var(--muted); text-align: center; margin: 0; }
+
+.done { background: var(--surface); border-radius: 14px; padding: 28px 22px; text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.done h2 { font: 800 40px/0.95 var(--display); text-transform: uppercase; margin: 0; }
+.done p { margin: 0; color: var(--muted); max-width: 32ch; }
+
+.btn {
+  appearance: none; border: 0; border-radius: 999px; cursor: pointer; font: 600 15px var(--body);
+  padding: 12px 20px; background: var(--blaze); color: var(--blaze-ink);
+}
+.btn.ghost { background: none; color: var(--ink); border: 1.5px solid var(--line); }
+.btn:disabled { opacity: .4; cursor: default; }
+
+/* Name sheet */
+.scrim { position: fixed; inset: 0; background: rgba(8, 10, 7, .55); z-index: 20; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; background: var(--surface);
+  border-radius: 18px 18px 0 0; box-shadow: 0 -10px 40px rgba(0, 0, 0, .3);
+  max-height: 88%; overflow-y: auto; padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+}
+.sheet-inner { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.sheet-head { display: flex; gap: 12px; align-items: center; }
+.sheet-photo { position: relative; width: 100%; height: min(42vh, 420px); background: var(--well); border-radius: 12px; overflow: hidden; cursor: zoom-in; border: 0; padding: 0; display: block; }
+.sheet-photo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.zoom-chip { position: absolute; right: 10px; bottom: 10px; font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; background: rgba(11, 14, 10, .72); color: var(--well-ink); border-radius: 999px; padding: 5px 10px; }
+.sheet h2 { font: 800 32px/0.95 var(--display); text-transform: uppercase; margin: 0; }
+.sheet-head p { margin: 2px 0 0; font: 12px var(--mono); color: var(--muted); }
+.label { font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin: 0 0 6px; }
+.roster-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.pick {
+  appearance: none; border: 1.5px solid var(--line); background: var(--ground); color: var(--ink); border-radius: 12px;
+  padding: 6px; display: flex; gap: 8px; align-items: center; cursor: pointer; text-align: left; position: relative;
+}
+.pick img { width: 60px; height: 60px; border-radius: 8px; object-fit: cover; background: var(--well); flex: none; }
+.pick b { display: block; font: 700 18px/1 var(--display); text-transform: uppercase; overflow-wrap: anywhere; }
+.pick small { font: 11px var(--mono); color: var(--muted); }
+.pick[aria-pressed="true"] { border-color: var(--blaze); box-shadow: 0 0 0 2px var(--blaze) inset; }
+.pick .sugg {
+  position: absolute; top: -8px; right: 6px; font: 500 10px var(--mono); text-transform: uppercase; letter-spacing: .06em;
+  background: var(--blaze); color: var(--blaze-ink); border-radius: 999px; padding: 2px 7px;
+}
+.newbuck { display: flex; gap: 8px; }
+.newbuck input {
+  flex: 1; min-width: 0; font: 600 16px var(--body); padding: 11px 14px; border-radius: 12px;
+  border: 1.5px solid var(--line); background: var(--ground); color: var(--ink);
+}
+.newbuck input.active { border-color: var(--blaze); }
+.points { display: flex; flex-wrap: wrap; gap: 6px; }
+.points button {
+  appearance: none; min-width: 44px; border: 1.5px solid var(--line); background: var(--ground); color: var(--ink);
+  border-radius: 10px; padding: 8px 10px; font: 500 14px var(--mono); cursor: pointer; font-variant-numeric: tabular-nums;
+}
+.points button[aria-pressed="true"] { background: var(--ink); color: var(--ground); border-color: var(--ink); }
+.ai-note { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+.conf { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.conf button {
+  appearance: none; border: 1.5px solid var(--line); background: var(--ground); color: var(--ink); border-radius: 10px;
+  padding: 8px 4px 7px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 1px;
+}
+.conf button b { font: 800 22px/1 var(--display); }
+.conf button small { font: 10px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.conf button[aria-pressed="true"] { background: var(--blaze); border-color: var(--blaze); color: var(--blaze-ink); }
+.conf button[aria-pressed="true"] small { color: var(--blaze-ink); }
+.conf-wrap[hidden] { display: none; }
+.thumb { position: relative; display: block; }
+.thumb .c { position: absolute; right: 2px; bottom: 2px; font: 500 10px/1 var(--mono); background: rgba(11, 14, 10, .8); color: #D9DECF; border-radius: 4px; padding: 2px 4px; }
+.thumb.shaky img { outline: 2px dashed var(--no); outline-offset: -2px; }
+.sheet-actions { display: flex; gap: 8px; justify-content: space-between; flex-wrap: wrap; }
+.sheet-actions .right { display: flex; gap: 8px; margin-left: auto; }
+
+/* Roster */
+.roster { display: flex; flex-direction: column; gap: 12px; }
+.bcard { background: var(--surface); border-radius: 14px; overflow: hidden; display: grid; grid-template-columns: minmax(120px, 38%) 1fr; }
+.bcard > img { width: 100%; height: 100%; min-height: 150px; object-fit: cover; background: var(--well); cursor: zoom-in; }
+.bbody { padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.bname { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.bname h3 { font: 800 26px/0.95 var(--display); text-transform: uppercase; margin: 0; overflow-wrap: anywhere; }
+.linkish { appearance: none; border: 0; background: none; color: var(--muted); font: 12px var(--mono); cursor: pointer; padding: 0; text-decoration: underline; }
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 1px 10px; font: 12px/1.5 var(--mono); }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.strip { display: flex; gap: 4px; flex-wrap: wrap; }
+.strip img { cursor: zoom-in; width: 56px; height: 56px; object-fit: cover; border-radius: 6px; background: var(--well); }
+.rename { display: flex; gap: 6px; }
+.rename input { flex: 1; min-width: 0; font: 600 15px var(--body); padding: 6px 10px; border-radius: 8px; border: 1.5px solid var(--blaze); background: var(--ground); color: var(--ink); }
+.empty { background: var(--surface); border-radius: 14px; padding: 24px 18px; color: var(--muted); text-align: center; }
+.summary { font: 12px var(--mono); color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; }
+.summary b { color: var(--ink); font-weight: 500; }
+
+/* Crew */
+.crew { background: var(--surface); border-radius: 14px; overflow: hidden; }
+.crew-row { display: grid; grid-template-columns: 28px 36px 1fr auto; gap: 10px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); }
+.crew-row:first-child { border-top: 0; }
+.crew-row .rank { font: 800 22px var(--display); color: var(--muted); text-align: center; }
+.crew-row img { width: 36px; height: 36px; border-radius: 50%; }
+.crew-row b { display: block; font-weight: 600; }
+.crew-row small { font: 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.crew-row .pts { font: 800 24px var(--display); font-variant-numeric: tabular-nums; }
+.rules { font-size: 13px; color: var(--muted); margin: 0; }
+
+/* Zoom viewer */
+.viewer { position: fixed; inset: 0; z-index: 40; background: #050704; display: flex; flex-direction: column; color: #D9DECF; }
+.vstage { flex: 1; position: relative; overflow: hidden; touch-action: none; cursor: grab; }
+.vstage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transform-origin: 50% 50%; user-select: none; -webkit-user-drag: none; }
+.vstage img.enhanced { filter: contrast(1.35) brightness(1.12); }
+.vtop, .vbar { display: flex; gap: 8px; align-items: center; padding: 10px 14px; background: #0B0E0A; }
+.vtop { padding-top: calc(10px + env(safe-area-inset-top, 0px)); justify-content: space-between; font: 12px var(--mono); }
+.vbar { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); justify-content: center; flex-wrap: wrap; }
+.vbtn { appearance: none; border: 1px solid #3A4535; background: #161B14; color: #D9DECF; border-radius: 999px; padding: 9px 14px; font: 500 13px var(--mono); cursor: pointer; min-width: 44px; }
+.vbtn[aria-pressed="true"] { background: #D9DECF; color: #0B0E0A; }
+.vzoom { font: 12px var(--mono); color: #8C9682; min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; }
+
+/* Toast */
+.toast {
+  position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  z-index: 30; background: var(--ink); color: var(--ground); border-radius: 999px; padding: 10px 10px 10px 18px;
+  display: flex; gap: 12px; align-items: center; box-shadow: var(--shadow); max-width: calc(100% - 32px); font-weight: 500;
+}
+.toast .plus { color: var(--blaze); font: 800 20px var(--display); }
+.toast button { appearance: none; border: 0; background: var(--ground); color: var(--ink); border-radius: 999px; padding: 6px 12px; font: 600 13px var(--body); cursor: pointer; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bar i { transition: none; }
+}
+</style>
+
+<div class="app">
+  <header class="masthead">
+    <div class="brand">
+      <h1>Buck <span>Book</span></h1>
+      <p id="scope">Property A · Cam #8 · Aug–Sep 2026</p>
+    </div>
+    <div class="score"><b id="myScore">0</b><small id="myRank">Scout</small></div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tab-sort" aria-selected="true" data-tab="sort">Sort</button>
+    <button role="tab" id="tab-roster" aria-selected="false" data-tab="roster">Roster</button>
+    <button role="tab" id="tab-crew" aria-selected="false" data-tab="crew">Crew</button>
+  </nav>
+
+  <p class="status" id="status">Connecting to the crew's book…</p>
+
+  <section id="view-sort" class="view">
+    <div class="progress">
+      <div class="progress-row"><span><b id="sortedCount">0</b> of <span id="totalCount">0</span> sorted</span><span id="streak"></span></div>
+      <div class="bar"><i id="barFill"></i></div>
+    </div>
+    <div style="height:14px"></div>
+    <div class="stack" id="stack"></div>
+    <div style="height:26px"></div>
+    <div class="actions" id="actions">
+      <button class="act not" id="btnNot" type="button">Not a buck <kbd>←</kbd></button>
+      <button class="act unsure" id="btnUnsure" type="button">Can't tell <kbd>↑</kbd></button>
+      <button class="act buck" id="btnBuck" type="button">Buck <kbd>→</kbd></button>
+    </div>
+    <div style="height:10px"></div>
+    <p class="hint">Tap the photo to zoom · swipe right: buck · left: not a buck · up: can't tell</p>
+  </section>
+
+  <section id="view-roster" class="view" hidden>
+    <div class="roster" id="roster"></div>
+  </section>
+
+  <section id="view-crew" class="view" hidden>
+    <div class="crew" id="crew"></div>
+    <div style="height:12px"></div>
+    <p class="rules">+10 for every photo sorted, +25 for every new buck you put in the book. Ranks: Scout, Tracker at 150, Guide at 400, Old Buck Whisperer at 800.</p>
+  </section>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="sheet-inner">
+    <button class="sheet-photo" id="sheetPhoto" type="button" aria-label="Zoom in on this photo"><img id="sheetImg" alt=""><span class="zoom-chip">Tap to zoom</span></button>
+    <div class="sheet-head">
+      <div><h2 id="sheetTitle">Who is he?</h2><p id="sheetMeta"></p></div>
+    </div>
+    <div id="pickWrap">
+      <p class="label">In the book</p>
+      <div class="roster-pick" id="pickList"></div>
+    </div>
+    <div>
+      <p class="label">Or a new buck</p>
+      <div class="newbuck">
+        <input id="newName" type="text" maxlength="40" placeholder="Name him — e.g. Tall Eight" autocomplete="off">
+      </div>
+    </div>
+    <div>
+      <p class="label">Points you can count</p>
+      <div class="points" id="points"></div>
+      <p class="ai-note" id="aiNote">Count every tine an inch or longer: brows pointing at the camera, tines stacked behind each other, kickers off the side, and each beam tip.</p>
+    </div>
+    <div class="conf-wrap" id="confWrap">
+      <p class="label">How sure are you it's him?</p>
+      <div class="conf" id="conf"></div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn ghost" id="sheetBack" type="button">Back</button>
+      <div class="right">
+        <button class="btn ghost" id="sheetSkip" type="button">Buck, no name</button>
+        <button class="btn" id="sheetLock" type="button" disabled>Lock it in</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="viewer" id="viewer" hidden role="dialog" aria-modal="true" aria-label="Photo zoom">
+  <div class="vtop"><span id="vcap"></span><span style="display:flex;gap:8px"><button class="vbtn" id="vResort" type="button" hidden>Re-sort this photo</button><button class="vbtn" id="vClose" type="button">Close</button></span></div>
+  <div class="vstage" id="vstage"><img id="vimg" alt="Zoomed trail camera photo"></div>
+  <div class="vbar">
+    <button class="vbtn" id="vCrop" type="button" aria-pressed="true">Close-up</button>
+    <button class="vbtn" id="vFrame" type="button" aria-pressed="false">Full frame</button>
+    <button class="vbtn" id="vEnh" type="button" aria-pressed="false">Enhance</button>
+    <button class="vbtn" id="vOut" type="button" aria-label="Zoom out">−</button>
+    <span class="vzoom" id="vLevel">1×</span>
+    <button class="vbtn" id="vIn" type="button" aria-label="Zoom in">+</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const CARDS = /*__CARDS__*/[];
+const CARD = Object.fromEntries(CARDS.map(c => [c.id, c]));
+const POINT_CHOICES = [null, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const CONFIDENCE = [[1, "Guess"], [2, "Leaning"], [3, "Probably"], [4, "Pretty sure"], [5, "Certain"]];
+const RANKS = [[800, "Old Buck Whisperer"], [400, "Guide"], [150, "Tracker"], [0, "Scout"]];
+const LOCAL_KEY = "buckbook-v1";
+
+const state = { labels: {}, bucks: {}, me: null, mode: "loading", streak: 0 };
+let db = null, user = null;
+let renderedTop = null;
+let sheetState = null;
+let lastAction = null;
+
+const $ = id => document.getElementById(id);
+
+// ---------- helpers ----------
+function fmtWhen(iso, withDate = true) {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  if (!withDate) return time;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + time;
+}
+function fmtDay(iso) { return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" }); }
+function deck() { return CARDS.filter(c => !state.labels[c.id]); }
+function sightings(buckId) {
+  return CARDS.filter(c => state.labels[c.id]?.buckId === buckId).sort((a, b) => a.when.localeCompare(b.when));
+}
+function rankFor(score) { return RANKS.find(([min]) => score >= min)[1]; }
+function scoreFor(uid) {
+  const labels = Object.values(state.labels).filter(l => (l.by ?? null) === uid).length;
+  const bucks = Object.values(state.bucks).filter(b => (b.by ?? null) === uid).length;
+  return { labels, bucks, score: labels * 10 + bucks * 25 };
+}
+function newId() { return "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+// ---------- storage ----------
+function loadLocal() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LOCAL_KEY) || "{}");
+    state.labels = saved.labels || {};
+    state.bucks = saved.bucks || {};
+  } catch { /* storage unavailable: start empty */ }
+}
+function saveLocal() {
+  try { localStorage.setItem(LOCAL_KEY, JSON.stringify({ labels: state.labels, bucks: state.bucks })); } catch {}
+}
+async function writeDoc(path, data) {
+  const [col, id] = path.split("/");
+  if (data === null) delete state[col][id]; else state[col][id] = data;
+  renderAll();
+  if (!db) { saveLocal(); return; }
+  try {
+    if (data === null) await db.doc(path).delete(); else await db.doc(path).set(data);
+  } catch (e) {
+    toast(e?.code === "invalid_argument" ? "You can view the book but not sort in it." : "That didn't save. Check your connection and try again.");
+  }
+}
+
+// ---------- rendering ----------
+function renderAll() {
+  renderHeader();
+  renderSort();
+  if (!$("view-roster").hidden) renderRoster();
+  if (!$("view-crew").hidden) renderCrew();
+}
+
+function renderHeader() {
+  const { score } = scoreFor(state.me);
+  $("myScore").textContent = score;
+  $("myRank").textContent = rankFor(score);
+  const sorted = CARDS.length - deck().length;
+  $("sortedCount").textContent = sorted;
+  $("totalCount").textContent = CARDS.length;
+  $("barFill").style.width = (CARDS.length ? (sorted / CARDS.length) * 100 : 0) + "%";
+  $("streak").textContent = state.streak >= 3 ? `Streak ×${state.streak}` : "";
+  const busy = state.mode === "loading";
+  ["btnNot", "btnUnsure", "btnBuck"].forEach(id => $(id).disabled = busy || !deck().length);
+  $("status").textContent =
+    state.mode === "loading" ? "Connecting to the crew's book…" :
+    state.mode === "local" ? "Saving on this device only — labels won't reach the crew." : "";
+  $("status").hidden = state.mode === "shared";
+}
+
+function cardEl(c, cls) {
+  const el = document.createElement("div");
+  el.className = "card " + cls;
+  el.dataset.id = c.id;
+  const burstMates = CARDS.filter(o => o.burst === c.burst).length;
+  el.innerHTML = `
+    <div class="photo">
+      <img alt="Cropped trail camera photo of a buck">
+      <span class="verdict buck">Buck</span>
+      <span class="verdict not">Nope</span>
+      <span class="verdict unsure">Can't tell</span>
+    </div>
+    <div class="stamp"></div>
+    <div class="ai"><span class="ai-head">AI guess</span><p></p></div>`;
+  el.querySelector("img").src = c.crop;
+  if (burstMates > 1) {
+    const tag = document.createElement("span");
+    tag.className = "burst-tag";
+    tag.textContent = `Burst · ${burstMates} shots`;
+    el.querySelector(".photo").append(tag);
+  }
+  if (cls === "top") {
+    const b = document.createElement("button");
+    b.className = "frame-btn"; b.type = "button"; b.textContent = "Full frame";
+    b.addEventListener("pointerdown", e => e.stopPropagation());
+    b.addEventListener("click", () => {
+      const img = el.querySelector("img");
+      const full = img.dataset.full === "1";
+      img.src = full ? c.crop : c.frame;
+      img.dataset.full = full ? "0" : "1";
+      b.textContent = full ? "Full frame" : "Close-up";
+    });
+    el.querySelector(".photo").append(b);
+  }
+  const stamp = el.querySelector(".stamp");
+  const parts = [
+    `CAM ${c.cam}`, fmtWhen(c.when), c.daylight ? "Daylight" : "Night",
+    c.temp != null ? `${c.temp}°F` : null, c.wind ? `Wind ${c.wind} mph` : null, c.moon,
+  ].filter(Boolean);
+  parts.forEach((p, i) => { const s = document.createElement("span"); if (i > 2) s.className = "dim"; s.textContent = p; stamp.append(s); });
+  el.querySelector(".ai p").textContent = "Buck. Point counts are yours to make — the AI can't count tines at this resolution.";
+  return el;
+}
+
+function renderSort() {
+  const d = deck();
+  const topId = d[0]?.id ?? "done";
+  if (topId === renderedTop) return;
+  renderedTop = topId;
+  const stack = $("stack");
+  stack.replaceChildren();
+  if (!d.length) {
+    const named = Object.keys(state.bucks).length;
+    const done = document.createElement("div");
+    done.className = "done";
+    done.innerHTML = `<h2>Deck cleared</h2><p></p><button class="btn" type="button">Open the roster</button>`;
+    done.querySelector("p").textContent =
+      `Every buck photo from this camera is sorted. ${named} buck${named === 1 ? "" : "s"} in the book so far.`;
+    done.querySelector("button").addEventListener("click", () => showTab("roster"));
+    stack.append(done);
+    return;
+  }
+  if (d[1]) stack.append(cardEl(d[1], "next"));
+  const top = cardEl(d[0], "top");
+  stack.append(top);
+  attachDrag(top, d[0]);
+}
+
+function renderRoster() {
+  const wrap = $("roster");
+  wrap.replaceChildren();
+  const bucks = Object.entries(state.bucks)
+    .map(([id, b]) => ({ id, ...b, seen: sightings(id) }))
+    .sort((a, b) => b.seen.length - a.seen.length);
+  const unnamed = Object.values(state.labels).filter(l => l.verdict === "buck" && !l.buckId).length;
+
+  const summary = document.createElement("div");
+  summary.className = "summary";
+  summary.innerHTML = `<span><b></b> bucks named</span><span><b></b> unnamed buck photos</span>`;
+  summary.querySelectorAll("b")[0].textContent = bucks.length;
+  summary.querySelectorAll("b")[1].textContent = unnamed;
+  wrap.append(summary);
+
+  if (!bucks.length) {
+    const e = document.createElement("div");
+    e.className = "empty";
+    e.textContent = "No bucks in the book yet. Swipe right on a buck in Sort and give him a name.";
+    wrap.append(e);
+    return;
+  }
+  for (const b of bucks) {
+    const cover = CARD[b.cover] || b.seen[0];
+    const pts = b.seen.map(c => state.labels[c.id]?.points).filter(Boolean);
+    const daylight = b.seen.filter(c => c.daylight).length;
+    const cams = [...new Set(b.seen.map(c => c.cam))].join(", ");
+    const el = document.createElement("article");
+    el.className = "bcard";
+    el.innerHTML = `
+      <img alt="">
+      <div class="bbody">
+        <div class="bname"><h3></h3><button class="linkish" type="button">Rename</button></div>
+        <dl class="facts">
+          <dt>Sightings</dt><dd class="f-seen"></dd>
+          <dt>ID confidence</dt><dd class="f-conf"></dd>
+          <dt>Daylight</dt><dd class="f-day"></dd>
+          <dt>Points</dt><dd class="f-pts"></dd>
+          <dt>Cameras</dt><dd class="f-cams"></dd>
+          <dt>Seen</dt><dd class="f-range"></dd>
+        </dl>
+        <div class="strip"></div>
+      </div>`;
+    if (cover) { el.querySelector("img").src = cover.crop; el.querySelector("img").addEventListener("click", () => openViewer(cover, "crop")); }
+    el.querySelector("h3").textContent = b.name;
+    const confs = b.seen.map(c => state.labels[c.id]?.confidence).filter(Boolean);
+    const sure = confs.filter(v => v >= 4).length;
+    const unrated = b.seen.length - confs.length;
+    el.querySelector(".f-seen").textContent = `${b.seen.length} (${sure} sure)`;
+    el.querySelector(".f-conf").textContent = confs.length
+      ? `avg ${(confs.reduce((a, v) => a + v, 0) / confs.length).toFixed(1)} of 5${unrated ? ` · ${unrated} unrated` : ""}`
+      : "unrated — tap a photo to re-sort";
+    el.querySelector(".f-day").textContent = b.seen.length ? `${daylight} of ${b.seen.length}` : "—";
+    el.querySelector(".f-pts").textContent = pts.length ? (Math.max(...pts) >= 12 ? "12+" : Math.max(...pts)) : "not counted";
+    el.querySelector(".f-cams").textContent = cams || "—";
+    el.querySelector(".f-range").textContent = b.seen.length
+      ? `${fmtDay(b.seen[0].when)} – ${fmtDay(b.seen[b.seen.length - 1].when)}` : "—";
+    const strip = el.querySelector(".strip");
+    b.seen.slice(0, 12).forEach(c => {
+      const conf = state.labels[c.id]?.confidence;
+      const wrapEl = document.createElement("span");
+      wrapEl.className = "thumb" + (!conf || conf <= 2 ? " shaky" : "");
+      const i = document.createElement("img");
+      i.src = c.crop; i.alt = ""; i.title = `${fmtWhen(c.when)} · confidence ${conf || "unrated"}`;
+      i.addEventListener("click", () => openViewer(c, "crop", { resort: true }));
+      const badge = document.createElement("span");
+      badge.className = "c"; badge.textContent = conf || "?";
+      wrapEl.append(i, badge);
+      strip.append(wrapEl);
+    });
+    el.querySelector(".linkish").addEventListener("click", () => startRename(el, b));
+    wrap.append(el);
+  }
+}
+
+function startRename(el, b) {
+  const nameRow = el.querySelector(".bname");
+  const form = document.createElement("form");
+  form.className = "rename";
+  form.innerHTML = `<input type="text" maxlength="40" id="rename-${b.id}" aria-label="New name"><button class="btn" type="submit">Save</button>`;
+  const input = form.querySelector("input");
+  input.value = b.name;
+  form.addEventListener("submit", e => {
+    e.preventDefault();
+    const name = input.value.trim();
+    if (!name) return;
+    const { seen, id, ...doc } = b;
+    writeDoc("bucks/" + b.id, { ...doc, name });
+  });
+  nameRow.replaceWith(form);
+  input.focus(); input.select();
+}
+
+async function renderCrew() {
+  const wrap = $("crew");
+  const ids = [...new Set([
+    ...Object.values(state.labels).map(l => l.by ?? null),
+    ...Object.values(state.bucks).map(b => b.by ?? null),
+    state.me,
+  ])];
+  const rows = ids.map(uid => ({ uid, ...scoreFor(uid) })).sort((a, b) => b.score - a.score);
+  const realIds = ids.filter(Boolean);
+  const profiles = user && realIds.length ? await user.profiles(realIds) : {};
+  wrap.replaceChildren();
+  rows.forEach((r, i) => {
+    const p = r.uid ? profiles[r.uid] : null;
+    const row = document.createElement("div");
+    row.className = "crew-row";
+    row.innerHTML = `<span class="rank"></span><img alt=""><div><b></b><small></small></div><span class="pts"></span>`;
+    row.querySelector(".rank").textContent = i + 1;
+    const img = row.querySelector("img");
+    if (p?.avatarUrl) img.src = p.avatarUrl; else img.hidden = true;
+    const isMe = r.uid === state.me;
+    row.querySelector("b").textContent = (p?.name || (isMe ? "You" : "Someone")) + (isMe && p?.name ? " (you)" : "");
+    row.querySelector("small").textContent = `${rankFor(r.score)} · ${r.labels} sorted · ${r.bucks} named`;
+    row.querySelector(".pts").textContent = r.score;
+    wrap.append(row);
+  });
+}
+
+// ---------- swipe ----------
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function attachDrag(el, c) {
+  let start = null;
+  const verdicts = { buck: el.querySelector(".verdict.buck"), not: el.querySelector(".verdict.not"), unsure: el.querySelector(".verdict.unsure") };
+  const setVerdicts = (dx, dy) => {
+    verdicts.buck.style.opacity = Math.max(0, Math.min(1, dx / 100));
+    verdicts.not.style.opacity = Math.max(0, Math.min(1, -dx / 100));
+    verdicts.unsure.style.opacity = Math.abs(dx) < 60 ? Math.max(0, Math.min(1, -dy / 100)) : 0;
+  };
+  el.addEventListener("pointerdown", e => {
+    if (state.mode === "loading" || sheetState) return;
+    start = { x: e.clientX, y: e.clientY };
+    el.setPointerCapture(e.pointerId);
+    el.classList.add("dragging");
+    el.style.transition = "none";
+  });
+  el.addEventListener("pointermove", e => {
+    if (!start) return;
+    const dx = e.clientX - start.x, dy = Math.min(0, e.clientY - start.y);
+    el.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx / 18}deg)`;
+    setVerdicts(dx, dy);
+  });
+  const end = e => {
+    if (!start) return;
+    const dx = e.clientX - start.x, dy = e.clientY - start.y;
+    start = null;
+    el.classList.remove("dragging");
+    if (dx > 100) return decide("buck");
+    if (dx < -100) return decide("not");
+    if (dy < -100 && Math.abs(dx) < 80) return decide("unsure");
+    snapBack(el);
+    if (Math.abs(dx) < 6 && Math.abs(dy) < 6) openViewer(c, el.querySelector("img").dataset.full === "1" ? "frame" : "crop");
+  };
+  el.addEventListener("pointerup", end);
+  el.addEventListener("pointercancel", () => { start = null; snapBack(el); });
+}
+
+function snapBack(el) {
+  el.style.transition = reduceMotion ? "none" : "transform .25s cubic-bezier(.2,.9,.3,1.2)";
+  el.style.transform = "";
+  el.querySelectorAll(".verdict").forEach(v => v.style.opacity = 0);
+}
+
+function flyOut(dir) {
+  return new Promise(resolve => {
+    const el = $("stack").querySelector(".card.top");
+    if (!el || reduceMotion) return resolve();
+    const x = dir === "buck" ? 1 : dir === "not" ? -1 : 0;
+    el.querySelector(`.verdict.${dir}`).style.opacity = 1;
+    el.style.transition = "transform .3s ease-in, opacity .3s ease-in";
+    el.style.transform = x ? `translate(${x * 140}%, 40px) rotate(${x * 22}deg)` : "translate(0, -120%)";
+    el.style.opacity = "0";
+    setTimeout(resolve, 280);
+  });
+}
+
+function decide(verdict) {
+  const c = deck()[0];
+  if (!c || state.mode === "loading") return;
+  if (verdict === "buck") {
+    snapBack($("stack").querySelector(".card.top"));
+    return openSheet(c);
+  }
+  commit(c, { verdict, buckId: null, points: null, confidence: null });
+}
+
+async function commit(c, label, newBuck) {
+  await flyOut(label.verdict);
+  state.streak += 1;
+  const stamp = { by: state.me, at: new Date().toISOString() };
+  let gained = 10;
+  if (newBuck) {
+    gained += 25;
+    await writeDoc("bucks/" + newBuck.id, { name: newBuck.name, cover: c.id, ...stamp });
+  }
+  await writeDoc("labels/" + c.id, { ...label, ...stamp });
+  lastAction = { cardId: c.id, newBuckId: newBuck?.id ?? null };
+  const buckName = label.buckId ? state.bucks[label.buckId]?.name : null;
+  const msg = newBuck ? `New buck in the book: ${newBuck.name}`
+    : buckName ? `${buckName} · sighting ${sightings(label.buckId).length}`
+    : label.verdict === "buck" ? "Buck logged" : label.verdict === "not" ? "Not a buck" : "Set aside";
+  toast(msg, gained, true);
+}
+
+async function undo() {
+  if (!lastAction) return;
+  const { cardId, newBuckId } = lastAction;
+  lastAction = null;
+  state.streak = 0;
+  await writeDoc("labels/" + cardId, null);
+  if (newBuckId && !sightings(newBuckId).length) await writeDoc("bucks/" + newBuckId, null);
+  hideToast();
+}
+
+// ---------- name sheet ----------
+function openSheet(c) {
+  sheetState = { card: c, buckId: null, newName: "", points: null, confidence: null };
+  $("sheetImg").src = c.crop;
+  $("sheetPhoto").onclick = () => openViewer(c, "crop");
+  $("sheetMeta").textContent = `CAM ${c.cam} · ${fmtWhen(c.when)} · ${c.daylight ? "daylight" : "night"}`;
+  $("newName").value = "";
+  $("newName").classList.remove("active");
+
+  // Suggest bucks already tagged in this burst, then most recently seen.
+  const burstBucks = new Set(CARDS.filter(o => o.burst === c.burst && state.labels[o.id]?.buckId).map(o => state.labels[o.id].buckId));
+  const list = Object.entries(state.bucks).map(([id, b]) => {
+    const seen = sightings(id);
+    return { id, ...b, seen, last: seen.length ? seen[seen.length - 1].when : "", sugg: burstBucks.has(id) };
+  }).sort((a, b) => (b.sugg - a.sugg) || b.last.localeCompare(a.last));
+
+  const pick = $("pickList");
+  pick.replaceChildren();
+  $("pickWrap").hidden = !list.length;
+  for (const b of list) {
+    const btn = document.createElement("button");
+    btn.type = "button"; btn.className = "pick"; btn.setAttribute("aria-pressed", "false");
+    btn.innerHTML = `<img alt=""><span><b></b><small></small></span>`;
+    const cover = CARD[b.cover] || b.seen[0];
+    if (cover) btn.querySelector("img").src = cover.crop;
+    btn.querySelector("b").textContent = b.name;
+    btn.querySelector("small").textContent = `${b.seen.length} seen`;
+    if (b.sugg) { const s = document.createElement("span"); s.className = "sugg"; s.textContent = "Same burst"; btn.append(s); }
+    btn.addEventListener("click", () => { sheetState.buckId = b.id; sheetState.newName = ""; $("newName").value = ""; syncSheet(); });
+    btn.dataset.id = b.id;
+    pick.append(btn);
+  }
+  if (list[0]?.sugg) sheetState.buckId = list[0].id;
+
+  const pts = $("points");
+  pts.replaceChildren();
+  POINT_CHOICES.forEach(v => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = v == null ? "Can't count" : v === 12 ? "12+" : v; b.dataset.v = v ?? "";
+    b.addEventListener("click", () => { sheetState.points = v; syncSheet(); });
+    pts.append(b);
+  });
+
+  const conf = $("conf");
+  conf.replaceChildren();
+  CONFIDENCE.forEach(([v, word]) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.v = v;
+    b.innerHTML = "<b></b><small></small>";
+    b.querySelector("b").textContent = v; b.querySelector("small").textContent = word;
+    b.addEventListener("click", () => { sheetState.confidence = v; syncSheet(); });
+    conf.append(b);
+  });
+
+  $("scrim").hidden = false; $("sheet").hidden = false;
+  syncSheet();
+  (list.length ? pick.querySelector("button") : $("newName")).focus();
+}
+
+function syncSheet() {
+  if (!sheetState) return;
+  $("pickList").querySelectorAll(".pick").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.id === sheetState.buckId)));
+  $("points").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String((b.dataset.v === "" ? null : +b.dataset.v) === sheetState.points)));
+  $("newName").classList.toggle("active", !!sheetState.newName);
+  const naming = !!(sheetState.buckId || sheetState.newName);
+  $("confWrap").hidden = !naming;
+  $("conf").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.v === sheetState.confidence)));
+  $("sheetLock").disabled = !(naming && sheetState.confidence);
+  $("sheetLock").textContent = sheetState.newName ? `Add ${sheetState.newName}` : "Lock it in";
+}
+
+function closeSheet() {
+  sheetState = null;
+  $("scrim").hidden = true; $("sheet").hidden = true;
+}
+
+function lockIn(named = true) {
+  if (!sheetState) return;
+  const { card, buckId, newName, points, confidence } = sheetState;
+  closeSheet();
+  if (!named) return commit(card, { verdict: "buck", buckId: null, points, confidence: null });
+  const newBuck = newName ? { id: newId(), name: newName } : null;
+  commit(card, { verdict: "buck", buckId: newBuck ? newBuck.id : buckId, points, confidence }, newBuck);
+}
+
+$("newName").addEventListener("input", e => {
+  sheetState.newName = e.target.value.trim();
+  if (sheetState.newName) sheetState.buckId = null;
+  syncSheet();
+});
+$("newName").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); if (!$("sheetLock").disabled) lockIn(); } });
+$("sheetLock").addEventListener("click", () => lockIn());
+$("sheetSkip").addEventListener("click", () => lockIn(false));
+$("sheetBack").addEventListener("click", closeSheet);
+$("scrim").addEventListener("click", closeSheet);
+
+// ---------- toast ----------
+let toastTimer = null;
+function toast(msg, gained = 0, canUndo = false) {
+  const t = $("toast");
+  t.replaceChildren();
+  if (gained) { const p = document.createElement("span"); p.className = "plus"; p.textContent = `+${gained}`; t.append(p); }
+  const m = document.createElement("span"); m.textContent = msg; t.append(m);
+  if (canUndo) {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = "Undo";
+    b.addEventListener("click", undo); t.append(b);
+  }
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, 5000);
+}
+function hideToast() { $("toast").hidden = true; }
+
+// ---------- tabs & keys ----------
+function showTab(name) {
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  document.querySelectorAll(".view").forEach(v => v.hidden = v.id !== "view-" + name);
+  if (name === "roster") renderRoster();
+  if (name === "crew") renderCrew();
+}
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
+$("btnNot").addEventListener("click", () => decide("not"));
+$("btnUnsure").addEventListener("click", () => decide("unsure"));
+$("btnBuck").addEventListener("click", () => decide("buck"));
+document.addEventListener("keydown", e => {
+  if (!$("viewer").hidden) {
+    if (e.key === "Escape") closeViewer();
+    else if (e.key === "+" || e.key === "=") zoomBy(1.4);
+    else if (e.key === "-") zoomBy(1 / 1.4);
+    return;
+  }
+  if (sheetState) { if (e.key === "Escape") closeSheet(); return; }
+  if ($("view-sort").hidden || e.target.tagName === "INPUT") return;
+  if (e.key === "ArrowRight") decide("buck");
+  else if (e.key === "ArrowLeft") decide("not");
+  else if (e.key === "ArrowUp") { e.preventDefault(); decide("unsure"); }
+});
+
+// ---------- zoom viewer ----------
+const V = { card: null, mode: "crop", scale: 1, x: 0, y: 0, pointers: new Map(), pinch: null, pan: null, lastTap: 0 };
+const MAX_ZOOM = 8;
+
+function openViewer(c, mode = "crop", opts = {}) {
+  V.card = c;
+  $("vResort").hidden = !(opts.resort && state.labels[c.id]);
+  $("vcap").textContent = `CAM ${c.cam} · ${fmtWhen(c.when)} · ${c.daylight ? "daylight" : "night"}`;
+  setViewerMode(mode);
+  $("viewer").hidden = false;
+  $("vClose").focus();
+}
+function closeViewer() { $("viewer").hidden = true; V.pointers.clear(); }
+function setViewerMode(mode) {
+  V.mode = mode;
+  $("vimg").src = mode === "frame" ? V.card.frame : V.card.crop;
+  $("vCrop").setAttribute("aria-pressed", String(mode === "crop"));
+  $("vFrame").setAttribute("aria-pressed", String(mode === "frame"));
+  resetZoom();
+}
+function resetZoom() { V.scale = 1; V.x = 0; V.y = 0; applyZoom(); }
+function applyZoom() {
+  if (V.scale <= 1) { V.scale = 1; V.x = 0; V.y = 0; }
+  const r = $("vstage").getBoundingClientRect();
+  const limX = (r.width * (V.scale - 1)) / 2, limY = (r.height * (V.scale - 1)) / 2;
+  V.x = Math.max(-limX, Math.min(limX, V.x));
+  V.y = Math.max(-limY, Math.min(limY, V.y));
+  $("vimg").style.transform = `translate(${V.x}px, ${V.y}px) scale(${V.scale})`;
+  $("vLevel").textContent = (Math.round(V.scale * 10) / 10) + "×";
+}
+function zoomAt(px, py, factor) {
+  const r = $("vstage").getBoundingClientRect();
+  const cx = px - (r.left + r.width / 2), cy = py - (r.top + r.height / 2);
+  const next = Math.max(1, Math.min(MAX_ZOOM, V.scale * factor));
+  const f = next / V.scale;
+  V.x = cx - (cx - V.x) * f;
+  V.y = cy - (cy - V.y) * f;
+  V.scale = next;
+  applyZoom();
+}
+function zoomBy(factor) {
+  const r = $("vstage").getBoundingClientRect();
+  zoomAt(r.left + r.width / 2, r.top + r.height / 2, factor);
+}
+
+const stage = $("vstage");
+stage.addEventListener("wheel", e => { e.preventDefault(); zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.18 : 1 / 1.18); }, { passive: false });
+stage.addEventListener("pointerdown", e => {
+  stage.setPointerCapture(e.pointerId);
+  V.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (V.pointers.size === 2) {
+    const [a, b] = [...V.pointers.values()];
+    V.pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y) };
+    V.pan = null;
+  } else {
+    V.pan = { x: e.clientX, y: e.clientY, ox: V.x, oy: V.y, moved: false };
+  }
+});
+stage.addEventListener("pointermove", e => {
+  if (!V.pointers.has(e.pointerId)) return;
+  V.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (V.pinch && V.pointers.size === 2) {
+    const [a, b] = [...V.pointers.values()];
+    const dist = Math.hypot(a.x - b.x, a.y - b.y);
+    zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, dist / V.pinch.dist);
+    V.pinch.dist = dist;
+  } else if (V.pan) {
+    const dx = e.clientX - V.pan.x, dy = e.clientY - V.pan.y;
+    if (Math.abs(dx) + Math.abs(dy) > 4) V.pan.moved = true;
+    V.x = V.pan.ox + dx; V.y = V.pan.oy + dy;
+    applyZoom();
+  }
+});
+const endPointer = e => {
+  V.pointers.delete(e.pointerId);
+  if (V.pointers.size < 2) V.pinch = null;
+  if (V.pan && !V.pan.moved && e.type === "pointerup") {
+    const now = Date.now();
+    if (now - V.lastTap < 320) { V.scale > 1 ? resetZoom() : zoomAt(e.clientX, e.clientY, 3); V.lastTap = 0; }
+    else V.lastTap = now;
+  }
+  V.pan = null;
+};
+stage.addEventListener("pointerup", endPointer);
+stage.addEventListener("pointercancel", endPointer);
+$("vClose").addEventListener("click", closeViewer);
+$("vResort").addEventListener("click", async () => {
+  const id = V.card.id;
+  closeViewer();
+  await writeDoc("labels/" + id, null);
+  toast("Back in the deck — sort it again from Sort.");
+});
+$("vCrop").addEventListener("click", () => setViewerMode("crop"));
+$("vFrame").addEventListener("click", () => setViewerMode("frame"));
+$("vIn").addEventListener("click", () => zoomBy(1.4));
+$("vOut").addEventListener("click", () => zoomBy(1 / 1.4));
+$("vEnh").addEventListener("click", () => {
+  const on = $("vimg").classList.toggle("enhanced");
+  $("vEnh").setAttribute("aria-pressed", String(on));
+});
+
+// ---------- boot ----------
+function goLocal() {
+  loadLocal();
+  state.mode = "local";
+  renderedTop = null;
+  renderAll();
+}
+
+async function boot() {
+  renderAll();
+  if (!window.claude?.use) return goLocal();
+  let dbNs = null;
+  try { [dbNs, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]); } catch {}
+  if (!dbNs) return goLocal();
+  db = dbNs;
+  state.me = user ? await user.id() : null;
+  let got = { labels: false, bucks: false };
+  const listen = col => db.collection(col).onSnapshot(snap => {
+    const next = {};
+    snap.docs.forEach(d => { next[d.id] = d.data(); });
+    state[col] = next;
+    got[col] = true;
+    if (got.labels && got.bucks) state.mode = "shared";
+    renderAll();
+  }, () => { toast("Lost the connection to the crew's book. Reload to reconnect."); });
+  listen("labels");
+  listen("bucks");
+}
+boot();
+</script>

@@ -1,0 +1,24 @@
+# Secrets: Reveal login, crew passcode, future Supabase service key
+.env
+.env.*
+
+# Photos, camera records (GPS, SIM IDs, signed URLs), tags, databases
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Project notes: contain property coordinates and camera details
+FINDINGS.md
+
+# Built Buck Book artifact with photos embedded
+apps/buck-book/index.html
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Local tooling
+.claude/
+.DS_Store
