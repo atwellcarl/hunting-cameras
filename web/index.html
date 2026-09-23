@@ -269,6 +269,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .composer { display: flex; gap: 8px; }
 .composer input { flex: 1; min-width: 0; font: 16px var(--body); padding: 12px 14px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); }
 
+/* ---------- name-them queue / unidentified ---------- */
+.queuebar { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--panel); border: 2px solid var(--blaze); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; }
+.queuebar b { font: 800 26px/1 var(--display); }
+.queuebar small { display: block; font: 12px var(--mono); color: var(--muted); }
+.unid { margin-bottom: 18px; }
+.unid .thumb { flex: 0 0 96px; }
+.qcount { font: 500 12px var(--mono); color: var(--blaze); text-transform: uppercase; letter-spacing: .06em; }
+
 /* ---------- buck editing ---------- */
 .editform { display: flex; flex-direction: column; gap: 16px; }
 .editform textarea { width: 100%; min-height: 84px; font: 16px/1.4 var(--body); padding: 12px 14px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); resize: vertical; }
@@ -410,12 +418,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
     <span class="chip zoom">Tap to zoom</span>
   </button>
   <div class="sheet-body">
+    <span class="qcount" id="queueCount" hidden></span>
     <h2 id="sheetTitle">Seen him before?</h2>
 
     <div id="stepAsk" class="choice">
       <button class="bigchoice shortcut" id="askBurst" type="button" hidden><img alt=""><span><b></b><small>Same burst. Tap if it's him</small></span></button>
       <button class="bigchoice primary" id="askYes" type="button"><b>Yes</b><small>Pick him from the book</small></button>
       <button class="bigchoice" id="askNo" type="button"><b>No, new buck</b><small>Name him and add what you can see</small></button>
+      <button class="bigchoice" id="askCant" type="button"><b>Can't ID him</b><small>Bad angle or rough photo. File it under Unidentified</small></button>
     </div>
 
     <div id="stepKnown" hidden>
@@ -440,7 +450,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
   </div>
   <div class="sheet-foot">
     <button class="btn ghost" id="sheetBack" type="button">Back</button>
-    <button class="linkish grow" id="sheetSkip" type="button">Just log a buck</button>
+    <button class="linkish grow" id="sheetSkip" type="button">Decide later</button>
     <button class="btn" id="sheetLock" type="button" disabled>Lock it in</button>
   </div>
 </div>
@@ -588,6 +598,7 @@ function agrees(a, b) {
   return a.verdict === b.verdict && (a.verdict === "not" || !a.buckId || !b.buckId || a.buckId === b.buckId);
 }
 function answerName(v) {
+  if (v.verdict === "buck" && !v.buckId && v.cantId) return "Can't ID";
   return v.verdict === "not" ? "Not a buck" : v.buckId ? (state.bucks[v.buckId]?.name || "A buck") : "Buck, unnamed";
 }
 // Photos where someone's vote conflicts with mine.
@@ -606,6 +617,19 @@ function deck() {
   const first = open.filter(c => c.id === forcedTop);
   const disputed = open.filter(c => c.id !== forcedTop && state.consensus[c.id]?.status === "disputed");
   return first.concat(disputed, open.filter(c => c.id !== forcedTop && state.consensus[c.id]?.status !== "disputed"));
+}
+// Called a buck, nobody has named him, and nobody filed him as can't-ID: waiting for a name.
+// Photos you already named or marked can't-ID yourself are skipped.
+function unnamedCards() {
+  return CARDS.filter(c => {
+    const k = state.consensus[c.id], mine = myVote(c.id);
+    if (!k || k.verdict !== "buck" || k.top_buck || k.cant_id_votes > 0) return false;
+    return !(mine && (mine.buckId || mine.cantId || mine.verdict === "not"));
+  });
+}
+// Called a buck, too rough to say which: the Unidentified pile.
+function unidentifiedCards() {
+  return CARDS.filter(c => { const k = state.consensus[c.id]; return k && k.verdict === "buck" && !k.top_buck && k.cant_id_votes > 0; });
 }
 // Which buck a photo belongs to: the crew consensus once there is one, else your own vote.
 function buckOf(id) {
@@ -680,7 +704,7 @@ async function writeVote(cardId, vote) {
   const res = vote === null
     ? await sb.from("votes").delete().eq("card_id", cardId).eq("voter", state.myUid)
     : await sb.from("votes").upsert({ card_id: cardId, verdict: vote.verdict, buck_id: vote.buckId,
-        points: vote.points, confidence: vote.confidence ?? null }, { onConflict: "card_id,voter" });
+        points: vote.points, confidence: vote.confidence ?? null, cant_id: !!vote.cantId }, { onConflict: "card_id,voter" });
   if (res.error) {
     put(before);
     renderedTop = null;
@@ -705,7 +729,7 @@ async function sync() {
     c.forEach(r => { users[nameKey(r.name)] = r.name; });
     const votes = {};
     v.forEach(r => {
-      (votes[r.card_id] ||= {})[r.voter] = { verdict: r.verdict, buckId: r.buck_id, points: r.points,
+      (votes[r.card_id] ||= {})[r.voter] = { verdict: r.verdict, buckId: r.buck_id, cantId: !!r.cant_id, points: r.points,
         confidence: r.confidence, by: nameKey(r.voter_name), name: r.voter_name, at: r.at };
       if (r.voter_name && !users[nameKey(r.voter_name)]) users[nameKey(r.voter_name)] = r.voter_name;
     });
@@ -861,18 +885,42 @@ function renderRoster() {
   const bucks = Object.entries(state.bucks)
     .map(([id, b]) => ({ id, ...b, ...buckStats(id) }))
     .sort((a, b) => b.seen.length - a.seen.length);
-  const unnamed = CARDS.filter(c => { const k = state.consensus[c.id]; return k && k.verdict === "buck" && !k.top_buck; }).length;
+  const toName = unnamedCards(), unid = unidentifiedCards();
+  const unnamed = toName.length;
   const disputed = CARDS.filter(c => state.consensus[c.id]?.status === "disputed");
 
   const summary = document.createElement("div");
   summary.className = "summary";
-  summary.innerHTML = `<span><b></b> bucks named</span><span><b></b> unnamed buck photos</span><span><b></b> in dispute</span>`;
+  summary.innerHTML = `<span><b></b> bucks named</span><span><b></b> waiting for a name</span><span><b></b> in dispute</span>`;
   summary.querySelectorAll("b")[0].textContent = bucks.length;
   summary.querySelectorAll("b")[1].textContent = unnamed;
   summary.querySelectorAll("b")[2].textContent = disputed.length;
   wrap.append(summary);
 
-
+  if (toName.length) {
+    const bar = document.createElement("div");
+    bar.className = "queuebar";
+    bar.innerHTML = `<span><b></b><small>buck photos waiting for a name</small></span><button class="btn" type="button">Name them</button>`;
+    bar.querySelector("b").textContent = toName.length;
+    bar.querySelector("button").addEventListener("click", startNameQueue);
+    wrap.append(bar);
+  }
+  if (unid.length) {
+    const box = document.createElement("div");
+    box.className = "unid";
+    box.innerHTML = `<p class="label"></p><div class="dstrip"></div>`;
+    box.querySelector(".label").textContent = `Unidentified · ${unid.length} · tap one to move it to a buck`;
+    unid.forEach(c => {
+      const t = document.createElement("button");
+      t.type = "button"; t.className = "thumb";
+      t.innerHTML = `<img alt=""><span class="t"></span>`;
+      t.querySelector("img").src = c.crop;
+      t.querySelector(".t").textContent = fmtDay(c.when);
+      t.addEventListener("click", () => openViewer(c, "crop", { resort: true, move: true }));
+      box.querySelector(".dstrip").append(t);
+    });
+    wrap.append(box);
+  }
 
   if (!bucks.length) {
     const e = document.createElement("div");
@@ -1208,7 +1256,7 @@ function decide(verdict) {
 
 async function commit(c, label, newBuck) {
   if (forcedTop === c.id) forcedTop = null;
-  await flyOut(label.verdict);
+  if (deck()[0]?.id === c.id) await flyOut(label.verdict);
   state.streak += 1;
   const stamp = { by: state.me, at: new Date().toISOString() };
   let gained = 10;
@@ -1227,7 +1275,7 @@ async function commit(c, label, newBuck) {
 // After a blind vote, say how it lines up with the rest of the crew.
 function voteFeedback(cardId, vote, newBuck) {
   const others = othersVotes(cardId);
-  const nameOf = v => v.verdict === "not" ? "not a buck" : v.buckId ? (state.bucks[v.buckId]?.name || "a buck") : "a buck";
+  const nameOf = v => v.verdict === "not" ? "not a buck" : v.buckId ? (state.bucks[v.buckId]?.name || "a buck") : v.cantId ? "a buck, can't ID" : "a buck";
   const mine = newBuck ? newBuck.name : nameOf(vote);
   if (!others.length) return newBuck ? `New buck: ${newBuck.name} · first call` : `${mine[0].toUpperCase() + mine.slice(1)} · first call`;
   const agrees = others.filter(o => o.verdict === vote.verdict && (vote.verdict === "not" || !o.buckId || !vote.buckId || o.buckId === vote.buckId));
@@ -1249,8 +1297,28 @@ async function undo() {
 
 // ---------- name sheet ----------
 // Steps: "ask" (seen him before?) -> "known" (pick from the book) or "new" (name him).
-function openSheet(c) {
+// The Name-them queue walks the unnamed buck photos one after another in the naming sheet.
+let nameQueue = null;
+function startNameQueue() {
+  nameQueue = { done: 0 };
+  nextInQueue();
+}
+function nextInQueue() {
+  const left = unnamedCards().filter(c => !nameQueue.skipped?.has(c.id));
+  if (!left.length) {
+    const n = nameQueue.done;
+    nameQueue = null;
+    closeSheet();
+    renderAll();
+    return toast(n ? `Named ${n} · none left` : "Nothing waiting for a name");
+  }
+  openSheet(left[0], { queued: left.length });
+}
+
+function openSheet(c, opts = {}) {
   sheetState = { card: c, step: "ask", buckId: null, newName: "", points: null, confidence: null };
+  $("queueCount").hidden = !opts.queued;
+  $("queueCount").textContent = opts.queued ? `Naming · ${opts.queued} left` : "";
   $("sheetImg").src = c.crop;
   $("sheetPhoto").onclick = () => openViewer(c, "crop");
   $("sheetMeta").textContent = `CAM ${c.cam} · ${fmtWhen(c.when)} · ${c.daylight ? "day" : "night"}`;
@@ -1355,7 +1423,7 @@ function syncSheet() {
 
 function sheetBack() {
   if (!sheetState) return;
-  if (sheetState.step === "ask" || !sheetState.list.length) return closeSheet();
+  if (sheetState.step === "ask" || !sheetState.list.length) return exitSheet();
   goStep("ask");
 }
 
@@ -1363,26 +1431,52 @@ function closeSheet() {
   sheetState = null;
   $("sheet").hidden = true;
 }
+// Leaving the sheet by Back or Escape also ends the queue.
+function exitSheet() {
+  nameQueue = null;
+  closeSheet();
+  renderAll();
+}
 
-function lockIn() {
+async function lockIn() {
   if (!sheetState) return;
   const { card, step, buckId, newName, points, confidence } = sheetState;
   closeSheet();
   if (step === "new") {
     const newBuck = { id: newId(), name: newName };
     // A new buck's first photo defines him, so it counts as certain.
-    return commit(card, { verdict: "buck", buckId: newBuck.id, points, confidence: 5 }, newBuck);
+    await commit(card, { verdict: "buck", buckId: newBuck.id, points, confidence: 5 }, newBuck);
+  } else {
+    await commit(card, { verdict: "buck", buckId, points, confidence });
   }
-  commit(card, { verdict: "buck", buckId, points, confidence });
+  afterSheetVote();
+}
+// In the Name-them queue, move straight on to the next photo (unless a dispute just opened).
+function afterSheetVote() {
+  if (!nameQueue) return;
+  nameQueue.done += 1;
+  if (disputeId) { nameQueue = null; return; }
+  nextInQueue();
 }
 
 $("askYes").addEventListener("click", () => goStep("known"));
 $("askNo").addEventListener("click", () => goStep("new"));
+$("askCant").addEventListener("click", async () => {
+  const { card } = sheetState;
+  closeSheet();
+  await commit(card, { verdict: "buck", buckId: null, cantId: true, points: null, confidence: null });
+  afterSheetVote();
+});
 $("newName").addEventListener("input", e => { sheetState.newName = e.target.value.trim(); syncSheet(); });
 $("newName").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } });
 $("sheetLock").addEventListener("click", lockIn);
-$("sheetSkip").addEventListener("click", () => {
+$("sheetSkip").addEventListener("click", async () => {
   const { card } = sheetState;
+  if (nameQueue) {
+    // In the queue, "Decide later" just skips this photo for now.
+    (nameQueue.skipped ||= new Set()).add(card.id);
+    return nextInQueue();
+  }
   closeSheet();
   commit(card, { verdict: "buck", buckId: null, points: null, confidence: null });
 });
@@ -1596,7 +1690,7 @@ document.addEventListener("keydown", e => {
   }
   if (chooser) { if (e.key === "Escape") closeChooser(); return; }
   if (disputeId) { if (e.key === "Escape") closeDispute(); return; }
-  if (sheetState) { if (e.key === "Escape") sheetBack(); return; }
+  if (sheetState) { if (e.key === "Escape") exitSheet(); return; }
   if (profileId) { if (e.key === "Escape") closeProfile(); return; }
   if ($("view-sort").hidden || e.target.tagName === "INPUT") return;
   if (e.key === "ArrowRight") decide("buck");
@@ -1611,7 +1705,7 @@ function openViewer(c, mode = "crop", opts = {}) {
   V.card = c;
   $("vResort").hidden = !(opts.resort && myVote(c.id));
   V.buck = opts.buck || null;
-  $("vMove").hidden = !V.buck;
+  $("vMove").hidden = !(V.buck || opts.move);
   $("vCover").hidden = !V.buck || state.bucks[V.buck]?.cover === c.id;
   const vv = $("vvotes");
   const all = Object.values(state.votes[c.id] || {});
