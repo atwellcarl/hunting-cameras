@@ -95,7 +95,8 @@ def main():
         done = {(r["file"], r["det_index"]) for r in map(json.loads, out_path.open())}
 
     preds = json.loads(preds_path.read_text())["predictions"]
-    deer = [p for p in preds if "white-tailed deer" in p.get("prediction", "")]
+    # Genus match: includes "white-tailed deer" and SpeciesNet's less certain "odocoileus species".
+    deer = [p for p in preds if "odocoileus" in p.get("prediction", "")]
 
     n = 0
     with out_path.open("a") as out:

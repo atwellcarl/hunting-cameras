@@ -269,6 +269,20 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .composer { display: flex; gap: 8px; }
 .composer input { flex: 1; min-width: 0; font: 16px var(--body); padding: 12px 14px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); }
 
+/* ---------- buck editing ---------- */
+.editform { display: flex; flex-direction: column; gap: 16px; }
+.editform textarea { width: 100%; min-height: 84px; font: 16px/1.4 var(--body); padding: 12px 14px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); resize: vertical; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chips button { appearance: none; min-height: 44px; min-width: 56px; border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 8px 14px; font: 500 15px var(--mono); cursor: pointer; }
+.chips button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn.danger { background: none; color: var(--no); border: 1.5px solid var(--no); }
+.status-pill { display: inline-block; font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; border-radius: 999px; padding: 3px 8px; background: var(--panel-2); color: var(--muted); margin-left: 8px; vertical-align: middle; }
+.status-pill.harvested { background: var(--blaze); color: var(--blaze-ink); }
+.status-pill.missing { background: var(--no); color: #1A0703; }
+.confirm { background: var(--panel); border: 2px solid var(--no); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.confirm p { margin: 0; }
+
 /* ---------- crew ---------- */
 .crew { background: var(--panel); border-radius: 14px; overflow: hidden; }
 .crew-row { display: grid; grid-template-columns: 26px 38px 1fr auto; gap: 10px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); }
@@ -438,11 +452,23 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
     <span class="chip zoom">Tap to zoom</span>
   </button>
   <div class="sheet-body">
-    <div class="namerow" id="profileNameRow"><h2 id="profileName"></h2><button class="linkish" id="profileRename" type="button">Rename</button></div>
+    <div class="namerow" id="profileNameRow"><h2 id="profileName"></h2><button class="linkish" id="profileEdit" type="button">Edit</button></div>
+    <form class="editform" id="editForm" hidden>
+      <div><p class="label">Name</p><input id="editName" class="newname" type="text" maxlength="40" autocapitalize="words"></div>
+      <div><p class="label">Age class</p><div class="chips" id="editAge"></div></div>
+      <div><p class="label">Status</p><div class="chips" id="editStatus"></div></div>
+      <div><p class="label">Notes</p><textarea id="editNotes" maxlength="500" placeholder="Split left brow, drop tine, beds on the north ridge…"></textarea></div>
+      <div class="btnrow"><button class="btn" type="submit">Save</button><button class="btn ghost" id="editCancel" type="button">Cancel</button></div>
+    </form>
     <dl class="facts" id="profileFacts"></dl>
     <div>
       <p class="label">Every photo · ✓ agreed · ~ leaning · 1 one vote · ! disputed</p>
       <div class="pgrid" id="profileGrid"></div>
+    </div>
+    <div>
+      <p class="label">Clean up</p>
+      <div class="btnrow"><button class="btn ghost" id="profileMerge" type="button">Merge into another buck…</button><button class="btn danger" id="profileDelete" type="button">Delete buck</button></div>
+      <div id="profileConfirm"></div>
     </div>
   </div>
   <div class="sheet-foot">
@@ -477,8 +503,32 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 
 <button class="alert" id="alert" type="button" hidden><img alt=""><span></span></button>
 
+<!-- Chooser: move one photo to another buck, or merge a whole buck into another -->
+<div class="sheet" id="chooser" hidden role="dialog" aria-modal="true" aria-labelledby="chooserTitle">
+  <button class="sheet-photo" id="chooserPhoto" type="button" aria-label="Zoom in"><img id="chooserImg" alt=""><span class="chip zoom">Tap to zoom</span></button>
+  <div class="sheet-body">
+    <h2 id="chooserTitle"></h2>
+    <p class="note" id="chooserNote"></p>
+    <div class="bgrid" id="chooserGrid"></div>
+    <div id="chooserNew" hidden>
+      <p class="label">Or a new buck</p>
+      <input id="chooserNewName" class="newname" type="text" maxlength="40" placeholder="Name him" autocomplete="off" autocapitalize="words">
+    </div>
+    <div id="chooserConf" hidden>
+      <p class="label">How sure are you it's him?</p>
+      <div class="conf" id="chooserConfBtns"></div>
+    </div>
+    <div id="chooserConfirm"></div>
+  </div>
+  <div class="sheet-foot">
+    <button class="btn ghost" id="chooserCancel" type="button">Cancel</button>
+    <span class="grow"></span>
+    <button class="btn" id="chooserGo" type="button" disabled></button>
+  </div>
+</div>
+
 <div class="viewer" id="viewer" hidden role="dialog" aria-modal="true" aria-label="Photo zoom">
-  <div class="vtop"><span id="vcap"></span><span style="display:flex;gap:8px"><button class="vbtn" id="vResort" type="button" hidden>Change my vote</button><button class="vbtn" id="vClose" type="button">Close</button></span></div>
+  <div class="vtop"><span id="vcap"></span><span style="display:flex;gap:8px"><button class="vbtn" id="vCover" type="button" hidden>Make cover</button><button class="vbtn" id="vMove" type="button" hidden>Move to…</button><button class="vbtn" id="vResort" type="button" hidden>Change my vote</button><button class="vbtn" id="vClose" type="button">Close</button></span></div>
   <div class="vvotes" id="vvotes" hidden></div>
   <div class="vstage" id="vstage"><img id="vimg" alt="Zoomed trail camera photo"></div>
   <div class="vbar">
@@ -608,7 +658,8 @@ async function writeDoc(path, data) {
   {
     res = data === null
       ? await sb.from("bucks").delete().eq("id", id)
-      : await sb.from("bucks").upsert({ id, name: data.name, cover: data.cover ?? null });
+      : await sb.from("bucks").upsert({ id, name: data.name, cover: data.cover ?? null, age_class: data.age ?? null,
+          status: data.status || "active", notes: data.notes || null });
   }
   if (res.error) {
     if (before === undefined) delete state[col][id]; else state[col][id] = before;
@@ -660,7 +711,8 @@ async function sync() {
     });
     const bucks = {};
     b.forEach(r => {
-      bucks[r.id] = { name: r.name, cover: r.cover, by: nameKey(r.by_name), at: r.at };
+      bucks[r.id] = { name: r.name, cover: r.cover, by: nameKey(r.by_name), at: r.at, age: r.age_class,
+        status: r.status || "active", notes: r.notes || "", editedBy: r.updated_by_name, editedAt: r.updated_at };
       if (r.by_name && !users[nameKey(r.by_name)]) users[nameKey(r.by_name)] = r.by_name;
     });
     const consensus = Object.fromEntries(cons.map(r => [r.card_id, r]));
@@ -861,6 +913,11 @@ function renderProfile() {
   $("profileImg").src = cover ? cover.crop : "";
   $("profilePhoto").onclick = () => cover && openViewer(cover, "crop");
   $("profileName").textContent = b.name;
+  if (b.status && b.status !== "active") {
+    const pill = document.createElement("span");
+    pill.className = "status-pill " + b.status; pill.textContent = b.status;
+    $("profileName").append(pill);
+  }
 
   const facts = [
     ["Sightings", `${s.seen.length} (${s.sure} confirmed by 2+)`],
@@ -869,6 +926,9 @@ function renderProfile() {
     ["Points", s.pts.length ? (Math.max(...s.pts) >= 12 ? "12+" : String(Math.max(...s.pts))) : "not counted"],
     ["Cameras", s.cams.join(", ") || "—"],
     ["Seen", s.seen.length ? `${fmtDay(s.seen[0].when)} – ${fmtDay(s.seen[s.seen.length - 1].when)}` : "—"],
+    ["Age class", b.age ? `${b.age} yr` : "—"],
+    ["Notes", b.notes || "—"],
+    ["Named by", `${state.users[b.by] || "Someone"}${b.editedBy ? ` · edited by ${b.editedBy}` : ""}`],
   ];
   const dl = $("profileFacts");
   dl.replaceChildren();
@@ -891,27 +951,157 @@ function renderProfile() {
     t.querySelector(".t").textContent = fmtDay(c.when);
     t.querySelector(".c").textContent = mark;
     t.setAttribute("aria-label", `${fmtWhen(c.when)}, ${k ? k.status : "no votes"}`);
-    t.addEventListener("click", () => openViewer(c, "crop", { resort: true }));
+    t.addEventListener("click", () => openViewer(c, "crop", { resort: true, buck: profileId }));
     grid.append(t);
   });
 }
 
-$("profileRename").addEventListener("click", () => {
-  const form = document.createElement("form");
-  form.className = "rename";
-  form.innerHTML = `<input type="text" maxlength="40" id="renameInput" aria-label="New name" autocapitalize="words"><button class="btn" type="submit">Save</button>`;
-  const input = form.querySelector("input");
-  input.value = state.bucks[profileId].name;
-  const finish = () => { form.remove(); $("profileName").hidden = false; $("profileRename").hidden = false; };
-  form.addEventListener("submit", e => {
-    e.preventDefault();
-    const name = input.value.trim();
-    finish();
-    if (name) writeDoc("bucks/" + profileId, { ...state.bucks[profileId], name });
+const AGES = ["1.5", "2.5", "3.5", "4.5+"];
+const STATUSES = [["active", "Active"], ["harvested", "Harvested"], ["missing", "Missing"]];
+let editDraft = null;
+
+function chipRow(el, options, current, onPick) {
+  el.replaceChildren();
+  options.forEach(([value, label]) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = label;
+    b.setAttribute("aria-pressed", String(value === current));
+    b.addEventListener("click", () => onPick(value === current && value !== "active" ? null : value));
+    el.append(b);
   });
-  $("profileName").hidden = true; $("profileRename").hidden = true;
-  $("profileNameRow").prepend(form);
-  input.focus(); input.select();
+}
+function renderEdit() {
+  chipRow($("editAge"), AGES.map(a => [a, `${a} yr`]), editDraft.age, v => { editDraft.age = v; renderEdit(); });
+  chipRow($("editStatus"), STATUSES, editDraft.status, v => { editDraft.status = v || "active"; renderEdit(); });
+}
+$("profileEdit").addEventListener("click", () => {
+  const b = state.bucks[profileId];
+  editDraft = { age: b.age || null, status: b.status || "active" };
+  $("editName").value = b.name;
+  $("editNotes").value = b.notes || "";
+  renderEdit();
+  $("editForm").hidden = false; $("profileNameRow").hidden = true;
+  $("editName").focus();
+});
+function closeEdit() { editDraft = null; $("editForm").hidden = true; $("profileNameRow").hidden = false; }
+$("editCancel").addEventListener("click", closeEdit);
+$("editForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const name = $("editName").value.trim();
+  if (!name) { $("editName").focus(); return; }
+  const b = state.bucks[profileId];
+  writeDoc("bucks/" + profileId, { ...b, name, age: editDraft.age, status: editDraft.status, notes: $("editNotes").value.trim() });
+  closeEdit();
+  toast(`Saved ${name}`);
+});
+
+function confirmBox(where, text, goLabel, onGo) {
+  const box = document.createElement("div");
+  box.className = "confirm";
+  box.innerHTML = `<p></p><div class="btnrow"><button class="btn danger" type="button"></button><button class="btn ghost" type="button">Cancel</button></div>`;
+  box.querySelector("p").textContent = text;
+  const [go, cancel] = box.querySelectorAll("button");
+  go.textContent = goLabel;
+  go.addEventListener("click", async () => { go.disabled = true; await onGo(); box.remove(); });
+  cancel.addEventListener("click", () => box.remove());
+  where.replaceChildren(box);
+  box.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+}
+$("profileDelete").addEventListener("click", () => {
+  const id = profileId, b = state.bucks[id], n = sightings(id).length;
+  confirmBox($("profileConfirm"), `Delete ${b.name}? His ${n} photo${n === 1 ? "" : "s"} stay in the book as "buck, unnamed" so the crew can name them again. This can't be undone.`,
+    `Delete ${b.name}`, async () => {
+      const { error } = await sb.rpc("delete_buck", { buck: id });
+      if (error) return toast(friendly(error));
+      closeProfile(); sync(); toast(`Deleted ${b.name}`);
+    });
+});
+$("profileMerge").addEventListener("click", () => openChooser({ mode: "merge", buck: profileId }));
+$("profileClose").addEventListener("click", closeProfile);
+
+// ---------- chooser: move a photo / merge a buck ----------
+let chooser = null;
+function openChooser(opts) {
+  chooser = { ...opts, target: null, newName: "", confidence: null };
+  const from = opts.buck ? state.bucks[opts.buck] : null;
+  const photo = opts.card || (from && (CARD[from.cover] || sightings(opts.buck)[0]));
+  $("chooserImg").src = photo ? photo.crop : "";
+  $("chooserPhoto").onclick = () => photo && openViewer(photo, "crop");
+  $("chooserTitle").textContent = opts.mode === "move" ? "Move this photo to…" : `Merge ${from.name} into…`;
+  $("chooserNote").textContent = opts.mode === "move"
+    ? "This changes your vote on this photo. Other members' votes stay as they are."
+    : `Every photo and every member's vote for ${from.name} moves to the buck you pick, and ${from.name} is removed.`;
+  const grid = $("chooserGrid");
+  grid.replaceChildren();
+  Object.entries(state.bucks).filter(([id]) => id !== opts.buck)
+    .sort((a, b) => a[1].name.localeCompare(b[1].name))
+    .forEach(([id, b]) => {
+      const cover = CARD[b.cover] || sightings(id)[0];
+      const tile = document.createElement("button");
+      tile.type = "button"; tile.className = "btile"; tile.dataset.id = id; tile.setAttribute("aria-pressed", "false");
+      tile.innerHTML = `<img alt=""><span class="cap"><b></b><small></small></span>`;
+      if (cover) tile.querySelector("img").src = cover.crop;
+      tile.querySelector("b").textContent = b.name;
+      tile.querySelector("small").textContent = `${sightings(id).length} seen`;
+      tile.addEventListener("click", () => { chooser.target = id; chooser.newName = ""; $("chooserNewName").value = ""; syncChooser(); });
+      grid.append(tile);
+    });
+  $("chooserNew").hidden = opts.mode !== "move";
+  $("chooserNewName").value = "";
+  const cb = $("chooserConfBtns");
+  cb.replaceChildren();
+  CONFIDENCE.forEach(([v, word]) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.v = v; b.innerHTML = "<b></b><small></small>";
+    b.querySelector("b").textContent = v; b.querySelector("small").textContent = word;
+    b.addEventListener("click", () => { chooser.confidence = v; syncChooser(); });
+    cb.append(b);
+  });
+  $("chooserConfirm").replaceChildren();
+  $("chooser").hidden = false;
+  $("chooser").querySelector(".sheet-body").scrollTop = 0;
+  syncChooser();
+}
+function syncChooser() {
+  const { mode, target, newName, confidence } = chooser;
+  $("chooserGrid").querySelectorAll(".btile").forEach(t => t.setAttribute("aria-pressed", String(t.dataset.id === target)));
+  $("chooserConf").hidden = !(mode === "move" && target);
+  $("chooserConfBtns").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.v === confidence)));
+  const go = $("chooserGo");
+  if (mode === "move") {
+    go.textContent = newName ? `Add ${newName}` : target ? `Move to ${state.bucks[target].name}` : "Pick a buck";
+    go.disabled = !(newName || (target && confidence));
+  } else {
+    go.textContent = target ? `Merge into ${state.bucks[target].name}` : "Pick a buck";
+    go.disabled = !target;
+  }
+}
+function closeChooser() { chooser = null; $("chooser").hidden = true; }
+$("chooserNewName").addEventListener("input", e => { chooser.newName = e.target.value.trim(); if (chooser.newName) chooser.target = null; syncChooser(); });
+$("chooserCancel").addEventListener("click", closeChooser);
+$("chooserGo").addEventListener("click", async () => {
+  const { mode, card, buck, target, newName, confidence } = chooser;
+  if (mode === "merge") {
+    const from = state.bucks[buck], into = state.bucks[target];
+    confirmBox($("chooserConfirm"), `Merge ${from.name} into ${into.name}? All of ${from.name}'s photos and votes become ${into.name}'s. This can't be undone.`,
+      "Merge", async () => {
+        const { error } = await sb.rpc("merge_bucks", { from_id: buck, into_id: target });
+        if (error) return toast(friendly(error));
+        closeChooser(); closeProfile(); await sync(); openProfile(target);
+        toast(`${from.name} merged into ${into.name}`);
+      });
+    return;
+  }
+  const mine = myVote(card.id);
+  let buckId = target;
+  if (newName) {
+    buckId = newId();
+    await writeDoc("bucks/" + buckId, { name: newName, cover: card.id, by: state.me });
+  }
+  await writeDoc("votes/" + card.id, { verdict: "buck", buckId, points: mine?.points ?? null,
+    confidence: newName ? 5 : confidence, by: state.me });
+  closeChooser(); closeViewer();
+  toast(`Moved to ${newName || state.bucks[buckId]?.name}`);
 });
 $("profileClose").addEventListener("click", closeProfile);
 
@@ -1404,6 +1594,7 @@ document.addEventListener("keydown", e => {
     else if (e.key === "-") zoomBy(1 / 1.4);
     return;
   }
+  if (chooser) { if (e.key === "Escape") closeChooser(); return; }
   if (disputeId) { if (e.key === "Escape") closeDispute(); return; }
   if (sheetState) { if (e.key === "Escape") sheetBack(); return; }
   if (profileId) { if (e.key === "Escape") closeProfile(); return; }
@@ -1419,6 +1610,9 @@ const MAX_ZOOM = 8;
 function openViewer(c, mode = "crop", opts = {}) {
   V.card = c;
   $("vResort").hidden = !(opts.resort && myVote(c.id));
+  V.buck = opts.buck || null;
+  $("vMove").hidden = !V.buck;
+  $("vCover").hidden = !V.buck || state.bucks[V.buck]?.cover === c.id;
   const vv = $("vvotes");
   const all = Object.values(state.votes[c.id] || {});
   const k = state.consensus[c.id];
@@ -1513,6 +1707,13 @@ const endPointer = e => {
 stage.addEventListener("pointerup", endPointer);
 stage.addEventListener("pointercancel", endPointer);
 $("vClose").addEventListener("click", closeViewer);
+$("vMove").addEventListener("click", () => { const card = V.card, buck = V.buck; closeViewer(); openChooser({ mode: "move", card, buck }); });
+$("vCover").addEventListener("click", async () => {
+  const b = state.bucks[V.buck];
+  await writeDoc("bucks/" + V.buck, { ...b, cover: V.card.id });
+  $("vCover").hidden = true;
+  toast(`New cover photo for ${b.name}`);
+});
 $("vResort").addEventListener("click", async () => {
   const id = V.card.id;
   closeViewer();

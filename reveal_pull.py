@@ -48,6 +48,11 @@ def pull_camera(token, cam, count, with_images, since=None):
             break
         if not photos:
             break
+        # A few records arrive without a date (still syncing from the camera); skip them.
+        photos = [p for p in photos if p.get("photoDateUtc")] or photos[:0]
+        if not photos:
+            page += 1
+            continue
         older = since and photos[-1]["photoDateUtc"][:10] < since
         if since:
             photos = [p for p in photos if p["photoDateUtc"][:10] >= since]
