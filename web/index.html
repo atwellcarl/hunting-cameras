@@ -63,13 +63,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .view { position: absolute; inset: 0; }
 .view.scroll { overflow-y: auto; padding: 16px 16px 24px; -webkit-overflow-scrolling: touch; }
 
-.tabbar { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); background: var(--bg); padding-bottom: var(--bottom); }
+.tabbar { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); background: var(--bg); padding-bottom: var(--bottom); }
 .tabbar button {
   appearance: none; border: 0; background: none; padding: 8px 0 7px; cursor: pointer; color: var(--muted);
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .08em;
 }
 .tabbar svg { width: 22px; height: 22px; }
+.tabbar button { position: relative; }
+.badge { position: absolute; top: 3px; left: calc(50% + 6px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--no); color: #1A0703; font: 600 11px/18px var(--mono); letter-spacing: 0; }
 .tabbar button[aria-selected="true"] { color: var(--ink); }
 .tabbar button[aria-selected="true"] svg { color: var(--blaze); }
 
@@ -224,6 +226,49 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .rename { display: flex; gap: 8px; }
 .rename input { flex: 1; min-width: 0; font: 600 17px var(--body); padding: 10px 12px; border-radius: 10px; border: 2px solid var(--blaze); background: var(--panel); color: var(--ink); }
 
+.disputes { margin-bottom: 18px; }
+.dstrip { display: flex; gap: 8px; overflow-x: auto; margin: 0 -16px; padding: 2px 16px 4px; }
+.dstrip .thumb { flex: 0 0 96px; outline: 2px solid var(--no); outline-offset: -2px; }
+.vvotes { padding: 0 12px 10px; background: #080A07; font: 12px/1.6 var(--mono); color: var(--muted); }
+.vvotes b { color: var(--ink); font-weight: 500; }
+.vvotes .st { text-transform: uppercase; letter-spacing: .06em; }
+.agree { font: 12px var(--mono); color: var(--muted); }
+
+/* ---------- disputes ---------- */
+.alert {
+  position: fixed; left: 50%; transform: translateX(-50%); top: calc(var(--top) + 52px); z-index: 35;
+  width: calc(100% - 24px); max-width: 616px; background: var(--no); color: #1A0703; border: 0; border-radius: 14px;
+  padding: 12px 14px; display: flex; gap: 12px; align-items: center; text-align: left; cursor: pointer;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .55); font: 600 15px/1.3 var(--body);
+}
+.alert img { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; flex: none; background: #000; }
+.alert small { display: block; font: 500 12px var(--mono); opacity: .8; }
+.dlist { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
+.drow { appearance: none; border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 8px; display: flex; gap: 12px; align-items: center; text-align: left; cursor: pointer; }
+.drow.mine { border-color: var(--no); }
+.drow img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; background: var(--well); flex: none; }
+.drow b { display: block; font-weight: 600; }
+.drow small { display: block; font: 12px/1.45 var(--mono); color: var(--muted); }
+.drow .go { margin-left: auto; font: 600 13px var(--body); color: var(--blaze); white-space: nowrap; padding-right: 4px; }
+.opts { display: flex; flex-direction: column; gap: 10px; }
+.opt { border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px; display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: center; }
+.opt.mine { border-color: var(--blaze); }
+.opt img, .opt .noimg { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; background: var(--well); display: grid; place-items: center; font: 800 26px var(--display); color: var(--muted); }
+.opt b { display: block; font: 800 22px/1 var(--display); text-transform: uppercase; }
+.opt small { display: block; font: 12px/1.5 var(--mono); color: var(--muted); }
+.opt .acts { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.opt .acts button { appearance: none; border: 2px solid var(--line); background: var(--bg); border-radius: 10px; min-height: 44px; min-width: 44px; padding: 6px 12px; font: 600 14px var(--body); cursor: pointer; }
+.opt .acts .switch { border-color: var(--blaze); color: var(--blaze); }
+.opt .acts .n { font: 800 20px var(--display); }
+.thread { display: flex; flex-direction: column; gap: 8px; }
+.cmt { background: var(--panel); border-radius: 12px; padding: 8px 12px; max-width: 88%; }
+.cmt.me { align-self: flex-end; background: var(--panel-2); }
+.cmt b { font: 600 13px var(--body); }
+.cmt small { font: 11px var(--mono); color: var(--muted); margin-left: 6px; }
+.cmt p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.composer { display: flex; gap: 8px; }
+.composer input { flex: 1; min-width: 0; font: 16px var(--body); padding: 12px 14px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); }
+
 /* ---------- crew ---------- */
 .crew { background: var(--panel); border-radius: 14px; overflow: hidden; }
 .crew-row { display: grid; grid-template-columns: 26px 38px 1fr auto; gap: 10px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); }
@@ -309,9 +354,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
       <div id="roster"></div>
     </section>
 
+    <section id="view-disputes" class="view scroll" hidden>
+      <div id="disputes"></div>
+    </section>
+
     <section id="view-crew" class="view scroll" hidden>
       <div class="crew" id="crew"></div>
-      <p class="rules">+10 for every photo sorted, +25 for every new buck you put in the book. Ranks: Scout, Tracker at 150, Guide at 400, Old Buck Whisperer at 800.</p>
+      <p class="rules">Agreement is how often your calls match other members' on photos you both voted on. Votes are blind: you only see others' picks after you vote. +10 for every vote, +25 for every new buck you put in the book. Ranks: Scout, Tracker at 150, Guide at 400, Old Buck Whisperer at 800.</p>
       <p class="signout"><button class="linkish" id="signOut" type="button">Sign out</button></p>
     </section>
   </div>
@@ -319,6 +368,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
   <nav class="tabbar" role="tablist">
     <button role="tab" id="tab-sort" aria-selected="true" data-tab="sort">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="6" y="3" width="13" height="16" rx="2"/><path d="M4 7v12a2 2 0 0 0 2 2h9"/></svg>Sort</button>
+    <button role="tab" id="tab-disputes" aria-selected="false" data-tab="disputes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5h11v8H9l-4 3.5V13H4z"/><path d="M15 9h5v8h-1v3l-3.5-3H10v-2"/></svg>Disputes<span class="badge" id="dBadge" hidden></span></button>
     <button role="tab" id="tab-roster" aria-selected="false" data-tab="roster">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21v-7M12 14c-3 0-5-2-5-5V4M7 8H4M12 14c3 0 5-2 5-5V4M17 8h3M9.5 11.5L7 10M14.5 11.5L17 10"/></svg>Roster</button>
     <button role="tab" id="tab-crew" aria-selected="false" data-tab="crew">
@@ -390,7 +441,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
     <div class="namerow" id="profileNameRow"><h2 id="profileName"></h2><button class="linkish" id="profileRename" type="button">Rename</button></div>
     <dl class="facts" id="profileFacts"></dl>
     <div>
-      <p class="label">Every photo · tap to zoom or re-sort</p>
+      <p class="label">Every photo · ✓ agreed · ~ leaning · 1 one vote · ! disputed</p>
       <div class="pgrid" id="profileGrid"></div>
     </div>
   </div>
@@ -399,8 +450,36 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
   </div>
 </div>
 
+<!-- Dispute: who said what, switch or stick, and talk it out -->
+<div class="sheet" id="dispute" hidden role="dialog" aria-modal="true" aria-labelledby="disputeTitle">
+  <button class="sheet-photo" id="disputePhoto" type="button" aria-label="Zoom in on this photo">
+    <img id="disputeImg" alt="">
+    <span class="meta" id="disputeMeta"></span>
+    <span class="chip zoom">Tap to zoom</span>
+  </button>
+  <div class="sheet-body">
+    <h2 id="disputeTitle">Dispute</h2>
+    <div class="opts" id="disputeOpts"></div>
+    <div>
+      <p class="label">Talk it out</p>
+      <div class="thread" id="thread"></div>
+      <div style="height:10px"></div>
+      <form class="composer" id="composer">
+        <input id="commentBody" type="text" maxlength="500" placeholder="What are you seeing?" autocomplete="off" enterkeyhint="send">
+        <button class="btn" type="submit">Send</button>
+      </form>
+    </div>
+  </div>
+  <div class="sheet-foot">
+    <button class="btn ghost grow" id="disputeClose" type="button">Close</button>
+  </div>
+</div>
+
+<button class="alert" id="alert" type="button" hidden><img alt=""><span></span></button>
+
 <div class="viewer" id="viewer" hidden role="dialog" aria-modal="true" aria-label="Photo zoom">
-  <div class="vtop"><span id="vcap"></span><span style="display:flex;gap:8px"><button class="vbtn" id="vResort" type="button" hidden>Re-sort</button><button class="vbtn" id="vClose" type="button">Close</button></span></div>
+  <div class="vtop"><span id="vcap"></span><span style="display:flex;gap:8px"><button class="vbtn" id="vResort" type="button" hidden>Change my vote</button><button class="vbtn" id="vClose" type="button">Close</button></span></div>
+  <div class="vvotes" id="vvotes" hidden></div>
   <div class="vstage" id="vstage"><img id="vimg" alt="Zoomed trail camera photo"></div>
   <div class="vbar">
     <button class="vbtn" id="vCrop" type="button" aria-pressed="true">Close-up</button>
@@ -425,7 +504,12 @@ const RANKS = [[800, "Old Buck Whisperer"], [400, "Guide"], [150, "Tracker"], [0
 const URL_TTL = 6 * 60 * 60; // signed photo links last 6 hours
 const PAGE = 1000;           // Supabase returns at most 1000 rows per request
 
-const state = { labels: {}, bucks: {}, users: {}, me: null, mode: "loading", streak: 0 };
+// votes: card id -> { voter uuid -> vote }. consensus: card id -> card_consensus row.
+const state = { votes: {}, consensus: {}, scores: {}, comments: {}, bucks: {}, users: {}, me: null, myUid: null, mode: "loading", streak: 0 };
+let disputeId = null;       // card open in the dispute sheet
+let forcedTop = null;       // card moved to the top of the deck by "Weigh in"
+let knownMine = null;       // my disputes at the last sync, to spot new ones
+let justVoted = null;       // my own vote just caused this dispute; don't alert about it
 const sb = supabase.createClient(BUCKBOOK_CONFIG.supabaseUrl, BUCKBOOK_CONFIG.publishableKey);
 let renderedTop = null;
 let sheetState = null;
@@ -446,13 +530,46 @@ function fmtWhen(iso, withDate = true) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + time;
 }
 function fmtDay(iso) { return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" }); }
-function deck() { return CARDS.filter(c => !state.labels[c.id]); }
+function myVote(id) { return state.votes[id]?.[state.myUid] || null; }
+function othersVotes(id) { return Object.entries(state.votes[id] || {}).filter(([v]) => v !== state.myUid).map(([, x]) => x); }
+// Two votes agree when buck-or-not matches and, if both named a buck, it's the same one.
+// (Same rule as the rater_pairs view in supabase/003_votes.sql.)
+function agrees(a, b) {
+  return a.verdict === b.verdict && (a.verdict === "not" || !a.buckId || !b.buckId || a.buckId === b.buckId);
+}
+function answerName(v) {
+  return v.verdict === "not" ? "Not a buck" : v.buckId ? (state.bucks[v.buckId]?.name || "A buck") : "Buck, unnamed";
+}
+// Photos where someone's vote conflicts with mine.
+function myDisputes() {
+  return CARDS.filter(c => { const m = myVote(c.id); return m && othersVotes(c.id).some(o => !agrees(m, o)); });
+}
+// Crew disputes I haven't weighed in on yet.
+function crewDisputes() {
+  return CARDS.filter(c => !myVote(c.id) && state.consensus[c.id]?.status === "disputed");
+}
+// A photo is settled once two or more members agree; nobody needs to see it again.
+function settled(id) { const c = state.consensus[id]; return !!c && c.votes >= 2 && c.status === "agreed"; }
+// Your deck: photos you haven't voted on and that aren't settled. Disputes first, to get more eyes.
+function deck() {
+  const open = CARDS.filter(c => !myVote(c.id) && !settled(c.id));
+  const first = open.filter(c => c.id === forcedTop);
+  const disputed = open.filter(c => c.id !== forcedTop && state.consensus[c.id]?.status === "disputed");
+  return first.concat(disputed, open.filter(c => c.id !== forcedTop && state.consensus[c.id]?.status !== "disputed"));
+}
+// Which buck a photo belongs to: the crew consensus once there is one, else your own vote.
+function buckOf(id) {
+  const c = state.consensus[id];
+  if (c && c.verdict === "buck" && c.top_buck) return c.top_buck;
+  const mine = myVote(id);
+  return mine?.verdict === "buck" ? mine.buckId : null;
+}
 function sightings(buckId) {
-  return CARDS.filter(c => state.labels[c.id]?.buckId === buckId).sort((a, b) => a.when.localeCompare(b.when));
+  return CARDS.filter(c => buckOf(c.id) === buckId).sort((a, b) => a.when.localeCompare(b.when));
 }
 function rankFor(score) { return RANKS.find(([min]) => score >= min)[1]; }
 function scoreFor(uid) {
-  const labels = Object.values(state.labels).filter(l => (l.by ?? null) === uid).length;
+  const labels = Object.values(state.votes).flatMap(Object.values).filter(v => v.by === uid).length;
   const bucks = Object.values(state.bucks).filter(b => (b.by ?? null) === uid).length;
   return { labels, bucks, score: labels * 10 + bucks * 25 };
 }
@@ -483,16 +600,12 @@ async function fetchAll(table, build = q => q) {
 
 async function writeDoc(path, data) {
   const [col, id] = path.split("/");
+  if (col === "votes") return writeVote(id, data);
   const before = state[col][id];
   if (data === null) delete state[col][id]; else state[col][id] = data;
   renderAll();
   let res;
-  if (col === "labels") {
-    res = data === null
-      ? await sb.from("labels").delete().eq("card_id", id)
-      : await sb.from("labels").upsert({ card_id: id, verdict: data.verdict, buck_id: data.buckId,
-          points: data.points, confidence: data.confidence ?? null });
-  } else {
+  {
     res = data === null
       ? await sb.from("bucks").delete().eq("id", id)
       : await sb.from("bucks").upsert({ id, name: data.name, cover: data.cover ?? null });
@@ -505,28 +618,56 @@ async function writeDoc(path, data) {
   }
 }
 
+async function writeVote(cardId, vote) {
+  const before = myVote(cardId);
+  const put = v => {
+    state.votes[cardId] = { ...(state.votes[cardId] || {}) };
+    if (v) state.votes[cardId][state.myUid] = v; else delete state.votes[cardId][state.myUid];
+  };
+  put(vote);
+  renderAll();
+  const res = vote === null
+    ? await sb.from("votes").delete().eq("card_id", cardId).eq("voter", state.myUid)
+    : await sb.from("votes").upsert({ card_id: cardId, verdict: vote.verdict, buck_id: vote.buckId,
+        points: vote.points, confidence: vote.confidence ?? null }, { onConflict: "card_id,voter" });
+  if (res.error) {
+    put(before);
+    renderedTop = null;
+    renderAll();
+    toast(friendly(res.error));
+  }
+}
+
 let syncing = false, syncAgain = false;
 async function sync() {
   if (!CARDS.length) return;
   if (syncing) { syncAgain = true; return; }
   syncing = true;
   try {
-    const [l, b, c] = await Promise.all([fetchAll("labels"), fetchAll("bucks"), fetchAll("crew")]);
+    const [v, b, c, cons, sc] = await Promise.all([
+      fetchAll("votes"), fetchAll("bucks"), fetchAll("crew"), fetchAll("card_consensus"), fetchAll("rater_scores"),
+    ]);
+    const cm = await fetchAll("comments", q => q.order("at"));
+    const comments = {};
+    cm.forEach(r => (comments[r.card_id] ||= []).push(r));
     const users = {};
     c.forEach(r => { users[nameKey(r.name)] = r.name; });
-    const labels = {};
-    l.forEach(r => {
-      labels[r.card_id] = { verdict: r.verdict, buckId: r.buck_id, points: r.points,
-        confidence: r.confidence, by: nameKey(r.by_name), at: r.at };
-      if (r.by_name && !users[nameKey(r.by_name)]) users[nameKey(r.by_name)] = r.by_name;
+    const votes = {};
+    v.forEach(r => {
+      (votes[r.card_id] ||= {})[r.voter] = { verdict: r.verdict, buckId: r.buck_id, points: r.points,
+        confidence: r.confidence, by: nameKey(r.voter_name), name: r.voter_name, at: r.at };
+      if (r.voter_name && !users[nameKey(r.voter_name)]) users[nameKey(r.voter_name)] = r.voter_name;
     });
     const bucks = {};
     b.forEach(r => {
       bucks[r.id] = { name: r.name, cover: r.cover, by: nameKey(r.by_name), at: r.at };
       if (r.by_name && !users[nameKey(r.by_name)]) users[nameKey(r.by_name)] = r.by_name;
     });
-    Object.assign(state, { labels, bucks, users, mode: "shared" });
+    const consensus = Object.fromEntries(cons.map(r => [r.card_id, r]));
+    const scores = Object.fromEntries(sc.map(r => [nameKey(r.member), r]));
+    Object.assign(state, { votes, bucks, users, consensus, scores, comments, mode: "shared" });
     renderAll();
+    noticeDisputes();
   } catch (e) {
     if (state.mode !== "offline") { state.mode = "offline"; renderAll(); }
   } finally {
@@ -541,7 +682,12 @@ function renderAll() {
   renderSort();
   if (!$("view-roster").hidden) renderRoster();
   if (!$("view-crew").hidden) renderCrew();
+  if (!$("view-disputes").hidden) renderDisputes();
   if (profileId) renderProfile();
+  if (disputeId) renderDispute();
+  const n = myDisputes().length;
+  $("dBadge").hidden = !n;
+  $("dBadge").textContent = n;
 }
 
 function renderHeader() {
@@ -645,11 +791,13 @@ function renderSort() {
 
 function buckStats(id) {
   const seen = sightings(id);
-  const confs = seen.map(c => state.labels[c.id]?.confidence).filter(Boolean);
-  const pts = seen.map(c => state.labels[c.id]?.points).filter(Boolean);
+  const backing = seen.flatMap(c => Object.values(state.votes[c.id] || {}).filter(v => v.buckId === id));
+  const confs = backing.map(v => v.confidence).filter(Boolean);
+  const pts = backing.map(v => v.points).filter(Boolean);
   return {
     seen, confs, pts,
-    sure: confs.filter(v => v >= 4).length,
+    // Confirmed: two or more members looked and the crew agrees (or leans clearly) it's him.
+    sure: seen.filter(c => { const k = state.consensus[c.id]; return k && k.votes >= 2 && k.status !== "disputed"; }).length,
     daylight: seen.filter(c => c.daylight).length,
     cams: [...new Set(seen.map(c => c.cam))],
   };
@@ -661,14 +809,18 @@ function renderRoster() {
   const bucks = Object.entries(state.bucks)
     .map(([id, b]) => ({ id, ...b, ...buckStats(id) }))
     .sort((a, b) => b.seen.length - a.seen.length);
-  const unnamed = Object.values(state.labels).filter(l => l.verdict === "buck" && !l.buckId).length;
+  const unnamed = CARDS.filter(c => { const k = state.consensus[c.id]; return k && k.verdict === "buck" && !k.top_buck; }).length;
+  const disputed = CARDS.filter(c => state.consensus[c.id]?.status === "disputed");
 
   const summary = document.createElement("div");
   summary.className = "summary";
-  summary.innerHTML = `<span><b></b> bucks named</span><span><b></b> unnamed buck photos</span>`;
+  summary.innerHTML = `<span><b></b> bucks named</span><span><b></b> unnamed buck photos</span><span><b></b> in dispute</span>`;
   summary.querySelectorAll("b")[0].textContent = bucks.length;
   summary.querySelectorAll("b")[1].textContent = unnamed;
+  summary.querySelectorAll("b")[2].textContent = disputed.length;
   wrap.append(summary);
+
+
 
   if (!bucks.length) {
     const e = document.createElement("div");
@@ -710,10 +862,9 @@ function renderProfile() {
   $("profilePhoto").onclick = () => cover && openViewer(cover, "crop");
   $("profileName").textContent = b.name;
 
-  const unrated = s.seen.length - s.confs.length;
   const facts = [
-    ["Sightings", `${s.seen.length} (${s.sure} sure)`],
-    ["ID confidence", s.confs.length ? `avg ${(s.confs.reduce((a, v) => a + v, 0) / s.confs.length).toFixed(1)} of 5${unrated ? ` · ${unrated} unrated` : ""}` : "unrated"],
+    ["Sightings", `${s.seen.length} (${s.sure} confirmed by 2+)`],
+    ["ID confidence", s.confs.length ? `avg ${(s.confs.reduce((a, v) => a + v, 0) / s.confs.length).toFixed(1)} of 5` : "unrated"],
     ["Daylight", s.seen.length ? `${s.daylight} of ${s.seen.length}` : "—"],
     ["Points", s.pts.length ? (Math.max(...s.pts) >= 12 ? "12+" : String(Math.max(...s.pts))) : "not counted"],
     ["Cameras", s.cams.join(", ") || "—"],
@@ -730,15 +881,16 @@ function renderProfile() {
   const grid = $("profileGrid");
   grid.replaceChildren();
   s.seen.slice().reverse().forEach(c => {
-    const conf = state.labels[c.id]?.confidence;
+    const k = state.consensus[c.id];
+    const mark = !k ? "?" : k.status === "disputed" ? "!" : k.votes < 2 ? "1" : k.status === "leaning" ? "~" : "✓";
     const t = document.createElement("button");
     t.type = "button";
-    t.className = "thumb" + (!conf || conf <= 2 ? " shaky" : "");
+    t.className = "thumb" + (mark === "!" || mark === "1" || mark === "?" ? " shaky" : "");
     t.innerHTML = `<img alt=""><span class="t"></span><span class="c"></span>`;
     t.querySelector("img").src = c.crop;
     t.querySelector(".t").textContent = fmtDay(c.when);
-    t.querySelector(".c").textContent = conf || "?";
-    t.setAttribute("aria-label", `${fmtWhen(c.when)}, confidence ${conf || "unrated"}`);
+    t.querySelector(".c").textContent = mark;
+    t.setAttribute("aria-label", `${fmtWhen(c.when)}, ${k ? k.status : "no votes"}`);
     t.addEventListener("click", () => openViewer(c, "crop", { resort: true }));
     grid.append(t);
   });
@@ -766,7 +918,7 @@ $("profileClose").addEventListener("click", closeProfile);
 function renderCrew() {
   const wrap = $("crew");
   const ids = [...new Set([
-    ...Object.values(state.labels).map(l => l.by ?? null),
+    ...Object.values(state.votes).flatMap(Object.values).map(v => v.by),
     ...Object.values(state.bucks).map(b => b.by ?? null),
     state.me,
   ])].filter(Boolean);
@@ -782,7 +934,9 @@ function renderCrew() {
     av.textContent = name.slice(0, 1).toUpperCase();
     av.style.background = `hsl(${[...r.uid].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 360, 7)} 38% 38%)`;
     row.querySelector("b").textContent = name + (r.uid === state.me ? " (you)" : "");
-    row.querySelector("small").textContent = `${rankFor(r.score)} · ${r.labels} sorted · ${r.bucks} named`;
+    const sc = state.scores[r.uid];
+    const agree = sc && sc.shared ? `${Math.round(sc.agreement * 100)}% agree (${sc.shared} shared)` : "no shared photos yet";
+    row.querySelector("small").textContent = `${rankFor(r.score)} · ${r.labels} votes · ${agree}`;
     row.querySelector(".pts").textContent = r.score;
     wrap.append(row);
   });
@@ -863,6 +1017,7 @@ function decide(verdict) {
 }
 
 async function commit(c, label, newBuck) {
+  if (forcedTop === c.id) forcedTop = null;
   await flyOut(label.verdict);
   state.streak += 1;
   const stamp = { by: state.me, at: new Date().toISOString() };
@@ -871,13 +1026,24 @@ async function commit(c, label, newBuck) {
     gained += 25;
     await writeDoc("bucks/" + newBuck.id, { name: newBuck.name, cover: c.id, ...stamp });
   }
-  await writeDoc("labels/" + c.id, { ...label, ...stamp });
+  justVoted = c.id;
+  await writeDoc("votes/" + c.id, { ...label, ...stamp });
   lastAction = { cardId: c.id, newBuckId: newBuck?.id ?? null };
-  const buckName = label.buckId ? state.bucks[label.buckId]?.name : null;
-  const msg = newBuck ? `New buck: ${newBuck.name}`
-    : buckName ? `${buckName} · #${sightings(label.buckId).length}`
-    : label.verdict === "buck" ? "Buck logged" : label.verdict === "not" ? "Not a buck" : "Set aside";
-  toast(msg, gained, true);
+  const conflict = othersVotes(c.id).some(o => !agrees(label, o));
+  if (conflict) { hideToast(); openDispute(c.id); }
+  else toast(voteFeedback(c.id, label, newBuck), gained, true);
+}
+
+// After a blind vote, say how it lines up with the rest of the crew.
+function voteFeedback(cardId, vote, newBuck) {
+  const others = othersVotes(cardId);
+  const nameOf = v => v.verdict === "not" ? "not a buck" : v.buckId ? (state.bucks[v.buckId]?.name || "a buck") : "a buck";
+  const mine = newBuck ? newBuck.name : nameOf(vote);
+  if (!others.length) return newBuck ? `New buck: ${newBuck.name} · first call` : `${mine[0].toUpperCase() + mine.slice(1)} · first call`;
+  const agrees = others.filter(o => o.verdict === vote.verdict && (vote.verdict === "not" || !o.buckId || !vote.buckId || o.buckId === vote.buckId));
+  if (agrees.length === others.length) return `Matches ${others.map(o => o.name).join(", ")}`;
+  const off = others.filter(o => !agrees.includes(o));
+  return `Dispute: ${off.map(o => `${o.name} said ${nameOf(o)}`).join(", ")}`;
 }
 
 async function undo() {
@@ -885,8 +1051,9 @@ async function undo() {
   const { cardId, newBuckId } = lastAction;
   lastAction = null;
   state.streak = 0;
-  await writeDoc("labels/" + cardId, null);
-  if (newBuckId && !sightings(newBuckId).length) await writeDoc("bucks/" + newBuckId, null);
+  await writeDoc("votes/" + cardId, null);
+  const stillUsed = Object.values(state.votes).some(vs => Object.values(vs).some(v => v.buckId === newBuckId));
+  if (newBuckId && !stillUsed) await writeDoc("bucks/" + newBuckId, null);
   hideToast();
 }
 
@@ -900,7 +1067,7 @@ function openSheet(c) {
   $("newName").value = "";
 
   // Bucks already tagged in this burst first, then most recently seen.
-  const burstBucks = new Set(CARDS.filter(o => o.burst === c.burst && state.labels[o.id]?.buckId).map(o => state.labels[o.id].buckId));
+  const burstBucks = new Set(CARDS.filter(o => o.burst === c.burst && o.id !== c.id).map(o => myVote(o.id)?.buckId || buckOf(o.id)).filter(Boolean));
   const list = Object.entries(state.bucks).map(([id, b]) => {
     const seen = sightings(id);
     return { id, ...b, seen, last: seen.length ? seen[seen.length - 1].when : "", sugg: burstBucks.has(id) };
@@ -1031,6 +1198,177 @@ $("sheetSkip").addEventListener("click", () => {
 });
 $("sheetBack").addEventListener("click", sheetBack);
 
+// ---------- disputes ----------
+function disputeRow(c, mine) {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "drow" + (mine ? " mine" : "");
+  b.innerHTML = `<img alt=""><span><b></b><small></small></span><span class="go"></span>`;
+  b.querySelector("img").src = c.crop;
+  const votes = Object.values(state.votes[c.id] || {});
+  if (mine) {
+    const m = myVote(c.id);
+    const against = othersVotes(c.id).filter(o => !agrees(m, o));
+    b.querySelector("b").textContent = `You: ${answerName(m)} · ${against.map(o => `${o.name}: ${answerName(o)}`).join(" · ")}`;
+    b.querySelector(".go").textContent = "Settle it";
+    b.addEventListener("click", () => openDispute(c.id));
+  } else {
+    b.querySelector("b").textContent = `${votes.length} votes, no clear call`;
+    b.querySelector(".go").textContent = "Weigh in";
+    b.addEventListener("click", () => { forcedTop = c.id; renderedTop = null; showTab("sort"); renderAll(); });
+  }
+  const talk = (state.comments[c.id] || []).length;
+  b.querySelector("small").textContent = `CAM ${c.cam} · ${fmtWhen(c.when)}${talk ? ` · ${talk} comment${talk === 1 ? "" : "s"}` : ""}`;
+  return b;
+}
+
+function renderDisputes() {
+  const wrap = $("disputes");
+  wrap.replaceChildren();
+  const mine = myDisputes(), crew = crewDisputes();
+  const section = (label, cards, isMine, empty) => {
+    const h = document.createElement("p"); h.className = "label"; h.textContent = label; wrap.append(h);
+    const list = document.createElement("div"); list.className = "dlist";
+    if (!cards.length) { const e = document.createElement("div"); e.className = "empty"; e.textContent = empty; list.append(e); }
+    cards.forEach(c => list.append(disputeRow(c, isMine)));
+    wrap.append(list);
+  };
+  section(`With you · ${mine.length}`, mine, true, "Nobody disagrees with you right now.");
+  section(`Crew disputes you haven't voted on · ${crew.length}`, crew, false, "No open crew disputes.");
+}
+
+function openDispute(id) {
+  disputeId = id;
+  const c = CARD[id];
+  $("disputeImg").src = c.crop;
+  $("disputePhoto").onclick = () => openViewer(c, "crop");
+  $("disputeMeta").textContent = `CAM ${c.cam} · ${fmtWhen(c.when)} · ${c.daylight ? "day" : "night"}`;
+  $("dispute").hidden = false;
+  $("dispute").querySelector(".sheet-body").scrollTop = 0;
+  renderDispute();
+}
+function closeDispute() { disputeId = null; $("dispute").hidden = true; }
+
+function renderDispute() {
+  const id = disputeId;
+  const all = Object.values(state.votes[id] || {});
+  const mine = myVote(id);
+  // Group votes into answers: "not", a named buck, or an unnamed buck.
+  const groups = new Map();
+  all.forEach(v => {
+    const key = v.verdict === "not" ? "not" : v.buckId || "unnamed";
+    if (!groups.has(key)) groups.set(key, { key, verdict: v.verdict, buckId: v.buckId, voters: [] });
+    groups.get(key).voters.push(v);
+  });
+  const opposed = mine ? all.filter(o => o !== mine && !agrees(mine, o)).map(o => o.name) : [];
+  $("disputeTitle").textContent = !mine ? "Crew dispute"
+    : opposed.length ? `Dispute with ${[...new Set(opposed)].join(" & ")}` : "Settled";
+
+  const box = $("disputeOpts");
+  box.replaceChildren();
+  [...groups.values()].sort((a, b) => b.voters.length - a.voters.length).forEach(g => {
+    const isMine = mine && (g.key === (mine.verdict === "not" ? "not" : mine.buckId || "unnamed"));
+    const el = document.createElement("div");
+    el.className = "opt" + (isMine ? " mine" : "");
+    const buck = g.buckId ? state.bucks[g.buckId] : null;
+    const cover = buck ? (CARD[buck.cover] || sightings(g.buckId)[0]) : null;
+    el.innerHTML = `${cover ? "<img alt=''>" : `<span class="noimg">${g.verdict === "not" ? "✕" : "?"}</span>`}<span><b></b><small></small></span><div class="acts"></div>`;
+    if (cover) el.querySelector("img").src = cover.crop;
+    el.querySelector("b").textContent = answerName(g) + (isMine ? " · you" : "");
+    el.querySelector("small").textContent = g.voters.map(v => `${v.name || "Someone"}${v.confidence ? ` (${v.confidence})` : ""}`).join(" · ");
+    const acts = el.querySelector(".acts");
+    if (mine && !isMine) {
+      const sw = document.createElement("button");
+      sw.type = "button"; sw.className = "switch";
+      sw.textContent = `Switch to ${answerName(g)}`;
+      sw.addEventListener("click", () => {
+        if (g.verdict === "not" || !g.buckId) return switchVote(id, g, null);
+        // Named buck: ask how sure before switching.
+        acts.replaceChildren();
+        const q = document.createElement("span"); q.className = "agree"; q.textContent = "How sure?"; acts.append(q);
+        CONFIDENCE.forEach(([v, word]) => {
+          const b = document.createElement("button"); b.type = "button"; b.title = word;
+          b.innerHTML = `<span class="n"></span>`; b.querySelector(".n").textContent = v;
+          b.addEventListener("click", () => switchVote(id, g, v));
+          acts.append(b);
+        });
+      });
+      acts.append(sw);
+    }
+    if (!acts.children.length) acts.remove();
+    box.append(el);
+  });
+  if (mine && opposed.length) {
+    const stick = document.createElement("p"); stick.className = "note";
+    stick.textContent = "Sticking with your call? Leave it. Say why below, or wait for another member to weigh in.";
+    box.append(stick);
+  }
+
+  const thread = $("thread");
+  thread.replaceChildren();
+  const cmts = state.comments[id] || [];
+  if (!cmts.length) { const e = document.createElement("p"); e.className = "note"; e.textContent = "No comments yet. Point out what you see: brow tines, a kicker, body size."; thread.append(e); }
+  cmts.forEach(cm => {
+    const el = document.createElement("div");
+    el.className = "cmt" + (cm.author === state.myUid ? " me" : "");
+    el.innerHTML = `<b></b><small></small><p></p>`;
+    el.querySelector("b").textContent = cm.author_name || "Someone";
+    el.querySelector("small").textContent = fmtWhen(cm.at);
+    el.querySelector("p").textContent = cm.body;
+    thread.append(el);
+  });
+}
+
+async function switchVote(id, g, confidence) {
+  const mine = myVote(id);
+  justVoted = id;
+  await writeDoc("votes/" + id, { verdict: g.verdict, buckId: g.buckId || null, points: mine?.points ?? null,
+    confidence: g.verdict === "buck" && g.buckId ? confidence : null, by: state.me });
+  renderDispute();
+}
+
+$("composer").addEventListener("submit", async e => {
+  e.preventDefault();
+  const body = $("commentBody").value.trim();
+  if (!body || !disputeId) return;
+  $("commentBody").value = "";
+  const { error } = await sb.from("comments").insert({ card_id: disputeId, body });
+  if (error) { $("commentBody").value = body; toast(friendly(error)); return; }
+  sync();
+});
+$("disputeClose").addEventListener("click", closeDispute);
+
+// Call out new disputes the moment they land, and celebrate ones that settle.
+let alertTimer = null;
+function noticeDisputes() {
+  const now = new Set(myDisputes().map(c => c.id));
+  if (knownMine) {
+    const fresh = [...now].filter(id => !knownMine.has(id) && id !== justVoted);
+    const settledNow = [...knownMine].filter(id => !now.has(id));
+    if (fresh.length) {
+      const id = fresh[0], c = CARD[id], m = myVote(id);
+      const against = othersVotes(id).filter(o => !agrees(m, o));
+      const a = $("alert");
+      a.querySelector("img").src = c.crop;
+      a.querySelector("span").innerHTML = "";
+      const line = document.createElement("span");
+      line.textContent = `${against.map(o => o.name).join(" & ")} disagree${against.length === 1 ? "s" : ""} with you: ${answerName(m)} vs ${answerName(against[0])}`;
+      const sub = document.createElement("small");
+      sub.textContent = fresh.length > 1 ? `+${fresh.length - 1} more · tap to settle it` : "Tap to settle it";
+      a.querySelector("span").append(line, sub);
+      a.onclick = () => { a.hidden = true; openDispute(id); };
+      a.hidden = false;
+      clearTimeout(alertTimer);
+      alertTimer = setTimeout(() => { a.hidden = true; }, 12000);
+    }
+    settledNow.forEach(id => {
+      const m = myVote(id);
+      if (m && Object.keys(state.votes[id] || {}).length > 1) toast(`Settled: ${answerName(m)}`);
+    });
+  }
+  knownMine = now;
+  justVoted = null;
+}
+
 // ---------- toast ----------
 let toastTimer = null;
 function toast(msg, gained = 0, canUndo = false) {
@@ -1054,6 +1392,7 @@ function showTab(name) {
   document.querySelectorAll(".view").forEach(v => v.hidden = v.id !== "view-" + name);
   if (name === "roster") renderRoster();
   if (name === "crew") renderCrew();
+  if (name === "disputes") renderDisputes();
 }
 document.querySelectorAll(".tabbar button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
 $("btnNot").addEventListener("click", () => decide("not"));
@@ -1065,6 +1404,7 @@ document.addEventListener("keydown", e => {
     else if (e.key === "-") zoomBy(1 / 1.4);
     return;
   }
+  if (disputeId) { if (e.key === "Escape") closeDispute(); return; }
   if (sheetState) { if (e.key === "Escape") sheetBack(); return; }
   if (profileId) { if (e.key === "Escape") closeProfile(); return; }
   if ($("view-sort").hidden || e.target.tagName === "INPUT") return;
@@ -1078,7 +1418,21 @@ const MAX_ZOOM = 8;
 
 function openViewer(c, mode = "crop", opts = {}) {
   V.card = c;
-  $("vResort").hidden = !(opts.resort && state.labels[c.id]);
+  $("vResort").hidden = !(opts.resort && myVote(c.id));
+  const vv = $("vvotes");
+  const all = Object.values(state.votes[c.id] || {});
+  const k = state.consensus[c.id];
+  vv.hidden = !(all.length && (myVote(c.id) || settled(c.id)));   // blind until you've voted
+  if (!vv.hidden) {
+    vv.replaceChildren();
+    const st = document.createElement("span"); st.className = "st"; st.textContent = (k?.status || "") + " · ";
+    vv.append(st);
+    all.forEach((v, i) => {
+      const who = document.createElement("b"); who.textContent = v.name || "Someone";
+      const what = v.verdict === "not" ? "not a buck" : v.buckId ? (state.bucks[v.buckId]?.name || "a buck") : "buck, unnamed";
+      vv.append(who, document.createTextNode(`: ${what}${v.confidence ? ` (${v.confidence})` : ""}${i < all.length - 1 ? " · " : ""}`));
+    });
+  }
   $("vcap").textContent = `CAM ${c.cam} · ${fmtWhen(c.when)}`;
   $("vimg").classList.remove("enhanced");
   $("vEnh").setAttribute("aria-pressed", "false");
@@ -1162,8 +1516,8 @@ $("vClose").addEventListener("click", closeViewer);
 $("vResort").addEventListener("click", async () => {
   const id = V.card.id;
   closeViewer();
-  await writeDoc("labels/" + id, null);
-  toast("Back in the deck. Sort it again from Sort.");
+  await writeDoc("votes/" + id, null);
+  toast("Your vote is withdrawn. The photo is back in your deck.");
 });
 $("vCrop").addEventListener("click", () => setViewerMode("crop"));
 $("vFrame").addEventListener("click", () => setViewerMode("frame"));
@@ -1233,6 +1587,7 @@ async function loadCards() {
 let channel = null, refreshTimer = null;
 async function start(myName) {
   state.me = nameKey(myName);
+  state.myUid = (await sb.auth.getSession()).data.session?.user.id ?? null;
   try {
     await loadCards();
   } catch (e) {
@@ -1244,7 +1599,8 @@ async function start(myName) {
     let pending = null;
     const soon = () => { clearTimeout(pending); pending = setTimeout(() => { if (!sheetState) sync(); }, 300); };
     channel = sb.channel("buckbook")
-      .on("postgres_changes", { event: "*", schema: "public", table: "labels" }, soon)
+      .on("postgres_changes", { event: "*", schema: "public", table: "votes" }, soon)
+      .on("postgres_changes", { event: "*", schema: "public", table: "comments" }, soon)
       .on("postgres_changes", { event: "*", schema: "public", table: "bucks" }, soon)
       .on("postgres_changes", { event: "*", schema: "public", table: "crew" }, soon)
       .subscribe();
