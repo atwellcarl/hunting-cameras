@@ -327,6 +327,31 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .vbar { padding-bottom: calc(var(--bottom) + 10px); justify-content: center; flex-wrap: wrap; }
 .vbtn { appearance: none; border: 1px solid #3A4535; background: #161B14; color: var(--ink); border-radius: 999px; padding: 10px 14px; font: 500 13px var(--mono); cursor: pointer; min-width: 44px; min-height: 42px; }
 .vbtn[aria-pressed="true"] { background: var(--ink); color: #000; }
+.pickprompt {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 23; max-width: 640px; margin: 0 auto;
+  background: var(--panel-2); border-top: 2px solid var(--blaze); border-radius: 16px 16px 0 0;
+  padding: 14px 16px calc(14px + var(--bottom)); display: grid; grid-template-columns: 56px 1fr; gap: 10px 12px; align-items: center;
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, .5);
+}
+.pickprompt img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; background: var(--well); }
+.pickprompt b { display: block; font: 800 24px/1 var(--display); text-transform: uppercase; }
+.pickprompt small { font: 12px var(--mono); color: var(--muted); }
+.pp-btns { grid-column: 1 / -1; display: flex; gap: 8px; }
+.pp-btns .btn { flex: 1; }
+.vpip {
+  position: absolute; top: 10px; right: 10px; z-index: 3; width: 34%; max-width: 200px; aspect-ratio: 16 / 10;
+  border: 2px solid var(--ink); border-radius: 8px; overflow: hidden; background: #000; padding: 0; cursor: pointer;
+}
+.vpip img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.vpip span { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, .7); color: var(--ink); font: 500 10px/1.8 var(--mono); text-transform: uppercase; letter-spacing: .06em; text-align: center; }
+.vnav { position: absolute; top: 50%; transform: translateY(-50%); z-index: 3; width: 44px; height: 64px; border: 0; border-radius: 10px; background: rgba(0, 0, 0, .45); color: var(--ink); font: 800 28px var(--display); cursor: pointer; }
+.vnav.prev { left: 6px; } .vnav.next { right: 6px; }
+.vbucks { display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; background: #080A07; border-top: 1px solid #1E251B; }
+.vbucks button { appearance: none; flex: 0 0 68px; border: 2px solid #2A3226; background: #000; border-radius: 8px; padding: 0; overflow: hidden; cursor: pointer; color: var(--ink); }
+.vbucks button[aria-pressed="true"] { border-color: var(--blaze); }
+.vbucks img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
+.vbucks span { display: block; font: 600 10px/1.6 var(--body); padding: 0 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vbtn.go { background: var(--blaze); color: var(--blaze-ink); border-color: var(--blaze); font-weight: 600; }
 .vzoom { font: 12px var(--mono); color: var(--muted); min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
 
 /* ---------- toast ---------- */
@@ -460,6 +485,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
   </div>
 </div>
 
+<!-- Tapping a buck in "Which buck?": call it, or compare first -->
+<div class="pickprompt" id="pickPrompt" hidden role="dialog" aria-labelledby="ppName">
+  <img id="ppImg" alt="">
+  <div><b id="ppName"></b><small id="ppMeta"></small></div>
+  <div class="pp-btns">
+    <button class="btn ghost" id="ppCancel" type="button">Back</button>
+    <button class="btn ghost" id="ppCompare" type="button">Compare</button>
+    <button class="btn" id="ppYes" type="button">It's this buck</button>
+  </div>
+</div>
+
 <!-- Buck profile: every photo of one buck -->
 <div class="sheet" id="profile" hidden role="dialog" aria-modal="true" aria-labelledby="profileName">
   <button class="sheet-photo" id="profilePhoto" type="button" aria-label="Zoom in on his best photo">
@@ -543,9 +579,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 </div>
 
 <div class="viewer" id="viewer" hidden role="dialog" aria-modal="true" aria-label="Photo zoom">
-  <div class="vtop"><span id="vcap"></span><span style="display:flex;gap:8px"><button class="vbtn" id="vCover" type="button" hidden>Make cover</button><button class="vbtn" id="vMove" type="button" hidden>Move to…</button><button class="vbtn" id="vResort" type="button" hidden>Change my vote</button><button class="vbtn" id="vClose" type="button">Close</button></span></div>
+  <div class="vtop"><span id="vcap"></span><span style="display:flex;gap:8px"><button class="vbtn" id="vCover" type="button" hidden>Make cover</button><button class="vbtn" id="vMove" type="button" hidden>Move to…</button><button class="vbtn" id="vResort" type="button" hidden>Change my vote</button><button class="vbtn go" id="vThisBuck" type="button" hidden></button><button class="vbtn" id="vClose" type="button">Close</button></span></div>
   <div class="vvotes" id="vvotes" hidden></div>
-  <div class="vstage" id="vstage"><img id="vimg" alt="Zoomed trail camera photo"></div>
+  <div class="vstage" id="vstage"><img id="vimg" alt="Zoomed trail camera photo">
+    <button class="vpip" id="vpip" type="button" hidden aria-label="Swap the two photos"><img id="vpipImg" alt=""><span id="vpipLabel"></span></button>
+    <button class="vnav prev" id="vPrev" type="button" hidden aria-label="Previous photo of this buck">‹</button>
+    <button class="vnav next" id="vNext" type="button" hidden aria-label="Next photo of this buck">›</button>
+  </div>
+  <div class="vbucks" id="vbucks" hidden></div>
   <div class="vbar">
     <button class="vbtn" id="vCrop" type="button" aria-pressed="true">Close-up</button>
     <button class="vbtn" id="vFrame" type="button" aria-pressed="false">Full frame</button>
@@ -1390,11 +1431,7 @@ function openSheet(c, opts = {}) {
     tile.querySelector("b").textContent = b.name;
     tile.querySelector("small").textContent = `${b.seen.length} seen`;
     if (b.sugg) { const s = document.createElement("span"); s.className = "sugg"; s.textContent = "Same burst"; tile.append(s); }
-    tile.addEventListener("click", () => {
-      sheetState.buckId = b.id;
-      syncSheet();
-      $("details").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
-    });
+    tile.addEventListener("click", () => openPickPrompt(b.id));
     pick.append(tile);
   }
 
@@ -1433,6 +1470,7 @@ function openSheet(c, opts = {}) {
 }
 
 function goStep(step) {
+  closePickPrompt();
   sheetState.step = step;
   if (step === "ask") { sheetState.buckId = null; sheetState.newName = ""; $("newName").value = ""; }
   if (step === "new") sheetState.buckId = null;
@@ -1474,6 +1512,7 @@ function sheetBack() {
 }
 
 function closeSheet() {
+  closePickPrompt();
   sheetState = null;
   $("sheet").hidden = true;
 }
@@ -1527,6 +1566,101 @@ $("sheetSkip").addEventListener("click", async () => {
   commit(card, { verdict: "buck", buckId: null, points: null, confidence: null });
 });
 $("sheetBack").addEventListener("click", sheetBack);
+
+// ---------- "It's this buck?" prompt and compare ----------
+function openPickPrompt(buckId) {
+  const b = state.bucks[buckId];
+  const cover = CARD[b.cover] || sightings(buckId)[0];
+  $("ppImg").src = cover ? cover.crop : "";
+  $("ppName").textContent = b.name;
+  $("ppMeta").textContent = `${sightings(buckId).length} photos${b.notes ? " · " + b.notes : ""}`;
+  $("pickPrompt").dataset.buck = buckId;
+  $("pickPrompt").hidden = false;
+}
+function closePickPrompt() { $("pickPrompt").hidden = true; }
+function chooseBuck(buckId) {
+  closePickPrompt();
+  sheetState.buckId = buckId;
+  syncSheet();
+  $("details").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+}
+$("ppCancel").addEventListener("click", closePickPrompt);
+$("ppYes").addEventListener("click", () => chooseBuck($("pickPrompt").dataset.buck));
+$("ppCompare").addEventListener("click", () => { closePickPrompt(); openCompare(sheetState.card, $("pickPrompt").dataset.buck); });
+
+// A buck's photos for comparing: his cover first, then newest to oldest, never the photo being sorted.
+function comparePhotos(buckId, exclude) {
+  const b = state.bucks[buckId];
+  const rest = sightings(buckId).filter(c => c.id !== exclude && c.id !== b.cover).reverse();
+  const cover = b.cover && b.cover !== exclude ? CARD[b.cover] : null;
+  return cover ? [cover, ...rest] : rest;
+}
+
+// Compare: the candidate buck full screen, the photo being sorted as a small inset. Tap the inset to swap.
+function openCompare(card, buckId) {
+  V.compare = { unknown: card, buckId, idx: 0, showing: "buck" };
+  ["vResort", "vMove", "vCover", "vvotes"].forEach(id => { $(id).hidden = true; });
+  $("vpip").hidden = false; $("vbucks").hidden = false; $("vThisBuck").hidden = false;
+  $("vimg").classList.remove("enhanced");
+  $("vEnh").setAttribute("aria-pressed", "false");
+  renderCompareBucks();
+  renderCompare();
+  $("viewer").hidden = false;
+}
+function renderCompare() {
+  const C = V.compare, b = state.bucks[C.buckId];
+  const photos = comparePhotos(C.buckId, C.unknown.id);
+  if (!photos.length) C.showing = "unknown";
+  C.idx = Math.max(0, Math.min(C.idx, photos.length - 1));
+  const his = photos[C.idx];
+  const main = C.showing === "buck" ? his : C.unknown;
+  const inset = C.showing === "buck" ? C.unknown : his;
+  V.card = main;
+  setViewerMode(V.mode);
+  $("vpipImg").src = inset ? inset.crop : "";
+  $("vpipLabel").textContent = C.showing === "buck" ? "Your photo" : b.name;
+  $("vpip").hidden = !inset;
+  $("vcap").textContent = C.showing === "buck"
+    ? `${b.name} · ${C.idx + 1} / ${photos.length} · CAM ${main.cam} · ${fmtDay(main.when)}`
+    : `Your photo · CAM ${main.cam} · ${fmtWhen(main.when)}`;
+  const leaf = C.showing === "buck" && photos.length > 1;
+  $("vPrev").hidden = !leaf; $("vNext").hidden = !leaf;
+  $("vThisBuck").textContent = `It's ${b.name}`;
+  $("vbucks").querySelectorAll("button").forEach(t => t.setAttribute("aria-pressed", String(t.dataset.id === C.buckId)));
+}
+function renderCompareBucks() {
+  const strip = $("vbucks");
+  strip.replaceChildren();
+  (sheetState?.list || bucksHere().map(([id, b]) => ({ id, ...b }))).forEach(b => {
+    const cover = CARD[b.cover] || sightings(b.id)[0];
+    const t = document.createElement("button");
+    t.type = "button"; t.dataset.id = b.id;
+    t.innerHTML = "<img alt=''><span></span>";
+    if (cover) t.querySelector("img").src = cover.crop;
+    t.querySelector("span").textContent = b.name;
+    t.addEventListener("click", () => { Object.assign(V.compare, { buckId: b.id, idx: 0, showing: "buck" }); renderCompare(); });
+    strip.append(t);
+  });
+}
+function leafCompare(step) {
+  const C = V.compare;
+  if (!C || C.showing !== "buck") return;
+  const n = comparePhotos(C.buckId, C.unknown.id).length;
+  if (n < 2) return;
+  C.idx = (C.idx + step + n) % n;
+  renderCompare();
+}
+function endCompare() {
+  V.compare = null;
+  ["vpip", "vbucks", "vThisBuck", "vPrev", "vNext"].forEach(id => { $(id).hidden = true; });
+}
+$("vpip").addEventListener("pointerdown", e => e.stopPropagation());
+$("vpip").addEventListener("click", () => { const C = V.compare; C.showing = C.showing === "buck" ? "unknown" : "buck"; renderCompare(); });
+["vPrev", "vNext"].forEach(id => {
+  $(id).addEventListener("pointerdown", e => e.stopPropagation());
+  $(id).addEventListener("click", () => leafCompare(id === "vNext" ? 1 : -1));
+});
+$("vThisBuck").addEventListener("click", () => { const id = V.compare.buckId; closeViewer(); chooseBuck(id); });
 
 // ---------- disputes ----------
 function disputeRow(c, mine) {
@@ -1730,13 +1864,15 @@ $("btnBuck").addEventListener("click", () => decide("buck"));
 document.addEventListener("keydown", e => {
   if (!$("viewer").hidden) {
     if (e.key === "Escape") closeViewer();
+    else if (V.compare && e.key === "ArrowRight") leafCompare(1);
+    else if (V.compare && e.key === "ArrowLeft") leafCompare(-1);
     else if (e.key === "+" || e.key === "=") zoomBy(1.4);
     else if (e.key === "-") zoomBy(1 / 1.4);
     return;
   }
   if (chooser) { if (e.key === "Escape") closeChooser(); return; }
   if (disputeId) { if (e.key === "Escape") closeDispute(); return; }
-  if (sheetState) { if (e.key === "Escape") exitSheet(); return; }
+  if (sheetState) { if (e.key === "Escape") { if (!$("pickPrompt").hidden) closePickPrompt(); else exitSheet(); } return; }
   if (profileId) { if (e.key === "Escape") closeProfile(); return; }
   if ($("view-sort").hidden || e.target.tagName === "INPUT") return;
   if (e.key === "ArrowRight") decide("buck");
@@ -1748,6 +1884,7 @@ const V = { card: null, mode: "crop", scale: 1, x: 0, y: 0, pointers: new Map(),
 const MAX_ZOOM = 8;
 
 function openViewer(c, mode = "crop", opts = {}) {
+  endCompare();
   V.card = c;
   $("vResort").hidden = !(opts.resort && myVote(c.id));
   V.buck = opts.buck || null;
@@ -1773,7 +1910,7 @@ function openViewer(c, mode = "crop", opts = {}) {
   setViewerMode(mode);
   $("viewer").hidden = false;
 }
-function closeViewer() { $("viewer").hidden = true; V.pointers.clear(); }
+function closeViewer() { $("viewer").hidden = true; V.pointers.clear(); endCompare(); }
 function setViewerMode(mode) {
   V.mode = mode;
   $("vimg").src = mode === "frame" ? V.card.frame : V.card.crop;
@@ -1809,7 +1946,7 @@ function zoomBy(factor) {
 const stage = $("vstage");
 stage.addEventListener("wheel", e => { e.preventDefault(); zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.18 : 1 / 1.18); }, { passive: false });
 stage.addEventListener("pointerdown", e => {
-  stage.setPointerCapture(e.pointerId);
+  try { stage.setPointerCapture(e.pointerId); } catch {}
   V.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (V.pointers.size === 2) {
     const [a, b] = [...V.pointers.values()];
@@ -1837,6 +1974,10 @@ stage.addEventListener("pointermove", e => {
 const endPointer = e => {
   V.pointers.delete(e.pointerId);
   if (V.pointers.size < 2) V.pinch = null;
+  if (V.compare && V.pan && V.scale <= 1 && e.type === "pointerup") {
+    const dx = e.clientX - V.pan.x, dy = e.clientY - V.pan.y;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) { V.pan = null; return leafCompare(dx < 0 ? 1 : -1); }
+  }
   if (V.pan && !V.pan.moved && e.type === "pointerup") {
     const now = Date.now();
     if (now - V.lastTap < 320) { V.scale > 1 ? resetZoom() : zoomAt(e.clientX, e.clientY, 3); V.lastTap = 0; }
