@@ -55,6 +55,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .scorepill { display: flex; align-items: baseline; gap: 6px; background: var(--panel); border-radius: 999px; padding: 4px 11px; }
 .scorepill b { font: 800 18px/1 var(--display); font-variant-numeric: tabular-nums; }
 .scorepill small { font: 10px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.proptoggle { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--panel); border-radius: 999px; padding: 3px; margin-top: 8px; }
+.proptoggle button { appearance: none; border: 0; background: none; color: var(--muted); border-radius: 999px; min-height: 36px; font: 600 14px var(--body); letter-spacing: .02em; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.proptoggle button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.proptoggle small { font: 500 11px var(--mono); opacity: .75; }
 .bar { height: 3px; background: var(--line); margin: 8px -16px 0; }
 .bar i { display: block; height: 100%; background: var(--blaze); width: 0; transition: width .3s ease; }
 .status { margin: 0; padding: 6px 16px; font: 12px var(--mono); color: var(--unsure); background: var(--panel); text-align: center; }
@@ -354,6 +358,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
       <span class="count"><b id="sortedCount">0</b> / <span id="totalCount">0</span> <span id="streak"></span></span>
       <span class="scorepill"><b id="myScore">0</b><small id="myRank">Scout</small></span>
     </div>
+    <div class="proptoggle" id="propToggle" role="group" aria-label="Property"></div>
     <div class="bar"><i id="barFill"></i></div>
   </header>
 
@@ -556,8 +561,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script>
-let CARDS = [];
-let CARD = {};
+let ALL_CARDS = [];   // every photo, both properties
+let CARDS = [];       // photos on the current property; every screen works from these
+let CARD = {};        // lookup by id across both properties
+const PROPERTIES = ["Stoddard", "North Ridge"];
 const POINT_CHOICES = [null, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const CONFIDENCE = [[1, "Guess"], [2, "Leaning"], [3, "Probably"], [4, "Pretty sure"], [5, "Certain"]];
 const RANKS = [[800, "Old Buck Whisperer"], [400, "Guide"], [150, "Tracker"], [0, "Scout"]];
@@ -577,10 +584,48 @@ let profileId = null;
 let lastAction = null;
 
 const $ = id => document.getElementById(id);
+
+// Bucks on the current property. The properties are ~9 miles apart, so bucks never cross.
+function bucksHere() {
+  return Object.entries(state.bucks).filter(([, b]) => !b.property || b.property === state.property);
+}
+
+// Switch the whole app to the other property.
+function setProperty(p) {
+  if (p === state.property) return;
+  state.property = p;
+  store.set("buckbook-property", p);
+  CARDS = ALL_CARDS.filter(c => c.property === p);
+  forcedTop = null; renderedTop = null; nameQueue = null; knownMine = null;
+  if (sheetState) closeSheet();
+  if (profileId) closeProfile();
+  if (disputeId) closeDispute();
+  if (chooser) closeChooser();
+  $("alert").hidden = true;
+  renderAll();
+  noticeDisputes();
+}
+
+function renderPropToggle() {
+  const el = $("propToggle");
+  el.replaceChildren();
+  PROPERTIES.forEach(p => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(p === state.property));
+    const left = ALL_CARDS.filter(c => c.property === p && !myVote(c.id) && !settled(c.id)).length;
+    b.innerHTML = "<span></span><small></small>";
+    b.querySelector("span").textContent = p;
+    b.querySelector("small").textContent = left ? `${left} to sort` : "";
+    b.addEventListener("click", () => setProperty(p));
+    el.append(b);
+  });
+}
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
 };
+state.property = PROPERTIES.includes(store.get("buckbook-property")) ? store.get("buckbook-property") : PROPERTIES[0];
 
 // ---------- helpers ----------
 function fmtWhen(iso, withDate = true) {
@@ -682,7 +727,7 @@ async function writeDoc(path, data) {
   {
     res = data === null
       ? await sb.from("bucks").delete().eq("id", id)
-      : await sb.from("bucks").upsert({ id, name: data.name, cover: data.cover ?? null, age_class: data.age ?? null,
+      : await sb.from("bucks").upsert({ id, name: data.name, cover: data.cover ?? null, property: data.property || state.property, age_class: data.age ?? null,
           status: data.status || "active", notes: data.notes || null });
   }
   if (res.error) {
@@ -735,7 +780,7 @@ async function sync() {
     });
     const bucks = {};
     b.forEach(r => {
-      bucks[r.id] = { name: r.name, cover: r.cover, by: nameKey(r.by_name), at: r.at, age: r.age_class,
+      bucks[r.id] = { name: r.name, cover: r.cover, property: r.property, by: nameKey(r.by_name), at: r.at, age: r.age_class,
         status: r.status || "active", notes: r.notes || "", editedBy: r.updated_by_name, editedAt: r.updated_at };
       if (r.by_name && !users[nameKey(r.by_name)]) users[nameKey(r.by_name)] = r.by_name;
     });
@@ -767,6 +812,7 @@ function renderAll() {
 }
 
 function renderHeader() {
+  renderPropToggle();
   const { score } = scoreFor(state.me);
   $("myScore").textContent = score;
   $("myRank").textContent = rankFor(score);
@@ -848,7 +894,7 @@ function renderSort() {
   renderedTop = topId;
   stack.replaceChildren();
   if (!d.length) {
-    const named = Object.keys(state.bucks).length;
+    const named = bucksHere().length;
     const done = document.createElement("div");
     done.className = "done";
     done.innerHTML = `<h2>Deck cleared</h2><p></p><button class="btn" type="button">Open the roster</button>`;
@@ -882,7 +928,7 @@ function buckStats(id) {
 function renderRoster() {
   const wrap = $("roster");
   wrap.replaceChildren();
-  const bucks = Object.entries(state.bucks)
+  const bucks = bucksHere()
     .map(([id, b]) => ({ id, ...b, ...buckStats(id) }))
     .sort((a, b) => b.seen.length - a.seen.length);
   const toName = unnamedCards(), unid = unidentifiedCards();
@@ -1081,7 +1127,7 @@ function openChooser(opts) {
     : `Every photo and every member's vote for ${from.name} moves to the buck you pick, and ${from.name} is removed.`;
   const grid = $("chooserGrid");
   grid.replaceChildren();
-  Object.entries(state.bucks).filter(([id]) => id !== opts.buck)
+  bucksHere().filter(([id]) => id !== opts.buck)
     .sort((a, b) => a[1].name.localeCompare(b[1].name))
     .forEach(([id, b]) => {
       const cover = CARD[b.cover] || sightings(id)[0];
@@ -1326,7 +1372,7 @@ function openSheet(c, opts = {}) {
 
   // Bucks already tagged in this burst first, then most recently seen.
   const burstBucks = new Set(CARDS.filter(o => o.burst === c.burst && o.id !== c.id).map(o => myVote(o.id)?.buckId || buckOf(o.id)).filter(Boolean));
-  const list = Object.entries(state.bucks).map(([id, b]) => {
+  const list = bucksHere().map(([id, b]) => {
     const seen = sightings(id);
     return { id, ...b, seen, last: seen.length ? seen[seen.length - 1].when : "", sugg: burstBucks.has(id) };
   }).sort((a, b) => (b.sugg - a.sugg) || b.last.localeCompare(a.last));
@@ -1871,12 +1917,13 @@ async function signUrls(paths) {
 async function loadCards() {
   const data = await fetchAll("cards", q => q.order("camera").order("taken_at").order("id"));
   const urls = await signUrls([...new Set(data.flatMap(r => [r.crop_path, r.frame_path]))]);
-  CARDS = data.map(r => ({
+  ALL_CARDS = data.map(r => ({
     id: r.id, cam: r.camera, property: r.property, when: r.taken_at, daylight: r.daylight,
     temp: r.temp_f, wind: r.wind, moon: r.moon, pressure: r.pressure, burst: r.burst,
     crop: urls[r.crop_path], frame: urls[r.frame_path],
   }));
-  CARD = Object.fromEntries(CARDS.map(c => [c.id, c]));
+  CARD = Object.fromEntries(ALL_CARDS.map(c => [c.id, c]));
+  CARDS = ALL_CARDS.filter(c => c.property === state.property);
 }
 
 let channel = null, refreshTimer = null;

@@ -17,6 +17,28 @@ from buckbook.db import IMG_DIR, ROOT, bump_version, connect
 from tag_deer import crop
 
 BURST_GAP_MIN = 5
+# Cameras that watch the same spot (#2 and #8 are ~21 m apart), so a buck passing
+# trips both; their photos chain into shared bursts.
+SHARED_BURSTS = [{"#2", "#8"}]
+
+
+def recompute_bursts(conn):
+    """Number every burst across all cameras: photos from one camera (or one shared-burst
+    group) taken at most BURST_GAP_MIN apart share a burst."""
+    group_of = {cam: min(g) for g in SHARED_BURSTS for cam in g}
+    rows = conn.execute("SELECT id, camera, taken_at FROM cards").fetchall()
+    by_group = {}
+    for r in rows:
+        by_group.setdefault(group_of.get(r["camera"], r["camera"]), []).append(r)
+    burst = 0
+    for group in sorted(by_group):
+        prev = None
+        for r in sorted(by_group[group], key=lambda r: r["taken_at"]):
+            t = datetime.fromisoformat(r["taken_at"])
+            if prev is None or (t - prev).total_seconds() > BURST_GAP_MIN * 60:
+                burst += 1
+            conn.execute("UPDATE cards SET burst = ? WHERE id = ?", (burst, r["id"]))
+            prev = t
 
 
 def main():
@@ -57,20 +79,11 @@ def main():
         )
         added += cur.rowcount
 
-    # Recompute bursts for this camera: same camera, gaps of at most BURST_GAP_MIN.
-    rows = conn.execute("SELECT id, taken_at FROM cards WHERE camera = ? ORDER BY taken_at", (camera,)).fetchall()
-    base = conn.execute("SELECT COALESCE(MAX(burst), 0) FROM cards WHERE camera != ?", (camera,)).fetchone()[0]
-    burst, prev = base, None
-    for r in rows:
-        t = datetime.fromisoformat(r["taken_at"])
-        if prev is None or (t - prev).total_seconds() > BURST_GAP_MIN * 60:
-            burst += 1
-        conn.execute("UPDATE cards SET burst = ? WHERE id = ?", (burst, r["id"]))
-        prev = t
-
+    recompute_bursts(conn)
     bump_version(conn)
     conn.commit()
-    print(f"{camera}: {added} new cards ({len(rows)} total for this camera)")
+    total = conn.execute("SELECT COUNT(*) FROM cards WHERE camera = ?", (camera,)).fetchone()[0]
+    print(f"{camera}: {added} new cards ({total} total for this camera)")
 
 
 if __name__ == "__main__":
