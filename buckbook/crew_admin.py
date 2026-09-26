@@ -8,6 +8,8 @@ Commands:
   add "Name"      Create an account and print a new password to hand over.
   reset "Name"    Print a fresh password for an existing account.
   remove "Name"   Delete the account. Their labels stay, still credited by name.
+  type "Name" T   Set their member type (needs 008_member_types.sql): admin (can also merge
+                  bucks straight away), user (the default), or viewer (read-only).
   list            Show crew and when each last signed in.
 
 Usage: .venv/bin/python -m buckbook.crew_admin add "Big Mike"
@@ -96,8 +98,22 @@ def remove(name):
     print(f"Removed {name}. Their labels stay in the book.")
 
 
+TYPES = ("admin", "user", "viewer")
+
+
+def set_type(name, user_type):
+    if user_type not in TYPES:
+        raise SystemExit(f"Type must be one of: {', '.join(TYPES)}.")
+    user = find_user(name)
+    if not user:
+        raise SystemExit(f"No account for {name!r}.")
+    rest("PATCH", "crew", {"user_type": user_type}, query=f"?user_id=eq.{user['id']}")
+    print(f"{name} is now {'an' if user_type == 'admin' else 'a'} {user_type}.")
+
+
 def list_crew():
-    crew = {c["user_id"]: c["name"] for c in rest("GET", "crew", query="?select=user_id,name")}
+    rows = rest("GET", "crew", query="?select=*")
+    crew = {c["user_id"]: f"{c['name']} ({c.get('user_type', 'user')})" for c in rows}
     status, out = call("GET", "/auth/v1/admin/users?per_page=200")
     last = {u["id"]: (u.get("last_sign_in_at") or "never")[:16].replace("T", " ") for u in out.get("users", [])}
     if not crew:
@@ -107,13 +123,15 @@ def list_crew():
 
 
 if __name__ == "__main__":
-    cmd, arg = (sys.argv + ["", ""])[1:3]
+    cmd, arg, arg2 = (sys.argv + ["", "", ""])[1:4]
     if cmd == "add" and arg:
         add(arg)
     elif cmd == "reset" and arg:
         reset(arg)
     elif cmd == "remove" and arg:
         remove(arg)
+    elif cmd == "type" and arg and arg2:
+        set_type(arg, arg2.lower())
     elif cmd == "list":
         list_crew()
     else:

@@ -63,7 +63,7 @@ Git-ignored on purpose: `.env` (secrets), `data/` (photos, records with GPS and 
    SUPABASE_SECRET_KEY=sb_secret_...
    ```
    The secret key bypasses all database rules. It stays in `.env` and is only used by the Mac scripts.
-4. **Supabase**: run `supabase/schema.sql`, then `002`–`007` in order in the SQL Editor. In Authentication settings, turn **off** "Allow new users to sign up" and "Allow anonymous sign-ins". Crew accounts are created with `crew_admin.py`.
+4. **Supabase**: run `supabase/schema.sql`, then `002`–`008` in order in the SQL Editor. In Authentication settings, turn **off** "Allow new users to sign up" and "Allow anonymous sign-ins". Crew accounts are created with `crew_admin.py`.
 5. **GitHub Pages**: Settings → Pages → Source: GitHub Actions. Pushing `web/` publishes the app.
 
 ## Everyday commands
@@ -107,7 +107,7 @@ Crew accounts (prints a password to hand over privately):
 ```bash
 .venv/bin/python -m buckbook.crew_admin list
 ```
-`reset "Name"` issues a new password; `remove "Name"` deletes the account (their votes stay).
+`reset "Name"` issues a new password; `remove "Name"` deletes the account (their votes stay). `type "Name" viewer` makes someone read-only; `type "Name" admin` lets them merge bucks straight away (everyone else proposes merges, and the bucks' namers agree).
 
 ### Camera folders and properties
 
@@ -133,7 +133,7 @@ Crew accounts (prints a password to hand over privately):
 - **card_consensus** (view): per photo. Buck-or-not by head count; which buck weighted by confidence. Status is `single`, `agreed`, `leaning` (a clear two-thirds winner) or `disputed`.
 - **rater_pairs** / **rater_scores** (views): how often each member agrees with the others on shared photos.
 
-Rules the database enforces: only crew can read or write anything; votes, bucks and comments are stamped with the signed-in member; a vote can't name a buck from the other property; merges stay within one property.
+Rules the database enforces: only crew can read or write anything; viewers can't change anything; merging two bucks needs both namers to agree, or an admin; votes, bucks and comments are stamped with the signed-in member; a vote can't name a buck from the other property; merges stay within one property.
 
 ## The app
 

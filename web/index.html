@@ -13,6 +13,9 @@
 <style>
 /* One dark look on purpose: trail-cam photos (mostly night IR) read best on a dark surround. */
 [hidden] { display: none !important; }
+/* Viewers can look at everything but change nothing (the database enforces it too). */
+body.viewer :is(#tab-sort, #view-sort, .cleanup, #profileEdit, #vCover, #vMove, #vResort, .mrow .btnrow, .switch, #composer, .queuebar .btn, .drow .go) { display: none !important; }
+body.viewer .drow:not(.mine) { pointer-events: none; }   /* "Weigh in" leads to Sort */
 :root {
   color-scheme: dark;
   --bg: #0E110D;
@@ -99,11 +102,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
   font: 12px/1.5 var(--mono); color: var(--ink); display: flex; flex-wrap: wrap; gap: 0 12px;
 }
 .stamp .dim { color: #A9B3A0; }
-.hint {
-  position: absolute; z-index: 4; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  background: rgba(0, 0, 0, .72); border-radius: 14px; padding: 12px 16px; text-align: center;
-  font: 13px/1.6 var(--mono); color: var(--ink); pointer-events: none; width: max-content; max-width: 86%;
-}
 .verdict {
   position: absolute; top: 30%; z-index: 5; padding: 4px 12px; border: 4px solid currentColor; border-radius: 8px;
   font: 800 40px/1 var(--display); text-transform: uppercase; letter-spacing: .04em; opacity: 0; pointer-events: none;
@@ -301,8 +299,21 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .status-pill { display: inline-block; font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; border-radius: 999px; padding: 3px 8px; background: var(--panel-2); color: var(--muted); margin-left: 8px; vertical-align: middle; }
 .status-pill.harvested { background: var(--blaze); color: var(--blaze-ink); }
 .status-pill.missing { background: var(--no); color: #1A0703; }
+.mrow { background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.mpair { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; }
+.mpair .vs { font: 600 18px var(--display); color: var(--muted); }
+.mbuck { appearance: none; border: 0; background: none; padding: 0; color: var(--ink); text-align: left; cursor: pointer; }
+.mbuck img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; background: var(--well); display: block; }
+.mbuck b { display: block; margin-top: 4px; font: 800 17px/1.1 var(--display); text-transform: uppercase; }
+.mrow small { font: 12px/1.45 var(--mono); color: var(--muted); }
+.mrow .btnrow { flex-wrap: wrap; }
+.mrow .btnrow .btn { flex: 1 1 auto; }
+.mrow.proposed { border-color: var(--blaze); }
+#profileSuggest:not(:empty) { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
 .confirm { background: var(--panel); border: 2px solid var(--no); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
 .confirm p { margin: 0; }
+.confirm-back { width: 100%; min-height: 64px; font-size: 20px; }
+.confirm-go { align-self: center; color: var(--no); }
 
 /* ---------- crew ---------- */
 .crew { background: var(--panel); border-radius: 14px; overflow: hidden; }
@@ -403,7 +414,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
   <div class="views">
     <p class="status" id="status">Connecting to the crew's book…</p>
 
-    <section id="view-sort" class="view">
+    <section id="view-sort" class="view" hidden>
       <div class="stack" id="stack"></div>
       <div class="actions">
         <span class="act-wrap"><button class="act not" id="btnNot" type="button" aria-label="Not a buck">
@@ -415,7 +426,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
       </div>
     </section>
 
-    <section id="view-roster" class="view scroll" hidden>
+    <section id="view-roster" class="view scroll">
       <div id="roster"></div>
     </section>
 
@@ -431,11 +442,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
   </div>
 
   <nav class="tabbar" role="tablist">
-    <button role="tab" id="tab-sort" aria-selected="true" data-tab="sort">
+    <button role="tab" id="tab-sort" aria-selected="false" data-tab="sort">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="6" y="3" width="13" height="16" rx="2"/><path d="M4 7v12a2 2 0 0 0 2 2h9"/></svg>Sort</button>
     <button role="tab" id="tab-disputes" aria-selected="false" data-tab="disputes">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5h11v8H9l-4 3.5V13H4z"/><path d="M15 9h5v8h-1v3l-3.5-3H10v-2"/></svg>Disputes<span class="badge" id="dBadge" hidden></span></button>
-    <button role="tab" id="tab-roster" aria-selected="false" data-tab="roster">
+    <button role="tab" id="tab-roster" aria-selected="true" data-tab="roster">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21v-7M12 14c-3 0-5-2-5-5V4M7 8H4M12 14c3 0 5-2 5-5V4M17 8h3M9.5 11.5L7 10M14.5 11.5L17 10"/></svg>Roster</button>
     <button role="tab" id="tab-crew" aria-selected="false" data-tab="crew">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c1.8.8 3 2.6 3.5 5.2"/></svg>Crew</button>
@@ -526,8 +537,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
       <div class="pgrid" id="profileGrid"></div>
     </div>
     <div>
-      <p class="label">Clean up</p>
-      <div class="btnrow"><button class="btn ghost" id="profileMerge" type="button">Merge into another buck…</button><button class="btn danger" id="profileDelete" type="button">Delete buck</button></div>
+      <div id="profileSuggest"></div>
+      <p class="label cleanup">Clean up</p>
+      <div class="btnrow cleanup"><button class="btn ghost" id="profileMerge" type="button">Merge into another buck…</button><button class="btn danger" id="profileDelete" type="button">Delete buck</button></div>
       <div id="profileConfirm"></div>
     </div>
   </div>
@@ -815,8 +827,9 @@ async function sync() {
   if (syncing) { syncAgain = true; return; }
   syncing = true;
   try {
-    const [v, b, c, cons, sc] = await Promise.all([
+    const [v, b, c, cons, sc, mp] = await Promise.all([
       fetchAll("votes"), fetchAll("bucks"), fetchAll("crew"), fetchAll("card_consensus"), fetchAll("rater_scores"),
+      fetchAll("merge_proposals").catch(() => []),   // table arrives with 008_member_types.sql
     ]);
     const cm = await fetchAll("comments", q => q.order("at"));
     const comments = {};
@@ -831,13 +844,19 @@ async function sync() {
     });
     const bucks = {};
     b.forEach(r => {
-      bucks[r.id] = { name: r.name, cover: r.cover, property: r.property, by: nameKey(r.by_name), at: r.at, age: r.age_class,
+      bucks[r.id] = { name: r.name, cover: r.cover, property: r.property, by: nameKey(r.by_name), byUser: r.by_user, at: r.at, age: r.age_class,
         status: r.status || "active", notes: r.notes || "", editedBy: r.updated_by_name, editedAt: r.updated_at };
       if (r.by_name && !users[nameKey(r.by_name)]) users[nameKey(r.by_name)] = r.by_name;
     });
     const consensus = Object.fromEntries(cons.map(r => [r.card_id, r]));
     const scores = Object.fromEntries(sc.map(r => [nameKey(r.member), r]));
-    Object.assign(state, { votes, bucks, users, consensus, scores, comments, mode: "shared" });
+    // Member types (008_member_types.sql): admins merge straight away, users propose, viewers only look.
+    const myType = c.find(r => r.user_id === state.myUid)?.user_type || "user";
+    const isAdmin = myType === "admin";
+    document.body.classList.toggle("viewer", myType === "viewer");
+    const crewById = Object.fromEntries(c.map(r => [r.user_id, r.name]));
+    const proposals = Object.fromEntries(mp.map(r => [r.buck_a + "|" + r.buck_b, r]));
+    Object.assign(state, { votes, bucks, users, consensus, scores, comments, isAdmin, crewById, proposals, mode: "shared" });
     renderAll();
     noticeDisputes();
   } catch (e) {
@@ -916,12 +935,6 @@ function cardEl(c, cls) {
       b.textContent = full ? "Full frame" : "Close-up";
     });
     el.append(b);
-    if (!store.get("buckbook-hint-seen")) {
-      const h = document.createElement("div");
-      h.className = "hint";
-      h.innerHTML = "Swipe right → buck<br>Swipe left → not a buck<br>Tap to zoom";
-      el.append(h);
-    }
   }
   return el;
 }
@@ -979,6 +992,7 @@ function buckStats(id) {
 function renderRoster() {
   const wrap = $("roster");
   wrap.replaceChildren();
+  if (state.mode === "loading") return;   // the status line says we're connecting
   const bucks = bucksHere()
     .map(([id, b]) => ({ id, ...b, ...buckStats(id) }))
     .sort((a, b) => b.seen.length - a.seen.length);
@@ -1087,6 +1101,15 @@ function renderProfile() {
     dl.append(dt, dd);
   });
 
+  $("profileMerge").textContent = state.isAdmin ? "Merge into another buck…" : "Propose a merge…";
+  const sugg = $("profileSuggest");
+  sugg.replaceChildren();
+  const merges = mergePairs(profileId);
+  if (merges.length) {
+    const h = document.createElement("p"); h.className = "label"; h.textContent = "Might be the same buck";
+    sugg.append(h, ...merges.map(mergeRow));
+  }
+
   const grid = $("profileGrid");
   grid.replaceChildren();
   const photos = s.seen.slice().reverse();
@@ -1145,12 +1168,15 @@ $("editForm").addEventListener("submit", e => {
   toast(`Saved ${name}`);
 });
 
-function confirmBox(where, text, goLabel, onGo) {
+function confirmBox(where, text, goLabel, onGo, { safeFirst = false } = {}) {
   const box = document.createElement("div");
   box.className = "confirm";
-  box.innerHTML = `<p></p><div class="btnrow"><button class="btn danger" type="button"></button><button class="btn ghost" type="button">Cancel</button></div>`;
+  // safeFirst: a big "Go back!" and a small, quiet way through, for things that are hard to redo.
+  box.innerHTML = safeFirst
+    ? `<p></p><button class="btn confirm-back" type="button">Go back!</button><button class="linkish confirm-go" type="button"></button>`
+    : `<p></p><div class="btnrow"><button class="btn danger" type="button"></button><button class="btn ghost" type="button">Cancel</button></div>`;
   box.querySelector("p").textContent = text;
-  const [go, cancel] = box.querySelectorAll("button");
+  const [go, cancel] = safeFirst ? [box.querySelector(".confirm-go"), box.querySelector(".confirm-back")] : box.querySelectorAll("button");
   go.textContent = goLabel;
   go.addEventListener("click", async () => { go.disabled = true; await onGo(); box.remove(); });
   cancel.addEventListener("click", () => box.remove());
@@ -1159,12 +1185,12 @@ function confirmBox(where, text, goLabel, onGo) {
 }
 $("profileDelete").addEventListener("click", () => {
   const id = profileId, b = state.bucks[id], n = sightings(id).length;
-  confirmBox($("profileConfirm"), `Delete ${b.name}? His ${n} photo${n === 1 ? "" : "s"} stay in the book as "buck, unnamed" so the crew can name them again. This can't be undone.`,
-    `Delete ${b.name}`, async () => {
+  confirmBox($("profileConfirm"), `Are you sure? ${n === 1 ? "His 1 photo stays" : `His ${n} photos stay`}, back in the pile waiting for a name. His name, notes, age and status are gone for good.`,
+    `Yes, delete ${b.name}`, async () => {
       const { error } = await sb.rpc("delete_buck", { buck: id });
       if (error) return toast(friendly(error));
       closeProfile(); sync(); toast(`Deleted ${b.name}`);
-    });
+    }, { safeFirst: true });
 });
 $("profileMerge").addEventListener("click", () => openChooser({ mode: "merge", buck: profileId }));
 $("profileClose").addEventListener("click", closeProfile);
@@ -1180,7 +1206,8 @@ function openChooser(opts) {
   $("chooserTitle").textContent = opts.mode === "move" ? "Move this photo to…" : `Merge ${from.name} into…`;
   $("chooserNote").textContent = opts.mode === "move"
     ? "This changes your vote on this photo. Other members' votes stay as they are."
-    : `Every photo and every member's vote for ${from.name} moves to the buck you pick, and ${from.name} is removed.`;
+    : `Every photo and every member's vote for ${from.name} moves to the buck you pick, and ${from.name} is removed.` +
+      (state.isAdmin ? "" : " The members who named the two bucks both have to agree first.");
   const grid = $("chooserGrid");
   grid.replaceChildren();
   bucksHere().filter(([id]) => id !== opts.buck)
@@ -1224,7 +1251,7 @@ function syncChooser() {
     go.textContent = cant ? "Move to Unidentified" : newName ? `Add ${newName}` : target ? `Move to ${state.bucks[target].name}` : "Pick a buck";
     go.disabled = !(cant || newName || (target && confidence));
   } else {
-    go.textContent = target ? `Merge into ${state.bucks[target].name}` : "Pick a buck";
+    go.textContent = target ? `${state.isAdmin ? "Merge" : "Propose merging"} into ${state.bucks[target].name}` : "Pick a buck";
     go.disabled = !target;
   }
 }
@@ -1238,6 +1265,18 @@ $("chooserCant").addEventListener("click", () => {
 $("chooserCancel").addEventListener("click", closeChooser);
 $("chooserGo").addEventListener("click", async () => {
   const { mode, card, buck, target, newName, confidence, cant } = chooser;
+  if (mode === "merge" && !state.isAdmin) {
+    // Members propose; it merges once whoever named each buck agrees.
+    const from = state.bucks[buck], into = state.bucks[target];
+    const pair = { a: buck, b: target, cards: [] };
+    const authors = mergeAuthors(pair), soloFinish = authors.length === 1 && authors[0] === state.myUid;
+    const names = authors.map(u => u === state.myUid ? "you" : state.crewById?.[u] || "an admin");
+    confirmBox($("chooserConfirm"), soloFinish
+      ? `You named both, so ${from.name} merges into ${into.name} now, with every photo and vote. This can't be undone.`
+      : `Propose merging ${from.name} into ${into.name}? It happens once ${names.join(" and ")} agree${names.length > 1 ? "" : "s"}. You'll see it in Disputes.`,
+      soloFinish ? "Merge" : "Propose", async () => { closeChooser(); await voteMerge(pair, target, true); });
+    return;
+  }
   if (mode === "merge") {
     const from = state.bucks[buck], into = state.bucks[target];
     confirmBox($("chooserConfirm"), `Merge ${from.name} into ${into.name}? All of ${from.name}'s photos and votes become ${into.name}'s. This can't be undone.`,
@@ -1359,8 +1398,6 @@ function flyOut(dir) {
 function decide(verdict) {
   const c = deck()[0];
   if (!c || state.mode === "loading") return;
-  store.set("buckbook-hint-seen", "1");
-  $("stack").querySelector(".hint")?.remove();
   if (verdict === "buck") {
     snapBack($("stack").querySelector(".card.top"));
     return openSheet(c);
@@ -1708,9 +1745,117 @@ function disputeRow(c, mine) {
   return b;
 }
 
+// Two bucks that different members named on the same photos are probably one deer with two names.
+// Only shared photos count: bucks seen together in a burst are usually a bachelor group, not one buck.
+const MERGE_MIN = 2;
+const proposalFor = (x, y) => state.proposals?.[x + "|" + y] || state.proposals?.[y + "|" + x] || null;
+
+// Pairs worth a look: suggested by shared photos, or proposed by someone. Pairs called different stay hidden.
+function mergePairs(buckId = null) {
+  const pairs = new Map();
+  const add = (x, y) => {
+    const [a, b] = [x, y].sort(), key = a + "|" + b;
+    if (!pairs.has(key)) pairs.set(key, { a, b, cards: [] });
+    return pairs.get(key);
+  };
+  CARDS.forEach(c => {
+    const ids = [...new Set(Object.values(state.votes[c.id] || {}).map(v => v.buckId).filter(id => id && state.bucks[id]))].sort();
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) add(ids[i], ids[j]).cards.push(c);
+  });
+  Object.values(state.proposals || {}).forEach(r => {
+    if (r.status === "open" && state.bucks[r.buck_a]?.property === state.property && state.bucks[r.buck_b]) add(r.buck_a, r.buck_b);
+  });
+  return [...pairs.values()]
+    .map(p => ({ ...p, prop: proposalFor(p.a, p.b) }))
+    .filter(p => p.prop ? p.prop.status === "open" : p.cards.length >= MERGE_MIN)
+    .filter(p => !buckId || p.a === buckId || p.b === buckId)
+    .sort((x, y) => (!!y.prop - !!x.prop) || y.cards.length - x.cards.length);
+}
+
+// Who has to agree: the member who named each buck (one yes if they named both).
+function mergeAuthors(p) {
+  return [...new Set([state.bucks[p.a].byUser, state.bucks[p.b].byUser])];
+}
+
+async function voteMerge(p, keep, agree) {
+  const { data, error } = await sb.rpc("vote_merge", { buck1: p.a, buck2: p.b, keep, agree });
+  if (error) return toast(friendly(error));
+  const kept = state.bucks[keep]?.name, gone = state.bucks[keep === p.a ? p.b : p.a]?.name;
+  if (data === "merged" && profileId && profileId !== keep) closeProfile();
+  await sync();
+  toast(data === "merged" ? `${gone} merged into ${kept}` : data === "rejected" ? "Marked as different bucks" : "Proposed. Waiting on the other namer.");
+}
+
+function mergeRow(p) {
+  const el = document.createElement("div");
+  el.className = "mrow";
+  el.innerHTML = `<div class="mpair"><button class="mbuck" type="button"><img alt=""><b></b></button><span class="vs">=?</span><button class="mbuck" type="button"><img alt=""><b></b></button></div>
+    <small></small><div class="btnrow"></div><div class="mconfirm"></div>`;
+  [[el.querySelectorAll(".mbuck")[0], p.a], [el.querySelectorAll(".mbuck")[1], p.b]].forEach(([tile, id]) => {
+    const b = state.bucks[id], cover = CARD[b.cover] || sightings(id)[0];
+    if (cover) tile.querySelector("img").src = cover.crop;
+    tile.querySelector("b").textContent = b.name;
+    tile.addEventListener("click", () => openProfile(id));
+  });
+  const name = id => state.bucks[id].name, other = id => id === p.a ? p.b : p.a;
+  const who = id => state.crewById?.[id] || "someone who's left";
+  const authors = mergeAuthors(p);
+  const canFinish = authors.every(u => u && state.crewById?.[u]);
+  const iAmAuthor = authors.includes(state.myUid);
+  const row = el.querySelector(".btnrow"), box = el.querySelector(".mconfirm");
+  const button = (label, cls, onClick) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "btn " + cls; b.textContent = label;
+    b.addEventListener("click", onClick);
+    row.append(b);
+  };
+  const adminMerge = keep => confirmBox(box, `Merge ${name(other(keep))} into ${name(keep)} now? Every photo and vote for ${name(other(keep))} becomes ${name(keep)}'s. This can't be undone.`,
+    `Merge into ${name(keep)}`, async () => {
+      const { error } = await sb.rpc("merge_bucks", { from_id: other(keep), into_id: keep });
+      if (error) return toast(friendly(error));
+      if (profileId === other(keep)) closeProfile();
+      await sync();
+      toast(`${name(other(keep))} merged into ${name(keep)}`);
+    });
+  const agreeTo = keep => {
+    // If my yes is the last one needed, this merges; say so first.
+    const yes = new Set([...(p.prop?.keep_id === keep ? p.prop.yes : []), state.myUid]);
+    if (canFinish && authors.every(u => yes.has(u))) {
+      confirmBox(box, `That makes it unanimous: ${name(other(keep))} merges into ${name(keep)} now, with every photo and vote. This can't be undone.`,
+        `Merge into ${name(keep)}`, () => voteMerge(p, keep, true));
+    } else voteMerge(p, keep, true);
+  };
+
+  const shared = p.cards.length ? `Named both on ${p.cards.length} of the same photos. ` : "";
+  const needs = canFinish ? authors.map(who).join(" and ") : "an admin";
+  if (!p.prop) {
+    const ask = document.body.classList.contains("viewer") ? "" : "Same buck? Pick the name to keep. ";
+    el.querySelector("small").textContent = `${shared}${ask}${needs[0].toUpperCase() + needs.slice(1)} ${authors.length > 1 && canFinish ? "both have" : "has"} to agree.`;
+    [p.a, p.b].forEach(id => button(`Keep ${name(id)}`, "ghost", () => state.isAdmin ? adminMerge(id) : agreeTo(id)));
+  } else {
+    const keep = p.prop.keep_id, yes = p.prop.yes || [];
+    const agreed = yes.map(who), waiting = authors.filter(u => !yes.includes(u)).map(who);
+    el.querySelector("small").textContent = `${p.prop.proposed_by_name || "Someone"} proposed keeping ${name(keep)}. ` +
+      `Agreed: ${agreed.join(", ") || "nobody yet"}. ` + (canFinish ? `Waiting on ${waiting.join(" and ")}.` : "Needs an admin to finish.");
+    if (state.isAdmin) button(`Merge now`, "", () => adminMerge(keep));
+    if (!yes.includes(state.myUid)) button(`Agree: keep ${name(keep)}`, state.isAdmin ? "ghost" : "", () => agreeTo(keep));
+    if (iAmAuthor || state.isAdmin) button("Not the same buck", "ghost", () => voteMerge(p, keep, false));
+    if (!state.isAdmin && yes.includes(state.myUid) && !iAmAuthor) el.querySelector(".btnrow").hidden = true;
+  }
+  el.classList.toggle("proposed", !!p.prop);
+  return el;
+}
+
 function renderDisputes() {
   const wrap = $("disputes");
   wrap.replaceChildren();
+  const merges = mergePairs();
+  if (merges.length) {
+    const h = document.createElement("p"); h.className = "label"; h.textContent = `Name merges · ${merges.length}`; wrap.append(h);
+    const list = document.createElement("div"); list.className = "dlist";
+    merges.forEach(p => list.append(mergeRow(p)));
+    wrap.append(list);
+  }
   const mine = myDisputes(), crew = crewDisputes();
   const section = (label, cards, isMine, empty) => {
     const h = document.createElement("p"); h.className = "label"; h.textContent = label; wrap.append(h);
@@ -2115,6 +2260,7 @@ async function start(myName) {
       .on("postgres_changes", { event: "*", schema: "public", table: "comments" }, soon)
       .on("postgres_changes", { event: "*", schema: "public", table: "bucks" }, soon)
       .on("postgres_changes", { event: "*", schema: "public", table: "crew" }, soon)
+      .on("postgres_changes", { event: "*", schema: "public", table: "merge_proposals" }, soon)
       .subscribe();
   }
   // Signed photo links expire; refresh them well before they do.
