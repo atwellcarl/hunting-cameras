@@ -107,7 +107,13 @@ Crew accounts (prints a password to hand over privately):
 ```bash
 .venv/bin/python -m buckbook.crew_admin list
 ```
-`reset "Name"` issues a new password; `remove "Name"` deletes the account (their votes stay). `type "Name" viewer` makes someone read-only; `type "Name" admin` lets them merge bucks straight away (everyone else proposes merges, and the bucks' namers agree).
+`reset "Name"` issues a new password; `remove "Name"` deletes the account (their votes stay).
+
+Member types: `user` is the default (vote, comment, name bucks, propose merges). `viewer` is read-only. `admin` can also merge bucks straight away; everyone else proposes a merge, and it goes through once the members who named both bucks agree.
+```bash
+.venv/bin/python -m buckbook.crew_admin type "Their Name" viewer
+```
+To add a read-only member, run `add "Their Name"` first, then `type "Their Name" viewer`.
 
 ### Camera folders and properties
 
