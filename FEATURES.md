@@ -34,36 +34,59 @@ Features we might add to Buck Book. Nothing here is built yet. Each entry has wh
 
 ---
 
-## Import Tactacam Hit Lists
+## Download budget (for discussion)
 
-**What:** Bring the bucks the crew names in the Tactacam app's Hit List into Buck Book as named bucks, with their photos.
+**The concern:** Supabase's free tier allows **5 GB of downloads a month** ("egress"). Once we're past it, Supabase warns and can restrict the project, so the 5 GB is a real limit. It will probably run out before the 1 GB of storage does, because the buck page gallery (added 2026-09-26) loads full frames. A full frame averages about 125 KB, and a close-up about 32 KB.
 
-**Why:** People already sort bucks in the Tactacam app. The Hit List's buck compare is behind a paywall, but the list itself is readable, so that work shouldn't have to be done twice.
+**Rough numbers (not measured yet):**
+- Opening a buck with 25 photos and scrolling his gallery is about 3 MB. At that rate, 5 GB is roughly 1,600 buck page views a month, or about 50 a day across the crew. For three or four people that's comfortable, not doom.
+- **The multiplier:** photo links are signed and change every time the app loads, and again every ~5.5 hours. The phone's browser can't reuse what it downloaded last time, so every session downloads the photos fresh. A crew member who opens the app ten times a day downloads the same pictures ten times.
+- Sorting mostly loads close-ups, so it's cheap. The gallery and the full-frame button are the expensive parts.
 
-**What we know (checked 2026-09-26, read-only):**
-- Each Hit List buck is a Reveal gallery of type `target`: `GET /v1/photoGroups?galleryType=target`. It has a name, a status (`active` / `harvested` / `m.i.a.`), a cover photo, and a photo count.
-- Its photos come from `GET /v1/photos/v2?photoGroupId=<id>` (paged with `paginationKey`). Every photo carries its `photoId`, and Buck Book cards already store that ID, so matching is exact.
-- The older "Buck / Doe / Turkey…" species tags (`/v1/photo-tags`) and the standard galleries are separate from the Hit List.
-- The Hit List doesn't record who added a photo, because everyone shares one Reveal login.
-
-**How it would work:**
-- Create a matching Buck Book buck for each Hit List buck, on the property its photos come from. Status maps across (`m.i.a.` → missing).
-- Record each photo as a vote from a **"Hit List" crew member**. It counts as one voice, so if the list disagrees with someone's call in Buck Book, that shows up as a normal dispute.
-- A photo with two bucks in it (two cards) can't be matched to one of them automatically. Those go to the crew to decide.
-- Hit List photos Buck Book doesn't have yet (newer than the last pull, or missed by the AI) come in through the normal pull, SpeciesNet, and import steps.
-- Re-running only adds new photos. It never touches anyone's votes.
-
-**Open:** 47 of the 56 matched photos are on the held-back cameras (#2, North Valley 300, Poll plot). Importing the Hit List means pushing at least those cards.
+**Ways to cut it, cheapest first:**
+1. **Check the real number.** Supabase's Usage page shows egress per day. Look at it after a week of real use before changing anything.
+2. **Small thumbnails for the gallery grid.** Make a ~20 KB preview per photo at upload and load the full frame only when someone opens a photo. This is the biggest saving, roughly 5× on the gallery.
+3. **Full frames as WebP.** About half the size, for both storage and downloads. Same change to the upload script as the storage fix.
+4. **Let the browser reuse photos.** Keep each photo's signed link for its whole lifetime (save it on the phone) instead of making new links on every load, so repeat visits come from the phone's cache.
+5. **If we still outgrow it:** Cloudflare R2 has no download charges at all, or Supabase Pro raises the limit to 250 GB.
 
 ---
 
-## Merge by agreement (naming consensus)
+## Share a photo
 
-**What:** When two bucks are probably the same deer under different names (for example, a Hit List name and a Buck Book name), anyone can *propose* a merge and a keeper name. The crew votes on it like a dispute, and it merges once there's agreement.
+**What:** A **Share** button in the photo viewer that sends the picture out of Buck Book (text, group chat, email) to people who aren't in the crew.
 
-**Why:** Today, Merge on a buck's profile is immediate and one person decides. Hit List imports will create same-buck, different-name pairs regularly, and the name everyone ends up using should be a group decision.
+**Why:** "Look at this one" is half the fun, and right now it means a screenshot.
 
-**How it would work:** a `merge_proposals` table (from, into, proposed name, proposer), with agree/disagree votes and comments. It shows up in Disputes with both bucks side by side, using the Compare view. The existing `merge_bucks` runs when a majority of the members who voted on either buck agree.
+**How it would work:**
+- Use the phone's own share sheet (the Web Share API). The app downloads the photo it's showing and hands the phone the image *file*, not a link. Buck Book's photo links are private and expire after a few hours, and the people you're sending to can't sign in.
+- Share whichever version is on screen, close-up or full frame, with a short caption such as "Too Tall · CAM #2 · Sep 20".
+- **Strip the photo's hidden details before sharing.** Re-save the image in the browser so camera metadata, possibly including GPS, doesn't go out with it. The Reveal date stamp on the frame stays.
+- On a computer without a share sheet, fall back to "Save image".
+- Viewers can share too, since it doesn't change the book.
+
+**To check:** how the share sheet behaves on iPhone Safari (it needs the file ready before the tap finishes). The full frames sampled on 2026-09-26 carried no metadata (no GPS), but re-saving before sharing is still the safe default.
+
+---
+
+## Compare two bucks
+
+**What:** From a buck's page, **Compare with…** another buck: both bucks' photos on screen together, each one swipeable on its own.
+
+**Why:** Deciding whether two names are the same deer, or checking a buck against last season, means flipping between two galleries. Comparing them together is how the crew will settle merges.
+
+**How it would work:**
+- On a phone, split the screen top and bottom, one buck in each half. Each half swipes through his photos and zooms on its own. On a wider screen, put them side by side.
+- Start each half on the buck's cover photo. The Close-up / Full frame switch applies to both.
+- Also reachable from a **Compare** button on the "Name merges" cards, so the people deciding can look before they agree.
+- This builds on the existing Compare view (which today puts one unsorted photo against one buck).
+
+---
+
+## Built
+
+- **Tactacam Hit List import** (`buckbook/hitlist.py`, 2026-09-26): reads Hit List bucks read-only and imports them as bucks, with the photos credited as votes from the member who keeps the list. Photos with more than one buck in them are left for the crew. Re-running adds only new photos.
+- **Merge by agreement** (`008_member_types.sql`, 2026-09-26): name-merge suggestions from shared photos. Anyone proposes; it merges once both bucks' namers agree, and either namer can say "not the same buck". Admins merge straight away. Member types: admin / user / viewer.
 
 ---
 
