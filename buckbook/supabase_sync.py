@@ -86,12 +86,12 @@ def mb(n):
     return f"{n / 1024 ** 2:,.1f} MB"
 
 
-def push(assume_yes=False, skip=()):
+def push(assume_yes=False, skip=(), only=None):
     conn = connect()
     remote = {r["id"] for r in rest("GET", "cards", query="?select=id")}
     rows = [r for r in conn.execute("SELECT * FROM cards ORDER BY camera, taken_at")
-            if r["id"] not in remote and r["camera"] not in skip]
-    held = conn.execute(f"SELECT camera, COUNT(*) FROM cards WHERE camera IN ({','.join('?' * len(skip))}) GROUP BY camera",
+            if r["id"] not in remote and r["camera"] not in skip and (only is None or r["id"] in only)]
+    held = [] if only is not None else conn.execute(f"SELECT camera, COUNT(*) FROM cards WHERE camera IN ({','.join('?' * len(skip))}) GROUP BY camera",
                         tuple(skip)).fetchall() if skip else []
     for cam, n in held:
         print(f"Holding back {cam}: {n} cards")

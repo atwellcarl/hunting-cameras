@@ -154,6 +154,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .sheet-photo .zoom { position: absolute; right: 12px; bottom: 12px; background: rgba(0, 0, 0, .6); color: var(--ink); }
 .sheet-photo .meta { position: absolute; left: 12px; bottom: 12px; font: 12px var(--mono); color: var(--ink); text-shadow: 0 1px 3px #000; }
 .sheet-photo .close { position: absolute; left: 12px; top: calc(var(--top) + 10px); background: rgba(0, 0, 0, .6); color: var(--ink); cursor: pointer; }
+#profile { grid-template-rows: 1fr auto; }
+#profile .sheet-body { padding-top: calc(var(--top) + 20px); }
 .sheet-body { overflow-y: auto; padding: 16px 16px 20px; display: flex; flex-direction: column; gap: 20px; -webkit-overflow-scrolling: touch; }
 .sheet-body h2 { font: 800 30px/0.95 var(--display); text-transform: uppercase; margin: 0; }
 .sheet-foot {
@@ -173,6 +175,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .pick small { font: 11px var(--mono); color: var(--muted); }
 .pick[aria-pressed="true"] { border-color: var(--blaze); }
 .pick .sugg { position: absolute; top: 6px; left: 6px; font: 500 10px var(--mono); text-transform: uppercase; letter-spacing: .06em; background: var(--blaze); color: var(--blaze-ink); border-radius: 999px; padding: 3px 7px; }
+.chooser-or { margin-top: 16px; }
+.chooser-cant { width: 100%; }
+.chooser-cant[aria-pressed="true"] { background: var(--ink); color: #000; border-color: var(--ink); }
 .newname {
   width: 100%; font: 600 17px var(--body); padding: 13px 14px; border-radius: 12px;
   border: 2px solid var(--line); background: var(--panel); color: var(--ink);
@@ -225,7 +230,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .thumb .c { position: absolute; right: 4px; bottom: 4px; font: 500 11px/1 var(--mono); background: rgba(0, 0, 0, .75); color: var(--ink); border-radius: 4px; padding: 3px 5px; }
 .thumb .t { position: absolute; left: 4px; top: 4px; font: 10px/1 var(--mono); background: rgba(0, 0, 0, .6); color: var(--ink); border-radius: 4px; padding: 3px 4px; }
-.thumb.shaky { outline: 2px dashed var(--no); outline-offset: -2px; }
+.thumb.disputed { outline: 2px solid var(--no); outline-offset: -2px; }
+#profileGrid { grid-template-columns: repeat(2, 1fr); }
+#profileGrid .thumb { aspect-ratio: 16 / 10; }
+@media (min-width: 560px) { #profileGrid { grid-template-columns: repeat(3, 1fr); } }
 .namerow { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .rename { display: flex; gap: 8px; }
 .rename input { flex: 1; min-width: 0; font: 600 17px var(--body); padding: 10px 12px; border-radius: 10px; border: 2px solid var(--blaze); background: var(--panel); color: var(--ink); }
@@ -278,6 +286,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .queuebar b { font: 800 26px/1 var(--display); }
 .queuebar small { display: block; font: 12px var(--mono); color: var(--muted); }
 .unid { margin-bottom: 18px; }
+.pile-head { margin: 26px 0 10px; }
 .unid .thumb { flex: 0 0 96px; }
 .qcount { font: 500 12px var(--mono); color: var(--blaze); text-transform: uppercase; letter-spacing: .06em; }
 
@@ -321,9 +330,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .viewer { position: fixed; inset: 0; z-index: 40; background: #000; display: flex; flex-direction: column; color: var(--ink); }
 .vstage { flex: 1; position: relative; overflow: hidden; touch-action: none; cursor: grab; }
 .vstage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transform-origin: 50% 50%; user-select: none; -webkit-user-drag: none; }
-.vstage img.enhanced { filter: contrast(1.35) brightness(1.12); }
 .vtop, .vbar { display: flex; gap: 8px; align-items: center; padding: 10px 12px; background: #080A07; }
-.vtop { padding-top: calc(var(--top) + 10px); justify-content: space-between; font: 12px var(--mono); }
+.vtop { padding-top: calc(var(--top) + 10px); flex-direction: column; align-items: center; gap: 6px; }
+.vacts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 100%; }
+.vacts .vbtn { white-space: nowrap; flex-shrink: 0; padding: 10px 11px; font-size: 12px; }
+.vacts #vThisBuck { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#vcap { font: 11px var(--mono); color: var(--muted); letter-spacing: .04em; }
+#vcap:empty { display: none; }
 .vbar { padding-bottom: calc(var(--bottom) + 10px); justify-content: center; flex-wrap: wrap; }
 .vbtn { appearance: none; border: 1px solid #3A4535; background: #161B14; color: var(--ink); border-radius: 999px; padding: 10px 14px; font: 500 13px var(--mono); cursor: pointer; min-width: 44px; min-height: 42px; }
 .vbtn[aria-pressed="true"] { background: var(--ink); color: #000; }
@@ -346,13 +359,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .vpip span { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, .7); color: var(--ink); font: 500 10px/1.8 var(--mono); text-transform: uppercase; letter-spacing: .06em; text-align: center; }
 .vnav { position: absolute; top: 50%; transform: translateY(-50%); z-index: 3; width: 44px; height: 64px; border: 0; border-radius: 10px; background: rgba(0, 0, 0, .45); color: var(--ink); font: 800 28px var(--display); cursor: pointer; }
 .vnav.prev { left: 6px; } .vnav.next { right: 6px; }
+@media (pointer: coarse) { .vnav { display: none; } }   /* phones swipe instead */
 .vbucks { display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; background: #080A07; border-top: 1px solid #1E251B; }
 .vbucks button { appearance: none; flex: 0 0 68px; border: 2px solid #2A3226; background: #000; border-radius: 8px; padding: 0; overflow: hidden; cursor: pointer; color: var(--ink); }
 .vbucks button[aria-pressed="true"] { border-color: var(--blaze); }
 .vbucks img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
 .vbucks span { display: block; font: 600 10px/1.6 var(--body); padding: 0 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vbtn.go { background: var(--blaze); color: var(--blaze-ink); border-color: var(--blaze); font-weight: 600; }
-.vzoom { font: 12px var(--mono); color: var(--muted); min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
 
 /* ---------- toast ---------- */
 .toast {
@@ -498,10 +511,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 
 <!-- Buck profile: every photo of one buck -->
 <div class="sheet" id="profile" hidden role="dialog" aria-modal="true" aria-labelledby="profileName">
-  <button class="sheet-photo" id="profilePhoto" type="button" aria-label="Zoom in on his best photo">
-    <img id="profileImg" alt="">
-    <span class="chip zoom">Tap to zoom</span>
-  </button>
   <div class="sheet-body">
     <div class="namerow" id="profileNameRow"><h2 id="profileName"></h2><button class="linkish" id="profileEdit" type="button">Edit</button></div>
     <form class="editform" id="editForm" hidden>
@@ -564,6 +573,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
     <div id="chooserNew" hidden>
       <p class="label">Or a new buck</p>
       <input id="chooserNewName" class="newname" type="text" maxlength="40" placeholder="Name him" autocomplete="off" autocapitalize="words">
+      <p class="label chooser-or">Or not sure who he is</p>
+      <button class="btn ghost chooser-cant" id="chooserCant" type="button" aria-pressed="false">Can't ID him · Unidentified</button>
     </div>
     <div id="chooserConf" hidden>
       <p class="label">How sure are you it's him?</p>
@@ -579,21 +590,20 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 </div>
 
 <div class="viewer" id="viewer" hidden role="dialog" aria-modal="true" aria-label="Photo zoom">
-  <div class="vtop"><span id="vcap"></span><span style="display:flex;gap:8px"><button class="vbtn" id="vCover" type="button" hidden>Make cover</button><button class="vbtn" id="vMove" type="button" hidden>Move to…</button><button class="vbtn" id="vResort" type="button" hidden>Change my vote</button><button class="vbtn go" id="vThisBuck" type="button" hidden></button><button class="vbtn" id="vClose" type="button">Close</button></span></div>
+  <div class="vtop">
+    <div class="vacts"><button class="vbtn" id="vCover" type="button" hidden >Make Cover Image</button><button class="vbtn" id="vMove" type="button" hidden aria-label="Move this photo to another buck">Move</button><button class="vbtn" id="vResort" type="button" hidden aria-label="Change my vote">Revote</button><button class="vbtn go" id="vThisBuck" type="button" hidden></button><button class="vbtn" id="vClose" type="button">Close</button></div>
+    <span id="vcap"></span>
+  </div>
   <div class="vvotes" id="vvotes" hidden></div>
   <div class="vstage" id="vstage"><img id="vimg" alt="Zoomed trail camera photo">
     <button class="vpip" id="vpip" type="button" hidden aria-label="Swap the two photos"><img id="vpipImg" alt=""><span id="vpipLabel"></span></button>
-    <button class="vnav prev" id="vPrev" type="button" hidden aria-label="Previous photo of this buck">‹</button>
-    <button class="vnav next" id="vNext" type="button" hidden aria-label="Next photo of this buck">›</button>
+    <button class="vnav prev" id="vPrev" type="button" hidden aria-label="Previous photo">‹</button>
+    <button class="vnav next" id="vNext" type="button" hidden aria-label="Next photo">›</button>
   </div>
   <div class="vbucks" id="vbucks" hidden></div>
   <div class="vbar">
     <button class="vbtn" id="vCrop" type="button" aria-pressed="true">Close-up</button>
     <button class="vbtn" id="vFrame" type="button" aria-pressed="false">Full frame</button>
-    <button class="vbtn" id="vEnh" type="button" aria-pressed="false">Enhance</button>
-    <button class="vbtn" id="vOut" type="button" aria-label="Zoom out">−</button>
-    <span class="vzoom" id="vLevel">1×</span>
-    <button class="vbtn" id="vIn" type="button" aria-label="Zoom in">+</button>
   </div>
 </div>
 
@@ -984,6 +994,35 @@ function renderRoster() {
   summary.querySelectorAll("b")[2].textContent = disputed.length;
   wrap.append(summary);
 
+  if (!bucks.length) {
+    const e = document.createElement("div");
+    e.className = "empty";
+    e.textContent = "No bucks in the book yet. Swipe right on a buck in Sort and give him a name.";
+    wrap.append(e);
+  } else {
+    const grid = document.createElement("div");
+    grid.className = "bgrid";
+    for (const b of bucks) {
+      const cover = CARD[b.cover] || b.seen[0];
+      const tile = document.createElement("button");
+      tile.type = "button"; tile.className = "btile";
+      tile.innerHTML = `<img alt=""><span class="cap"><b></b><small></small></span>`;
+      if (cover) tile.querySelector("img").src = cover.crop;
+      tile.querySelector("b").textContent = b.name;
+      tile.querySelector("small").textContent = `${b.seen.length} seen · ${b.sure} sure`;
+      tile.addEventListener("click", () => openProfile(b.id));
+      grid.append(tile);
+    }
+    wrap.append(grid);
+  }
+
+  // Named bucks are the headline; the piles still to sort sit underneath.
+  if (toName.length || unid.length) {
+    const h = document.createElement("p");
+    h.className = "label pile-head";
+    h.textContent = "Still to sort";
+    wrap.append(h);
+  }
   if (toName.length) {
     const bar = document.createElement("div");
     bar.className = "queuebar";
@@ -1008,28 +1047,6 @@ function renderRoster() {
     });
     wrap.append(box);
   }
-
-  if (!bucks.length) {
-    const e = document.createElement("div");
-    e.className = "empty";
-    e.textContent = "No bucks in the book yet. Swipe right on a buck in Sort and give him a name.";
-    wrap.append(e);
-    return;
-  }
-  const grid = document.createElement("div");
-  grid.className = "bgrid";
-  for (const b of bucks) {
-    const cover = CARD[b.cover] || b.seen[0];
-    const tile = document.createElement("button");
-    tile.type = "button"; tile.className = "btile";
-    tile.innerHTML = `<img alt=""><span class="cap"><b></b><small></small></span>`;
-    if (cover) tile.querySelector("img").src = cover.crop;
-    tile.querySelector("b").textContent = b.name;
-    tile.querySelector("small").textContent = `${b.seen.length} seen · ${b.sure} sure`;
-    tile.addEventListener("click", () => openProfile(b.id));
-    grid.append(tile);
-  }
-  wrap.append(grid);
 }
 
 function openProfile(id) {
@@ -1044,9 +1061,6 @@ function renderProfile() {
   const b = state.bucks[profileId];
   if (!b) return closeProfile();
   const s = buckStats(profileId);
-  const cover = CARD[b.cover] || s.seen[0];
-  $("profileImg").src = cover ? cover.crop : "";
-  $("profilePhoto").onclick = () => cover && openViewer(cover, "crop");
   $("profileName").textContent = b.name;
   if (b.status && b.status !== "active") {
     const pill = document.createElement("span");
@@ -1075,18 +1089,19 @@ function renderProfile() {
 
   const grid = $("profileGrid");
   grid.replaceChildren();
-  s.seen.slice().reverse().forEach(c => {
+  const photos = s.seen.slice().reverse();
+  photos.forEach((c, i) => {
     const k = state.consensus[c.id];
     const mark = !k ? "?" : k.status === "disputed" ? "!" : k.votes < 2 ? "1" : k.status === "leaning" ? "~" : "✓";
     const t = document.createElement("button");
     t.type = "button";
-    t.className = "thumb" + (mark === "!" || mark === "1" || mark === "?" ? " shaky" : "");
-    t.innerHTML = `<img alt=""><span class="t"></span><span class="c"></span>`;
-    t.querySelector("img").src = c.crop;
+    t.className = "thumb" + (mark === "!" ? " disputed" : "");
+    t.innerHTML = `<img alt="" loading="lazy"><span class="t"></span><span class="c"></span>`;
+    t.querySelector("img").src = c.frame;
     t.querySelector(".t").textContent = fmtDay(c.when);
     t.querySelector(".c").textContent = mark;
     t.setAttribute("aria-label", `${fmtWhen(c.when)}, ${k ? k.status : "no votes"}`);
-    t.addEventListener("click", () => openViewer(c, "crop", { resort: true, buck: profileId }));
+    t.addEventListener("click", () => openViewer(c, "frame", { resort: true, buck: profileId, list: photos, idx: i }));
     grid.append(t);
   });
 }
@@ -1157,7 +1172,7 @@ $("profileClose").addEventListener("click", closeProfile);
 // ---------- chooser: move a photo / merge a buck ----------
 let chooser = null;
 function openChooser(opts) {
-  chooser = { ...opts, target: null, newName: "", confidence: null };
+  chooser = { ...opts, target: null, newName: "", confidence: null, cant: false };
   const from = opts.buck ? state.bucks[opts.buck] : null;
   const photo = opts.card || (from && (CARD[from.cover] || sightings(opts.buck)[0]));
   $("chooserImg").src = photo ? photo.crop : "";
@@ -1178,10 +1193,11 @@ function openChooser(opts) {
       if (cover) tile.querySelector("img").src = cover.crop;
       tile.querySelector("b").textContent = b.name;
       tile.querySelector("small").textContent = `${sightings(id).length} seen`;
-      tile.addEventListener("click", () => { chooser.target = id; chooser.newName = ""; $("chooserNewName").value = ""; syncChooser(); });
+      tile.addEventListener("click", () => { chooser.target = id; chooser.newName = ""; chooser.cant = false; $("chooserNewName").value = ""; syncChooser(); });
       grid.append(tile);
     });
   $("chooserNew").hidden = opts.mode !== "move";
+  $("chooserCant").hidden = !!(opts.card && myVote(opts.card.id)?.cantId);   // already in Unidentified
   $("chooserNewName").value = "";
   const cb = $("chooserConfBtns");
   cb.replaceChildren();
@@ -1198,24 +1214,30 @@ function openChooser(opts) {
   syncChooser();
 }
 function syncChooser() {
-  const { mode, target, newName, confidence } = chooser;
+  const { mode, target, newName, confidence, cant } = chooser;
+  $("chooserCant").setAttribute("aria-pressed", String(cant));
   $("chooserGrid").querySelectorAll(".btile").forEach(t => t.setAttribute("aria-pressed", String(t.dataset.id === target)));
   $("chooserConf").hidden = !(mode === "move" && target);
   $("chooserConfBtns").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.v === confidence)));
   const go = $("chooserGo");
   if (mode === "move") {
-    go.textContent = newName ? `Add ${newName}` : target ? `Move to ${state.bucks[target].name}` : "Pick a buck";
-    go.disabled = !(newName || (target && confidence));
+    go.textContent = cant ? "Move to Unidentified" : newName ? `Add ${newName}` : target ? `Move to ${state.bucks[target].name}` : "Pick a buck";
+    go.disabled = !(cant || newName || (target && confidence));
   } else {
     go.textContent = target ? `Merge into ${state.bucks[target].name}` : "Pick a buck";
     go.disabled = !target;
   }
 }
 function closeChooser() { chooser = null; $("chooser").hidden = true; }
-$("chooserNewName").addEventListener("input", e => { chooser.newName = e.target.value.trim(); if (chooser.newName) chooser.target = null; syncChooser(); });
+$("chooserNewName").addEventListener("input", e => { chooser.newName = e.target.value.trim(); if (chooser.newName) { chooser.target = null; chooser.cant = false; } syncChooser(); });
+$("chooserCant").addEventListener("click", () => {
+  chooser.cant = !chooser.cant;
+  if (chooser.cant) { chooser.target = null; chooser.newName = ""; $("chooserNewName").value = ""; }
+  syncChooser();
+});
 $("chooserCancel").addEventListener("click", closeChooser);
 $("chooserGo").addEventListener("click", async () => {
-  const { mode, card, buck, target, newName, confidence } = chooser;
+  const { mode, card, buck, target, newName, confidence, cant } = chooser;
   if (mode === "merge") {
     const from = state.bucks[buck], into = state.bucks[target];
     confirmBox($("chooserConfirm"), `Merge ${from.name} into ${into.name}? All of ${from.name}'s photos and votes become ${into.name}'s. This can't be undone.`,
@@ -1228,6 +1250,11 @@ $("chooserGo").addEventListener("click", async () => {
     return;
   }
   const mine = myVote(card.id);
+  if (cant) {
+    await writeDoc("votes/" + card.id, { verdict: "buck", buckId: null, cantId: true, points: mine?.points ?? null, confidence: null, by: state.me });
+    closeChooser(); closeViewer();
+    return toast("Moved to Unidentified");
+  }
   let buckId = target;
   if (newName) {
     buckId = newId();
@@ -1601,8 +1628,6 @@ function openCompare(card, buckId) {
   V.compare = { unknown: card, buckId, idx: 0, showing: "buck" };
   ["vResort", "vMove", "vCover", "vvotes"].forEach(id => { $(id).hidden = true; });
   $("vpip").hidden = false; $("vbucks").hidden = false; $("vThisBuck").hidden = false;
-  $("vimg").classList.remove("enhanced");
-  $("vEnh").setAttribute("aria-pressed", "false");
   renderCompareBucks();
   renderCompare();
   $("viewer").hidden = false;
@@ -1620,9 +1645,7 @@ function renderCompare() {
   $("vpipImg").src = inset ? inset.crop : "";
   $("vpipLabel").textContent = C.showing === "buck" ? "Your photo" : b.name;
   $("vpip").hidden = !inset;
-  $("vcap").textContent = C.showing === "buck"
-    ? `${b.name} · ${C.idx + 1} / ${photos.length} · CAM ${main.cam} · ${fmtDay(main.when)}`
-    : `Your photo · CAM ${main.cam} · ${fmtWhen(main.when)}`;
+  setCap(C.showing === "buck" ? `${b.name} · ${C.idx + 1} / ${photos.length} · CAM ${main.cam}` : `Your photo · CAM ${main.cam}`);
   const leaf = C.showing === "buck" && photos.length > 1;
   $("vPrev").hidden = !leaf; $("vNext").hidden = !leaf;
   $("vThisBuck").textContent = `It's ${b.name}`;
@@ -1658,7 +1681,7 @@ $("vpip").addEventListener("pointerdown", e => e.stopPropagation());
 $("vpip").addEventListener("click", () => { const C = V.compare; C.showing = C.showing === "buck" ? "unknown" : "buck"; renderCompare(); });
 ["vPrev", "vNext"].forEach(id => {
   $(id).addEventListener("pointerdown", e => e.stopPropagation());
-  $(id).addEventListener("click", () => leafCompare(id === "vNext" ? 1 : -1));
+  $(id).addEventListener("click", () => leaf(id === "vNext" ? 1 : -1));
 });
 $("vThisBuck").addEventListener("click", () => { const id = V.compare.buckId; closeViewer(); chooseBuck(id); });
 
@@ -1864,8 +1887,8 @@ $("btnBuck").addEventListener("click", () => decide("buck"));
 document.addEventListener("keydown", e => {
   if (!$("viewer").hidden) {
     if (e.key === "Escape") closeViewer();
-    else if (V.compare && e.key === "ArrowRight") leafCompare(1);
-    else if (V.compare && e.key === "ArrowLeft") leafCompare(-1);
+    else if (e.key === "ArrowRight") leaf(1);
+    else if (e.key === "ArrowLeft") leaf(-1);
     else if (e.key === "+" || e.key === "=") zoomBy(1.4);
     else if (e.key === "-") zoomBy(1 / 1.4);
     return;
@@ -1886,6 +1909,8 @@ const MAX_ZOOM = 8;
 function openViewer(c, mode = "crop", opts = {}) {
   endCompare();
   V.card = c;
+  V.opts = opts;
+  V.gallery = opts.list && opts.list.length > 1 ? opts : null;
   $("vResort").hidden = !(opts.resort && myVote(c.id));
   V.buck = opts.buck || null;
   $("vMove").hidden = !(V.buck || opts.move);
@@ -1904,15 +1929,26 @@ function openViewer(c, mode = "crop", opts = {}) {
       vv.append(who, document.createTextNode(`: ${what}${v.confidence ? ` (${v.confidence})` : ""}${i < all.length - 1 ? " · " : ""}`));
     });
   }
-  $("vcap").textContent = `CAM ${c.cam} · ${fmtWhen(c.when)}`;
-  $("vimg").classList.remove("enhanced");
-  $("vEnh").setAttribute("aria-pressed", "false");
+  setCap(`CAM ${c.cam}` + (V.gallery ? ` · ${opts.idx + 1} / ${opts.list.length}` : ""));
+  $("vPrev").hidden = $("vNext").hidden = !V.gallery;
   setViewerMode(mode);
   $("viewer").hidden = false;
 }
-function closeViewer() { $("viewer").hidden = true; V.pointers.clear(); endCompare(); }
+function closeViewer() { $("viewer").hidden = true; V.pointers.clear(); V.gallery = null; endCompare(); }
+// Gallery: step through a buck's photos, keeping close-up or full frame as chosen.
+function leafGallery(step) {
+  const G = V.gallery;
+  if (!G) return;
+  const idx = (G.idx + step + G.list.length) % G.list.length;
+  openViewer(G.list[idx], V.mode, { ...G, idx });
+}
+function leaf(step) { V.compare ? leafCompare(step) : leafGallery(step); }
+// Small label under the buttons. Full frames carry the camera's own date stamp; close-ups don't, so add it there.
+function setCap(text) { V.cap = text; renderCap(); }
+function renderCap() { $("vcap").textContent = V.cap + (V.mode === "crop" && V.card ? ` · ${fmtWhen(V.card.when)}` : ""); }
 function setViewerMode(mode) {
   V.mode = mode;
+  if (V.cap) renderCap();
   $("vimg").src = mode === "frame" ? V.card.frame : V.card.crop;
   $("vCrop").setAttribute("aria-pressed", String(mode === "crop"));
   $("vFrame").setAttribute("aria-pressed", String(mode === "frame"));
@@ -1926,7 +1962,10 @@ function applyZoom() {
   V.x = Math.max(-limX, Math.min(limX, V.x));
   V.y = Math.max(-limY, Math.min(limY, V.y));
   $("vimg").style.transform = `translate(${V.x}px, ${V.y}px) scale(${V.scale})`;
-  $("vLevel").textContent = (Math.round(V.scale * 10) / 10) + "×";
+}
+function zoomBy(factor) {
+  const r = $("vstage").getBoundingClientRect();
+  zoomAt(r.left + r.width / 2, r.top + r.height / 2, factor);
 }
 function zoomAt(px, py, factor) {
   const r = $("vstage").getBoundingClientRect();
@@ -1937,10 +1976,6 @@ function zoomAt(px, py, factor) {
   V.y = cy - (cy - V.y) * f;
   V.scale = next;
   applyZoom();
-}
-function zoomBy(factor) {
-  const r = $("vstage").getBoundingClientRect();
-  zoomAt(r.left + r.width / 2, r.top + r.height / 2, factor);
 }
 
 const stage = $("vstage");
@@ -1974,9 +2009,9 @@ stage.addEventListener("pointermove", e => {
 const endPointer = e => {
   V.pointers.delete(e.pointerId);
   if (V.pointers.size < 2) V.pinch = null;
-  if (V.compare && V.pan && V.scale <= 1 && e.type === "pointerup") {
+  if ((V.compare || V.gallery) && V.pan && V.scale <= 1 && e.type === "pointerup") {
     const dx = e.clientX - V.pan.x, dy = e.clientY - V.pan.y;
-    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) { V.pan = null; return leafCompare(dx < 0 ? 1 : -1); }
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) { V.pan = null; return leaf(dx < 0 ? 1 : -1); }
   }
   if (V.pan && !V.pan.moved && e.type === "pointerup") {
     const now = Date.now();
@@ -2003,12 +2038,6 @@ $("vResort").addEventListener("click", async () => {
 });
 $("vCrop").addEventListener("click", () => setViewerMode("crop"));
 $("vFrame").addEventListener("click", () => setViewerMode("frame"));
-$("vIn").addEventListener("click", () => zoomBy(1.4));
-$("vOut").addEventListener("click", () => zoomBy(1 / 1.4));
-$("vEnh").addEventListener("click", () => {
-  const on = $("vimg").classList.toggle("enhanced");
-  $("vEnh").setAttribute("aria-pressed", String(on));
-});
 
 // ---------- sign in & boot ----------
 // Names map to placeholder addresses (see buckbook/crew_admin.py); keep the two in step.
