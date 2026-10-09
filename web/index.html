@@ -187,16 +187,21 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .ggrid .thumb { border-radius: 4px; }
 .chips.gcams { overflow-x: auto; scrollbar-width: none; margin: 0 -16px 14px; padding: 0 16px; }
 .chips.gcams button { flex-shrink: 0; }
-.gtools { display: flex; justify-content: space-between; align-items: center; font: 12px var(--mono); color: var(--muted); margin: -4px 0 10px; }
-.gburst .label.gpick { appearance: none; border: 0; background: none; padding: 0; cursor: pointer; display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; color: var(--ink); }
-.gpick i { flex: none; width: 16px; height: 16px; border: 2px solid var(--muted); border-radius: 4px; font: 700 11px/12px var(--body); font-style: normal; text-align: center; }
+.gtools { position: sticky; top: -16px; z-index: 3; display: flex; justify-content: space-between; align-items: center; gap: 10px; font: 12px var(--mono); color: var(--muted); margin: -4px -16px 10px; padding: 10px 16px; background: var(--bg); }
+.gtools .linkish { font-weight: 600; color: var(--ink); padding: 6px 2px; }
+.gburst .label.gpick { appearance: none; border: 0; background: none; padding: 0; cursor: default; display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; }
+.gpick i { display: none; flex: none; width: 16px; height: 16px; border: 2px solid var(--muted); border-radius: 4px; font: 700 11px/12px var(--body); font-style: normal; text-align: center; }
+.selecting .gburst .label.gpick { cursor: pointer; color: var(--ink); }
+.selecting .gpick i { display: block; }
 .gpick[aria-pressed="true"] i { background: var(--blaze); border-color: var(--blaze); color: var(--blaze-ink); }
 .ggrid .thumb { -webkit-touch-callout: none; user-select: none; }
-.ggrid .thumb.pick { cursor: pointer; }
-.ggrid .thumb .tick { position: absolute; right: 4px; top: 4px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff; background: rgba(0, 0, 0, .35); display: grid; place-items: center; font: 700 12px/1 var(--body); color: transparent; }
-.ggrid .thumb[aria-pressed="true"] { outline: 3px solid var(--blaze); outline-offset: -3px; }
-.ggrid .thumb[aria-pressed="true"] .tick { background: var(--blaze); border-color: var(--blaze); color: var(--blaze-ink); }
-.gbar { position: sticky; bottom: 0; z-index: 2; margin: 14px -16px -24px; padding: 10px 16px calc(10px + 0px); background: var(--bg); border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
+.ggrid .thumb .tick { display: none; position: absolute; right: 4px; top: 4px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff; background: rgba(0, 0, 0, .35); place-items: center; font: 700 12px/1 var(--body); color: transparent; }
+.selecting .ggrid .thumb { cursor: pointer; }
+.selecting .ggrid .thumb .tick { display: grid; }
+.selecting .ggrid .thumb[aria-pressed="true"] { outline: 3px solid var(--blaze); outline-offset: -3px; }
+.selecting .ggrid .thumb[aria-pressed="true"] .tick { background: var(--blaze); border-color: var(--blaze); color: var(--blaze-ink); }
+#view-gallery.selecting { padding-bottom: 84px; }   /* room for the action bar */
+.gbar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; padding: 10px 16px; background: var(--bg); border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; box-shadow: 0 -6px 16px rgba(0, 0, 0, .35); }
 .gbar span { flex: 1; font: 600 14px var(--mono); }
 .gbar .btn { min-height: 44px; padding: 8px 16px; }
 .chips.gcams::-webkit-scrollbar { display: none; }
@@ -471,6 +476,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
     <section id="view-gallery" class="view scroll" hidden>
       <div id="gallery"></div>
     </section>
+    <div class="gbar" id="gbar" hidden><span id="gbarCount"></span><button class="btn ghost" id="gbarPass" type="button">Pass</button><button class="btn" id="gbarTag" type="button">Tag as…</button></div>
 
     <section id="view-roster" class="view scroll">
       <div id="roster"></div>
@@ -527,7 +533,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
       <button class="bigchoice shortcut" id="askBurst" type="button" hidden><img alt=""><span><b></b><small>Same burst. Tap if it's him</small></span></button>
       <button class="bigchoice primary" id="askYes" type="button"><b>Yes</b><small>Pick him from the book</small></button>
       <button class="bigchoice" id="askNo" type="button"><b>No, new buck</b><small>Name him and add what you can see</small></button>
-      <button class="bigchoice" id="askCant" type="button"><b>Can't ID him</b><small>Bad angle or rough photo. File it under Unidentified</small></button>
+      <button class="bigchoice" id="askCant" type="button"><b>Can't ID him</b><small>Bad angle or rough photo. It waits in Name them for a second look</small></button>
     </div>
 
     <div id="stepKnown" hidden>
@@ -648,7 +654,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
       <p class="label">Or a new buck</p>
       <input id="chooserNewName" class="newname" type="text" maxlength="40" placeholder="Name him" autocomplete="off" autocapitalize="words">
       <p class="label chooser-or">Or not sure who he is</p>
-      <button class="btn ghost chooser-cant" id="chooserCant" type="button" aria-pressed="false">Can't ID him · Unidentified</button>
+      <button class="btn ghost chooser-cant" id="chooserCant" type="button" aria-pressed="false">Can't ID him</button>
     </div>
     <div id="chooserConf" hidden>
       <p class="label">How sure are you it's him?</p>
@@ -1189,18 +1195,42 @@ function galleryCards() {
 // each burst read in order. #2 and #8 share bursts; here each camera shows its own half.
 let galleryCam = null;
 // Select mode: tick photos (or whole bursts), then Tag as… / Pass them together. null = not selecting.
-let gallerySel = null;
+// Ticks and checkboxes are always in the page (hidden until selecting), so entering select mode and
+// ticking only flip attributes; the photos are never rebuilt or reloaded.
+let gallerySel = null, galleryOrder = [];
 function startGallerySelect(firstId) {
   if (document.body.classList.contains("viewer")) return;
   gallerySel = new Set(firstId ? [firstId] : []);
-  renderGallery();
+  syncGallerySel();
 }
-function exitGallerySelect() { gallerySel = null; if (!$("view-gallery").hidden) renderGallery(); }
+function exitGallerySelect() { gallerySel = null; syncGallerySel(); }
 function toggleGallerySel(ids) {
   const all = ids.every(id => gallerySel.has(id));
   ids.forEach(id => all ? gallerySel.delete(id) : gallerySel.add(id));
-  renderGallery();
+  syncGallerySel();
 }
+function syncGallerySel() {
+  const wrap = $("gallery"), sel = gallerySel || new Set(), on = !!gallerySel;
+  $("view-gallery").classList.toggle("selecting", on);
+  wrap.querySelectorAll(".ggrid .thumb").forEach(t => t.setAttribute("aria-pressed", String(sel.has(t.dataset.id))));
+  wrap.querySelectorAll(".gpick").forEach(h => {
+    const all = on && h.dataset.ids.split(" ").every(id => sel.has(id));
+    h.setAttribute("aria-pressed", String(all));
+    h.querySelector("i").textContent = all ? "✓" : "";
+  });
+  const tools = wrap.querySelector(".gtools");
+  if (tools) {
+    tools.querySelector("span").textContent = on ? "Tap photos, or a burst's time for the whole burst" : tools.dataset.summary;
+    tools.querySelector("button").textContent = on ? "Cancel" : "Select";
+  }
+  $("gbar").hidden = !on || $("view-gallery").hidden;
+  $("gbarCount").textContent = `${sel.size} selected`;
+  $("gbarPass").disabled = $("gbarTag").disabled = !sel.size;
+}
+const gallerySelected = () => galleryOrder.filter(c => gallerySel?.has(c.id));
+$("gbarPass").addEventListener("click", () => { const cards = gallerySelected(); batchVote(cards, { verdict: "not", buckId: null, confidence: null }, `Passed on ${cards.length}`); });
+$("gbarTag").addEventListener("click", () => openChooser({ mode: "move", cards: gallerySelected() }));
+
 function renderGallery() {
   const wrap = $("gallery");
   if (state.mode === "loading") return wrap.replaceChildren();
@@ -1237,6 +1267,7 @@ function renderGallery() {
     e.className = "empty";
     e.textContent = galleryFilter === "buck" ? "No buck photos waiting for a name." : "Every photo here has been sorted. Nice work.";
     wrap.replaceChildren(filters, e);
+    galleryOrder = []; gallerySel = null; syncGallerySel();
     view.scrollTop = keep;
     return;
   }
@@ -1246,15 +1277,15 @@ function renderGallery() {
   cams.get(galleryCam).forEach(c => { if (!bursts.has(c.burst)) bursts.set(c.burst, []); bursts.get(c.burst).push(c); });
   const groups = [...bursts.values()].map(cs => cs.slice().reverse());
   const order = groups.flat();                                   // what the viewer swipes through
-  const selecting = !!gallerySel;
-  if (selecting) [...gallerySel].forEach(id => { if (!order.some(c => c.id === id)) gallerySel.delete(id); });
+  galleryOrder = order;
+  if (gallerySel) [...gallerySel].forEach(id => { if (!order.some(c => c.id === id)) gallerySel.delete(id); });
 
+  // Pinned to the top of the Gallery while scrolling, so Select is always in reach.
   const tools = document.createElement("div");
   tools.className = "gtools";
+  tools.dataset.summary = `${order.length} photos · ${groups.length} bursts`;
   tools.innerHTML = `<span></span><button class="linkish" type="button"></button>`;
-  tools.querySelector("span").textContent = selecting ? "Tap photos, or a burst's time to take the whole burst" : `${order.length} photos · ${groups.length} bursts`;
-  tools.querySelector("button").textContent = selecting ? "Cancel" : "Select";
-  tools.querySelector("button").addEventListener("click", () => selecting ? exitGallerySelect() : startGallerySelect());
+  tools.querySelector("button").addEventListener("click", () => gallerySel ? exitGallerySelect() : startGallerySelect());
 
   const list = document.createElement("div");
   list.className = "gbursts";
@@ -1264,46 +1295,38 @@ function renderGallery() {
     const block = document.createElement("section");
     block.className = "gburst";
     block.style.setProperty("--k", Math.min(cs.length, cols));
-    const h = document.createElement(selecting ? "button" : "p");
-    h.className = "label";
-    if (selecting) {
-      const ids = cs.map(c => c.id), on = ids.every(id => gallerySel.has(id));
-      h.type = "button"; h.classList.add("gpick"); h.setAttribute("aria-pressed", String(on));
-      h.addEventListener("click", () => toggleGallerySel(ids));
-      const box = document.createElement("i"); box.textContent = on ? "✓" : ""; h.append(box);
-    }
-    h.append(fmtWhen(cs[0].when));
+    // The burst's time doubles as its checkbox in select mode.
+    const h = document.createElement("button");
+    h.type = "button"; h.className = "label gpick";
+    h.dataset.ids = cs.map(c => c.id).join(" ");
+    h.append(document.createElement("i"), fmtWhen(cs[0].when));
     if (cs.length > 1) { const n = document.createElement("b"); n.textContent = ` ×${cs.length}`; h.append(n); }
     h.title = `${fmtWhen(cs[0].when)} · ${cs.length} photo${cs.length === 1 ? "" : "s"}`;
+    h.addEventListener("click", () => { if (gallerySel) toggleGallerySel(cs.map(c => c.id)); });
     const grid = document.createElement("div");
     grid.className = "ggrid";
     cs.forEach(c => {
       const idx = i++;
       const t = document.createElement("button");
-      t.type = "button"; t.className = "thumb";
-      t.innerHTML = `<img alt="" loading="lazy">`;
+      t.type = "button"; t.className = "thumb"; t.dataset.id = c.id;
+      t.innerHTML = `<img alt="" loading="lazy"><span class="tick">✓</span>`;
       const img = t.querySelector("img");
       if (idx < 18) { img.loading = "eager"; img.fetchPriority = "high"; }   // the first screenful jumps the queue
       img.src = c.crop;
       t.setAttribute("aria-label", `CAM ${c.cam}, ${fmtWhen(c.when)}`);
-      if (selecting) {
-        t.classList.add("pick");
-        t.setAttribute("aria-pressed", String(gallerySel.has(c.id)));
-        t.insertAdjacentHTML("beforeend", `<span class="tick">✓</span>`);
-      }
       // Long-press starts select mode with this photo ticked (the usual phone gesture).
       let press = null, held = false;
       t.addEventListener("pointerdown", e => {
         held = false;
         if (gallerySel) return;
         const x = e.clientX, y = e.clientY;
-        press = { x, y, timer: setTimeout(() => { held = true; startGallerySelect(c.id); }, 500) };
+        press = { x, y, timer: setTimeout(() => { held = true; press = null; startGallerySelect(c.id); }, 450) };
       });
       t.addEventListener("pointermove", e => { if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) { clearTimeout(press.timer); press = null; } });
       ["pointerup", "pointercancel", "pointerleave"].forEach(ev => t.addEventListener(ev, () => { if (press) clearTimeout(press.timer); press = null; }));
       t.addEventListener("contextmenu", e => e.preventDefault());
       t.addEventListener("click", () => {
-        if (held) { held = false; return; }
+        if (held) { held = false; return; }               // the long-press already ticked it
         if (gallerySel) toggleGallerySel([c.id]);
         else openViewer(c, "crop", { list: order, idx, tag: true, resort: true });
       });
@@ -1312,21 +1335,8 @@ function renderGallery() {
     block.append(h, grid);
     list.append(block);
   });
-  const parts = [filters, camRow, tools, list];
-  if (selecting) {
-    // Action bar, pinned to the bottom of the Gallery while selecting.
-    const bar = document.createElement("div");
-    bar.className = "gbar";
-    bar.innerHTML = `<span></span><button class="btn ghost" type="button">Pass</button><button class="btn" type="button">Tag as…</button>`;
-    const n = gallerySel.size, picked = order.filter(c => gallerySel.has(c.id));
-    bar.querySelector("span").textContent = `${n} selected`;
-    const [pass, tag] = bar.querySelectorAll("button");
-    pass.disabled = tag.disabled = !n;
-    pass.addEventListener("click", () => batchVote(picked, { verdict: "not", buckId: null, confidence: null }, `Passed on ${n}`));
-    tag.addEventListener("click", () => openChooser({ mode: "move", cards: picked }));
-    parts.push(bar);
-  }
-  wrap.replaceChildren(...parts);
+  wrap.replaceChildren(filters, camRow, tools, list);
+  syncGallerySel();
   view.scrollTop = keep;
 }
 
@@ -1339,6 +1349,7 @@ async function batchVote(cards, vote, msg, newBuckId = null) {
   }
   gallerySel = null;
   renderAll();
+  syncGallerySel();
   Sound.play(vote.verdict === "not" ? "pass" : newBuckId ? "newBuck" : vote.buckId ? "knownBuck" : "keeper");
   lastAction = null;
   toast(msg, cards.length * 10 + (newBuckId ? 25 : 0), false, { label: "Undo", run: async () => {
@@ -1512,7 +1523,7 @@ function openChooser(opts) {
       grid.append(tile);
     });
   $("chooserNew").hidden = opts.mode !== "move";
-  $("chooserCant").hidden = !!(opts.card && myVote(opts.card.id)?.cantId);   // already in Unidentified
+  $("chooserCant").hidden = !!(opts.card && myVote(opts.card.id)?.cantId);   // already marked can't ID
   $("chooserNewName").value = "";
   const cb = $("chooserConfBtns");
   cb.replaceChildren();
@@ -1537,7 +1548,7 @@ function syncChooser() {
   const go = $("chooserGo");
   if (mode === "move") {
     const n = chooser.cards?.length;
-    go.textContent = cant ? (n ? `Mark ${n} can't ID` : "Move to Unidentified")
+    go.textContent = cant ? (n ? `Mark ${n} can't ID` : "Mark can't ID")
       : newName ? (n ? `Add ${newName} · ${n} photos` : `Add ${newName}`)
       : target ? (n ? `Tag ${n} as ${state.bucks[target].name}` : `Move to ${state.bucks[target].name}`) : "Pick a buck";
     go.disabled = !(cant || newName || (target && confidence));
@@ -1548,10 +1559,11 @@ function syncChooser() {
 }
 function closeChooser() { chooser = null; $("chooser").hidden = true; }
 $("chooserNewName").addEventListener("input", e => { chooser.newName = e.target.value.trim(); if (chooser.newName) { chooser.target = null; chooser.cant = false; } syncChooser(); });
+// Can't ID needs no buck or how-sure, so one tap does it.
 $("chooserCant").addEventListener("click", () => {
-  chooser.cant = !chooser.cant;
-  if (chooser.cant) { chooser.target = null; chooser.newName = ""; $("chooserNewName").value = ""; }
-  syncChooser();
+  Object.assign(chooser, { cant: true, target: null, newName: "" });
+  $("chooserNewName").value = "";
+  $("chooserGo").click();
 });
 $("chooserCancel").addEventListener("click", closeChooser);
 $("chooserGo").addEventListener("click", async () => {
@@ -1595,7 +1607,7 @@ $("chooserGo").addEventListener("click", async () => {
   if (cant) {
     await writeDoc("votes/" + card.id, { verdict: "buck", buckId: null, cantId: true, points: mine?.points ?? null, confidence: null, by: state.me });
     closeChooser(); closeViewer();
-    return toast("Moved to Unidentified");
+    return toast("Marked can't ID");
   }
   let buckId = target;
   if (newName) {
@@ -2532,6 +2544,7 @@ function showTab(name) {
   document.querySelectorAll(".view").forEach(v => v.hidden = v.id !== "view-" + name);
   if (name === "roster") renderRoster();
   if (name === "gallery") renderGallery();
+  else if (gallerySel) exitGallerySelect();   // leaving the Gallery ends select mode
   if (name === "crew") renderCrew();
   if (name === "disputes") renderDisputes();
 }
