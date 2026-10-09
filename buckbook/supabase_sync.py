@@ -10,6 +10,7 @@ Commands:
   prune     Delete the photo files of passed photos (009_pass_and_drop.sql): two passes, or one pass
             14+ days old, and no keeper vote. Shows what goes and the space it frees, backs up, and
             asks first (--yes skips the question). The card row stays, marked dropped.
+            --only=<prefix> limits it to card ids starting with the prefix (e.g. --only=cam8-).
 
 Usage: .venv/bin/python -m buckbook.supabase_sync push
 """
@@ -147,15 +148,16 @@ def push(assume_yes=False, skip=(), only=None):
     print(f"Uploaded {len(rows)} cards.")
 
 
-def prune(assume_yes=False):
+def prune(assume_yes=False, only=""):
     ready = {r["card_id"] for r in rest("GET", "card_drop", query="?droppable=is.true&select=card_id")}
     cards = rest("GET", "cards", query="?select=id,camera,property,crop_path,frame_path,dropped_at")
-    todo = [c for c in cards if c["id"] in ready and not c["dropped_at"]]
+    todo = [c for c in cards if c["id"] in ready and not c["dropped_at"] and c["id"].startswith(only)]
     if not todo:
         print("Nothing to drop.")
         return
     # A full frame can hold several deer; keep it while any card that isn't being dropped uses it.
-    in_use = {c["frame_path"] for c in cards if c["id"] not in ready and not c["dropped_at"] and c["frame_path"]}
+    dropping = {c["id"] for c in todo}
+    in_use = {c["frame_path"] for c in cards if c["id"] not in dropping and not c["dropped_at"] and c["frame_path"]}
     crops = [c["crop_path"] for c in todo if c["crop_path"]]
     frames = sorted({c["frame_path"] for c in todo if c["frame_path"] and c["frame_path"] not in in_use})
 
@@ -215,6 +217,7 @@ if __name__ == "__main__":
     elif cmd == "backup":
         backup()
     elif cmd == "prune":
-        prune(assume_yes="--yes" in sys.argv)
+        only = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--only=")), "")
+        prune(assume_yes="--yes" in sys.argv, only=only)
     else:
         raise SystemExit(__doc__)
