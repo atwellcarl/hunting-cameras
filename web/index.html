@@ -1660,9 +1660,20 @@ const Sound = (() => {
       Object.entries(SOUND_FILES).forEach(([k, url]) =>
         fetch(url).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b)).then(buf => { files[k] = buf; }).catch(() => {}));
     }
-    if (ctx.state === "suspended") ctx.resume();
+    if (ctx.state !== "running") ctx.resume();   // "suspended", or "interrupted" on iPhone after a call
     return ctx;
   };
+  // Safari only starts audio inside certain taps (click / touchend / keydown, not every swipe), so
+  // unlock on the first one: create the context there and play a silent sample.
+  const unlock = () => {
+    try {
+      const c = ac(), src = c.createBufferSource();
+      src.buffer = c.createBuffer(1, 1, c.sampleRate);
+      src.connect(c.destination); src.start(0);
+    } catch {}
+    if (ctx?.state === "running") ["touchend", "click", "keydown"].forEach(e => document.removeEventListener(e, unlock, true));
+  };
+  ["touchend", "click", "keydown"].forEach(e => document.addEventListener(e, unlock, true));
   // A pitched tone with a fast attack and exponential decay, optionally gliding to another pitch.
   const tone = (t, { f, to = f, dur, type = "sine", gain = 0.2 }) => {
     const o = ctx.createOscillator(), g = ctx.createGain();
@@ -1809,7 +1820,8 @@ function openSheet(c, opts = {}) {
     const cover = CARD[hit.cover] || hit.seen[0];
     $("askBurst").querySelector("img").src = cover ? cover.crop : "";
     $("askBurst").querySelector("b").textContent = `That's ${hit.name}`;
-    $("askBurst").onclick = () => { goStep("known"); sheetState.buckId = hit.id; syncSheet(); };
+    // Same burst, clearly him: skip the Which-buck grid and go straight to how sure.
+    $("askBurst").onclick = () => { goStep("known"); Object.assign(sheetState, { buckId: hit.id, via: "burst" }); syncSheet(); };
   }
 
   const pts = $("points");
@@ -1839,6 +1851,7 @@ function openSheet(c, opts = {}) {
 function goStep(step) {
   closePickPrompt();
   sheetState.step = step;
+  sheetState.via = null;
   if (step === "ask") { sheetState.buckId = null; sheetState.newName = ""; $("newName").value = ""; }
   if (step === "new") sheetState.buckId = null;
   if (step === "known") { sheetState.newName = ""; $("newName").value = ""; }
@@ -1850,9 +1863,11 @@ function goStep(step) {
 function syncSheet() {
   if (!sheetState) return;
   const { step, buckId, newName, points, confidence } = sheetState;
-  $("sheetTitle").textContent = step === "ask" ? "Seen him before?" : step === "known" ? "Which buck?" : "New buck";
+  const viaBurst = step === "known" && sheetState.via === "burst";
+  $("sheetTitle").textContent = step === "ask" ? "Seen him before?" : viaBurst ? `${state.bucks[buckId]?.name}, same burst`
+    : step === "known" ? "Which buck?" : "New buck";
   $("stepAsk").hidden = step !== "ask";
-  $("stepKnown").hidden = step !== "known";
+  $("stepKnown").hidden = step !== "known" || viaBurst;
   $("stepNew").hidden = step !== "new";
   $("details").hidden = !((step === "known" && buckId) || step === "new");
   $("confWrap").hidden = step !== "known";
