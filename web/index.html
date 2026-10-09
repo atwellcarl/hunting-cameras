@@ -321,13 +321,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .composer { display: flex; gap: 8px; }
 .composer input { flex: 1; min-width: 0; font: 16px var(--body); padding: 12px 14px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); }
 
-/* ---------- name-them queue / unidentified ---------- */
+/* ---------- name-them queue ---------- */
 .queuebar { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--panel); border: 2px solid var(--blaze); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; }
 .queuebar b { font: 800 26px/1 var(--display); }
 .queuebar small { display: block; font: 12px var(--mono); color: var(--muted); }
-.unid { margin-bottom: 18px; }
 .pile-head { margin: 26px 0 10px; }
-.unid .thumb { flex: 0 0 96px; }
 .qcount { font: 500 12px var(--mono); color: var(--blaze); text-transform: uppercase; letter-spacing: .06em; }
 
 /* ---------- buck editing ---------- */
@@ -799,18 +797,14 @@ function deck() {
   const disputed = open.filter(c => c.id !== forcedTop && state.consensus[c.id]?.status === "disputed");
   return first.concat(disputed, open.filter(c => c.id !== forcedTop && state.consensus[c.id]?.status !== "disputed"));
 }
-// Called a buck, nobody has named him, and nobody filed him as can't-ID: waiting for a name.
-// Photos you already named or marked can't-ID yourself are skipped.
+// Called a keeper and nobody has named him (someone may have said can't ID): waiting for a name.
+// Photos you already named, marked can't-ID, or passed on yourself are skipped.
 function unnamedCards() {
   return CARDS.filter(c => {
     const k = state.consensus[c.id], mine = myVote(c.id);
-    if (!k || k.verdict !== "buck" || k.top_buck || k.cant_id_votes > 0) return false;
+    if (!k || k.verdict !== "buck" || k.top_buck) return false;
     return !(mine && (mine.buckId || mine.cantId || mine.verdict === "not"));
   });
-}
-// Called a buck, too rough to say which: the Unidentified pile.
-function unidentifiedCards() {
-  return CARDS.filter(c => { const k = state.consensus[c.id]; return k && k.verdict === "buck" && !k.top_buck && k.cant_id_votes > 0; });
 }
 // Which buck a photo belongs to: the crew consensus once there is one, else your own vote.
 function buckOf(id) {
@@ -1126,7 +1120,7 @@ function renderRoster() {
   const bucks = bucksHere()
     .map(([id, b]) => ({ id, ...b, ...buckStats(id) }))
     .sort((a, b) => b.seen.length - a.seen.length);
-  const toName = unnamedCards(), unid = unidentifiedCards();
+  const toName = unnamedCards();
   const unnamed = toName.length;
   const disputed = CARDS.filter(c => state.consensus[c.id]?.status === "disputed");
 
@@ -1161,35 +1155,17 @@ function renderRoster() {
   }
 
   // Named bucks are the headline; the piles still to sort sit underneath.
-  if (toName.length || unid.length) {
+  if (toName.length) {
     const h = document.createElement("p");
     h.className = "label pile-head";
     h.textContent = "Still to sort";
     wrap.append(h);
-  }
-  if (toName.length) {
     const bar = document.createElement("div");
     bar.className = "queuebar";
     bar.innerHTML = `<span><b></b><small>buck photos waiting for a name</small></span><button class="btn" type="button">Name them</button>`;
     bar.querySelector("b").textContent = toName.length;
     bar.querySelector("button").addEventListener("click", startNameQueue);
     wrap.append(bar);
-  }
-  if (unid.length) {
-    const box = document.createElement("div");
-    box.className = "unid";
-    box.innerHTML = `<p class="label"></p><div class="dstrip"></div>`;
-    box.querySelector(".label").textContent = `Unidentified · ${unid.length} · tap one to move it to a buck`;
-    unid.forEach(c => {
-      const t = document.createElement("button");
-      t.type = "button"; t.className = "thumb";
-      t.innerHTML = `<img alt=""><span class="t"></span>`;
-      t.querySelector("img").src = c.crop;
-      t.querySelector(".t").textContent = fmtDay(c.when);
-      t.addEventListener("click", () => openViewer(c, "crop", { resort: true, move: true }));
-      box.querySelector(".dstrip").append(t);
-    });
-    wrap.append(box);
   }
 }
 
