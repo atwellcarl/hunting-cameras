@@ -821,7 +821,11 @@ async function writeVote(cardId, vote) {
   }
 }
 
+const voteFromRow = r => ({ verdict: r.verdict, buckId: r.buck_id, cantId: !!r.cant_id, points: r.points,
+  confidence: r.confidence, by: nameKey(r.voter_name), name: r.voter_name, at: r.at });
+
 let syncing = false, syncAgain = false;
+// Full reload of every table: on start, after a merge or buck change, and after time away.
 async function sync() {
   if (!CARDS.length) return;
   if (syncing) { syncAgain = true; return; }
@@ -838,8 +842,7 @@ async function sync() {
     c.forEach(r => { users[nameKey(r.name)] = r.name; });
     const votes = {};
     v.forEach(r => {
-      (votes[r.card_id] ||= {})[r.voter] = { verdict: r.verdict, buckId: r.buck_id, cantId: !!r.cant_id, points: r.points,
-        confidence: r.confidence, by: nameKey(r.voter_name), name: r.voter_name, at: r.at };
+      (votes[r.card_id] ||= {})[r.voter] = voteFromRow(r);
       if (r.voter_name && !users[nameKey(r.voter_name)]) users[nameKey(r.voter_name)] = r.voter_name;
     });
     const bucks = {};
@@ -865,6 +868,59 @@ async function sync() {
     syncing = false;
     if (syncAgain) { syncAgain = false; sync(); }
   }
+}
+
+// Live updates. A vote or comment arrives with its row, so apply just that row and refresh the
+// consensus of the photos it touched. Reloading every table on every vote cost each open copy of
+// the app ~60 KB per vote, and grew with the book. Bucks, crew and merge proposals change rarely
+// (a new name, a merge that moves many votes), so those still reload everything.
+const liveQueue = [];
+let liveTimer = null;
+function onLive(table, payload) {
+  liveQueue.push({ table, payload });
+  clearTimeout(liveTimer);
+  liveTimer = setTimeout(flushLive, 300);
+}
+async function flushLive() {
+  if (sheetState) { liveTimer = setTimeout(flushLive, 1000); return; }   // don't redraw under the naming sheet
+  const batch = liveQueue.splice(0);
+  if (!batch.length) return;
+  if (state.mode !== "shared" || batch.some(b => !["votes", "comments"].includes(b.table))) return sync();
+  const touched = new Set();
+  for (const { table, payload: { eventType, new: row, old } } of batch) {
+    if (table === "votes") {
+      const cardId = row?.card_id || old?.card_id;
+      touched.add(cardId);
+      if (eventType === "DELETE") {
+        if (state.votes[cardId]) { state.votes[cardId] = { ...state.votes[cardId] }; delete state.votes[cardId][old.voter]; }
+      } else {
+        state.votes[cardId] = { ...(state.votes[cardId] || {}), [row.voter]: voteFromRow(row) };
+        if (row.voter_name && !state.users[nameKey(row.voter_name)]) state.users[nameKey(row.voter_name)] = row.voter_name;
+      }
+    } else if (eventType === "DELETE") {
+      for (const id in state.comments) state.comments[id] = state.comments[id].filter(c => c.id !== old.id);
+    } else {
+      const list = (state.comments[row.card_id] || []).filter(c => c.id !== row.id);
+      state.comments[row.card_id] = [...list, row].sort((a, b) => a.at < b.at ? -1 : 1);
+    }
+  }
+  try {
+    const ids = [...touched].filter(Boolean);
+    const cons = [];
+    for (let i = 0; i < ids.length; i += 100) {
+      const { data, error } = await sb.from("card_consensus").select("*").in("card_id", ids.slice(i, i + 100));
+      if (error) throw error;
+      cons.push(...data);
+    }
+    if (ids.length) {
+      ids.forEach(id => delete state.consensus[id]);            // a photo with no votes left has no row
+      cons.forEach(r => { state.consensus[r.card_id] = r; });
+      const sc = await fetchAll("rater_scores");                 // one row per member; small
+      state.scores = Object.fromEntries(sc.map(r => [nameKey(r.member), r]));
+    }
+    renderAll();
+    noticeDisputes();
+  } catch { sync(); }
 }
 
 // ---------- rendering ----------
@@ -2253,14 +2309,13 @@ async function start(myName) {
   renderedTop = null;
   await sync();
   if (!channel) {
-    let pending = null;
-    const soon = () => { clearTimeout(pending); pending = setTimeout(() => { if (!sheetState) sync(); }, 300); };
+    const live = table => payload => onLive(table, payload);
     channel = sb.channel("buckbook")
-      .on("postgres_changes", { event: "*", schema: "public", table: "votes" }, soon)
-      .on("postgres_changes", { event: "*", schema: "public", table: "comments" }, soon)
-      .on("postgres_changes", { event: "*", schema: "public", table: "bucks" }, soon)
-      .on("postgres_changes", { event: "*", schema: "public", table: "crew" }, soon)
-      .on("postgres_changes", { event: "*", schema: "public", table: "merge_proposals" }, soon)
+      .on("postgres_changes", { event: "*", schema: "public", table: "votes" }, live("votes"))
+      .on("postgres_changes", { event: "*", schema: "public", table: "comments" }, live("comments"))
+      .on("postgres_changes", { event: "*", schema: "public", table: "bucks" }, live("bucks"))
+      .on("postgres_changes", { event: "*", schema: "public", table: "crew" }, live("crew"))
+      .on("postgres_changes", { event: "*", schema: "public", table: "merge_proposals" }, live("merge_proposals"))
       .subscribe();
   }
   // Signed photo links expire; refresh them well before they do.
@@ -2269,7 +2324,12 @@ async function start(myName) {
     try { await loadCards(); renderedTop = null; renderAll(); } catch {}
   }, (URL_TTL - 30 * 60) * 1000);
 }
-document.addEventListener("visibilitychange", () => { if (!document.hidden) sync(); });
+// Phones pause the live connection in the background; after more than a minute away, reload once.
+let hiddenAt = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { hiddenAt = Date.now(); return; }
+  if (Date.now() - hiddenAt > 60_000) sync();
+});
 
 (async () => {
   renderAll();
