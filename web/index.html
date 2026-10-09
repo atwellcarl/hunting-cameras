@@ -14,7 +14,7 @@
 /* One dark look on purpose: trail-cam photos (mostly night IR) read best on a dark surround. */
 [hidden] { display: none !important; }
 /* Viewers can look at everything but change nothing (the database enforces it too). */
-body.viewer :is(#tab-sort, #view-sort, #vTag, .cleanup, #profileEdit, #vCover, #vMove, #vResort, .mrow .btnrow, .switch, #composer, .queuebar .btn, .drow .go) { display: none !important; }
+body.viewer :is(#tab-sort, #view-sort, #vTag, .gtools button, .cleanup, #profileEdit, #vCover, #vMove, #vResort, .mrow .btnrow, .switch, #composer, .queuebar .btn, .drow .go) { display: none !important; }
 body.viewer .drow:not(.mine) { pointer-events: none; }   /* "Weigh in" leads to Sort */
 :root {
   color-scheme: dark;
@@ -187,6 +187,18 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .ggrid .thumb { border-radius: 4px; }
 .chips.gcams { overflow-x: auto; scrollbar-width: none; margin: 0 -16px 14px; padding: 0 16px; }
 .chips.gcams button { flex-shrink: 0; }
+.gtools { display: flex; justify-content: space-between; align-items: center; font: 12px var(--mono); color: var(--muted); margin: -4px 0 10px; }
+.gburst .label.gpick { appearance: none; border: 0; background: none; padding: 0; cursor: pointer; display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; color: var(--ink); }
+.gpick i { flex: none; width: 16px; height: 16px; border: 2px solid var(--muted); border-radius: 4px; font: 700 11px/12px var(--body); font-style: normal; text-align: center; }
+.gpick[aria-pressed="true"] i { background: var(--blaze); border-color: var(--blaze); color: var(--blaze-ink); }
+.ggrid .thumb { -webkit-touch-callout: none; user-select: none; }
+.ggrid .thumb.pick { cursor: pointer; }
+.ggrid .thumb .tick { position: absolute; right: 4px; top: 4px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff; background: rgba(0, 0, 0, .35); display: grid; place-items: center; font: 700 12px/1 var(--body); color: transparent; }
+.ggrid .thumb[aria-pressed="true"] { outline: 3px solid var(--blaze); outline-offset: -3px; }
+.ggrid .thumb[aria-pressed="true"] .tick { background: var(--blaze); border-color: var(--blaze); color: var(--blaze-ink); }
+.gbar { position: sticky; bottom: 0; z-index: 2; margin: 14px -16px -24px; padding: 10px 16px calc(10px + 0px); background: var(--bg); border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
+.gbar span { flex: 1; font: 600 14px var(--mono); }
+.gbar .btn { min-height: 44px; padding: 8px 16px; }
 .chips.gcams::-webkit-scrollbar { display: none; }
 .chips.gfilter { margin-bottom: 12px; gap: 6px; flex-wrap: nowrap; }
 .chips.gfilter button { min-height: 38px; min-width: 0; padding: 6px 10px; font-size: 12px; white-space: nowrap; }
@@ -1197,6 +1209,19 @@ function galleryCards() {
 // One camera at a time (keeps each page light), its photos grouped into bursts: newest burst first,
 // each burst read in order. #2 and #8 share bursts; here each camera shows its own half.
 let galleryCam = null;
+// Select mode: tick photos (or whole bursts), then Tag as… / Pass them together. null = not selecting.
+let gallerySel = null;
+function startGallerySelect(firstId) {
+  if (document.body.classList.contains("viewer")) return;
+  gallerySel = new Set(firstId ? [firstId] : []);
+  renderGallery();
+}
+function exitGallerySelect() { gallerySel = null; if (!$("view-gallery").hidden) renderGallery(); }
+function toggleGallerySel(ids) {
+  const all = ids.every(id => gallerySel.has(id));
+  ids.forEach(id => all ? gallerySel.delete(id) : gallerySel.add(id));
+  renderGallery();
+}
 function renderGallery() {
   const wrap = $("gallery");
   if (state.mode === "loading") return wrap.replaceChildren();
@@ -1214,7 +1239,7 @@ function renderGallery() {
       b.innerHTML = "<span></span><small></small>";
       b.querySelector("span").textContent = label;
       b.querySelector("small").textContent = count;
-      b.addEventListener("click", () => { onPick(key); view.scrollTop = 0; renderGallery(); });
+      b.addEventListener("click", () => { onPick(key); gallerySel = null; view.scrollTop = 0; renderGallery(); });   // a selection only covers what's on screen
       row.append(b);
     });
     return row;
@@ -1241,6 +1266,15 @@ function renderGallery() {
   cams.get(galleryCam).forEach(c => { if (!bursts.has(c.burst)) bursts.set(c.burst, []); bursts.get(c.burst).push(c); });
   const groups = [...bursts.values()].map(cs => cs.slice().reverse());
   const order = groups.flat();                                   // what the viewer swipes through
+  const selecting = !!gallerySel;
+  if (selecting) [...gallerySel].forEach(id => { if (!order.some(c => c.id === id)) gallerySel.delete(id); });
+
+  const tools = document.createElement("div");
+  tools.className = "gtools";
+  tools.innerHTML = `<span></span><button class="linkish" type="button"></button>`;
+  tools.querySelector("span").textContent = selecting ? "Tap photos, or a burst's time to take the whole burst" : `${order.length} photos · ${groups.length} bursts`;
+  tools.querySelector("button").textContent = selecting ? "Cancel" : "Select";
+  tools.querySelector("button").addEventListener("click", () => selecting ? exitGallerySelect() : startGallerySelect());
 
   const list = document.createElement("div");
   list.className = "gbursts";
@@ -1250,9 +1284,15 @@ function renderGallery() {
     const block = document.createElement("section");
     block.className = "gburst";
     block.style.setProperty("--k", Math.min(cs.length, cols));
-    const h = document.createElement("p");
+    const h = document.createElement(selecting ? "button" : "p");
     h.className = "label";
-    h.textContent = fmtWhen(cs[0].when);
+    if (selecting) {
+      const ids = cs.map(c => c.id), on = ids.every(id => gallerySel.has(id));
+      h.type = "button"; h.classList.add("gpick"); h.setAttribute("aria-pressed", String(on));
+      h.addEventListener("click", () => toggleGallerySel(ids));
+      const box = document.createElement("i"); box.textContent = on ? "✓" : ""; h.append(box);
+    }
+    h.append(fmtWhen(cs[0].when));
     if (cs.length > 1) { const n = document.createElement("b"); n.textContent = ` ×${cs.length}`; h.append(n); }
     h.title = `${fmtWhen(cs[0].when)} · ${cs.length} photo${cs.length === 1 ? "" : "s"}`;
     const grid = document.createElement("div");
@@ -1266,14 +1306,67 @@ function renderGallery() {
       if (idx < 18) { img.loading = "eager"; img.fetchPriority = "high"; }   // the first screenful jumps the queue
       img.src = c.crop;
       t.setAttribute("aria-label", `CAM ${c.cam}, ${fmtWhen(c.when)}`);
-      t.addEventListener("click", () => openViewer(c, "crop", { list: order, idx, tag: true, resort: true }));
+      if (selecting) {
+        t.classList.add("pick");
+        t.setAttribute("aria-pressed", String(gallerySel.has(c.id)));
+        t.insertAdjacentHTML("beforeend", `<span class="tick">✓</span>`);
+      }
+      // Long-press starts select mode with this photo ticked (the usual phone gesture).
+      let press = null, held = false;
+      t.addEventListener("pointerdown", e => {
+        held = false;
+        if (gallerySel) return;
+        const x = e.clientX, y = e.clientY;
+        press = { x, y, timer: setTimeout(() => { held = true; startGallerySelect(c.id); }, 500) };
+      });
+      t.addEventListener("pointermove", e => { if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) { clearTimeout(press.timer); press = null; } });
+      ["pointerup", "pointercancel", "pointerleave"].forEach(ev => t.addEventListener(ev, () => { if (press) clearTimeout(press.timer); press = null; }));
+      t.addEventListener("contextmenu", e => e.preventDefault());
+      t.addEventListener("click", () => {
+        if (held) { held = false; return; }
+        if (gallerySel) toggleGallerySel([c.id]);
+        else openViewer(c, "crop", { list: order, idx, tag: true, resort: true });
+      });
       grid.append(t);
     });
     block.append(h, grid);
     list.append(block);
   });
-  wrap.replaceChildren(filters, camRow, list);
+  const parts = [filters, camRow, tools, list];
+  if (selecting) {
+    // Action bar, pinned to the bottom of the Gallery while selecting.
+    const bar = document.createElement("div");
+    bar.className = "gbar";
+    bar.innerHTML = `<span></span><button class="btn ghost" type="button">Pass</button><button class="btn" type="button">Tag as…</button>`;
+    const n = gallerySel.size, picked = order.filter(c => gallerySel.has(c.id));
+    bar.querySelector("span").textContent = `${n} selected`;
+    const [pass, tag] = bar.querySelectorAll("button");
+    pass.disabled = tag.disabled = !n;
+    pass.addEventListener("click", () => batchVote(picked, { verdict: "not", buckId: null, confidence: null }, `Passed on ${n}`));
+    tag.addEventListener("click", () => openChooser({ mode: "move", cards: picked }));
+    parts.push(bar);
+  }
+  wrap.replaceChildren(...parts);
   view.scrollTop = keep;
+}
+
+// One vote per photo, all yours, with a single Undo that puts back exactly what your votes were.
+async function batchVote(cards, vote, msg, newBuckId = null) {
+  if (!cards.length) return;
+  const before = cards.map(c => [c.id, myVote(c.id)]);
+  for (const c of cards) {
+    await writeDoc("votes/" + c.id, { ...vote, points: myVote(c.id)?.points ?? null, by: state.me, at: new Date().toISOString() });
+  }
+  gallerySel = null;
+  renderAll();
+  Sound.play(vote.verdict === "not" ? "pass" : newBuckId ? "newBuck" : vote.buckId ? "knownBuck" : "keeper");
+  lastAction = null;
+  toast(msg, cards.length * 10 + (newBuckId ? 25 : 0), false, { label: "Undo", run: async () => {
+    for (const [id, prev] of before) await writeDoc("votes/" + id, prev ? { ...prev } : null);
+    const used = Object.values(state.votes).some(vs => Object.values(vs).some(v => v.buckId === newBuckId));
+    if (newBuckId && !used) await writeDoc("bucks/" + newBuckId, null);
+    toast(`Put back ${cards.length} photo${cards.length === 1 ? "" : "s"}`);
+  } });
 }
 
 function openProfile(id) {
@@ -1413,11 +1506,13 @@ let chooser = null;
 function openChooser(opts) {
   chooser = { ...opts, target: null, newName: "", confidence: null, cant: false };
   const from = opts.buck ? state.bucks[opts.buck] : null;
-  const photo = opts.card || (from && (CARD[from.cover] || sightings(opts.buck)[0]));
+  const photo = opts.card || opts.cards?.[0] || (from && (CARD[from.cover] || sightings(opts.buck)[0]));
   $("chooserImg").src = photo ? photo.crop : "";
   $("chooserPhoto").onclick = () => photo && openViewer(photo, "crop");
-  $("chooserTitle").textContent = opts.mode === "move" ? "Move this photo to…" : `Merge ${from.name} into…`;
-  $("chooserNote").textContent = opts.mode === "move"
+  const n = opts.cards?.length;
+  $("chooserTitle").textContent = n ? `Tag ${n} photo${n === 1 ? "" : "s"} as…` : opts.mode === "move" ? "Move this photo to…" : `Merge ${from.name} into…`;
+  $("chooserNote").textContent = n ? `Your vote on each of the ${n} photos, at one "how sure". Other members' votes stay as they are.`
+    : opts.mode === "move"
     ? "This changes your vote on this photo. Other members' votes stay as they are."
     : `Every photo and every member's vote for ${from.name} moves to the buck you pick, and ${from.name} is removed.` +
       (state.isAdmin ? "" : " The members who named the two bucks both have to agree first.");
@@ -1461,7 +1556,10 @@ function syncChooser() {
   $("chooserConfBtns").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.v === confidence)));
   const go = $("chooserGo");
   if (mode === "move") {
-    go.textContent = cant ? "Move to Unidentified" : newName ? `Add ${newName}` : target ? `Move to ${state.bucks[target].name}` : "Pick a buck";
+    const n = chooser.cards?.length;
+    go.textContent = cant ? (n ? `Mark ${n} can't ID` : "Move to Unidentified")
+      : newName ? (n ? `Add ${newName} · ${n} photos` : `Add ${newName}`)
+      : target ? (n ? `Tag ${n} as ${state.bucks[target].name}` : `Move to ${state.bucks[target].name}`) : "Pick a buck";
     go.disabled = !(cant || newName || (target && confidence));
   } else {
     go.textContent = target ? `${state.isAdmin ? "Merge" : "Propose merging"} into ${state.bucks[target].name}` : "Pick a buck";
@@ -1500,6 +1598,18 @@ $("chooserGo").addEventListener("click", async () => {
         toast(`${from.name} merged into ${into.name}`);
       });
     return;
+  }
+  if (chooser.cards) {
+    const cards = chooser.cards, n = cards.length;
+    closeChooser();
+    let id = target, made = null;
+    if (newName) {
+      id = made = newId();
+      await writeDoc("bucks/" + id, { name: newName, cover: cards[0].id, by: state.me });
+    }
+    const vote = cant ? { verdict: "buck", buckId: null, cantId: true, confidence: null }
+      : { verdict: "buck", buckId: id, confidence: newName ? 5 : confidence };
+    return batchVote(cards, vote, cant ? `Marked ${n} can't ID` : `Tagged ${n} as ${newName || state.bucks[id]?.name}`, made);
   }
   const mine = myVote(card.id);
   if (cant) {
