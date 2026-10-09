@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 
 from buckbook.crew_admin import find_user
 from buckbook.db import ROOT, connect
-from buckbook.supabase_sync import backup, push, rest
+from buckbook.supabase_sync import backup, push, rest, rest_all
 from reveal_poc import api_get, load_env, login
 
 HL_DIR = ROOT / "data" / "hitlist"
@@ -84,16 +84,16 @@ def apply(member, assume_yes=False):
 
     # 1. Every card on a Hit List photo has to be in Supabase before it can be voted on.
     needed = {c["id"] for g in lists for p in g["photos"] for c in by_photo.get(p["photoId"], [])}
-    remote = {r["id"] for r in rest("GET", "cards", query="?select=id")}
+    remote = {r["id"] for r in rest_all("cards", "?select=id")}
     if needed - remote:
         print(f"{len(needed - remote)} Hit List cards aren't in Buck Book yet.")
         push(assume_yes=assume_yes, only=needed - remote)
     # Only vote on photos still in the book; dropped ones (passed by the crew) stay dropped.
-    remote = {r["id"] for r in rest("GET", "cards", query="?select=id&dropped_at=is.null")}
+    remote = {r["id"] for r in rest_all("cards", "?select=id&dropped_at=is.null")}
 
     # 2. Plan bucks and votes.
-    bucks = {b["id"]: b for b in rest("GET", "bucks", query="?select=id,name,property")}
-    mine = {v["card_id"] for v in rest("GET", "votes", query=f"?select=card_id&voter=eq.{user['id']}")}
+    bucks = {b["id"]: b for b in rest_all("bucks", "?select=id,name,property")}
+    mine = {v["card_id"] for v in rest_all("votes", f"?select=card_id&voter=eq.{user['id']}", order="card_id")}
     new_bucks, votes, ambiguous, missing, report = [], [], [], [], []
     for g in lists:
         matched = [(p, by_photo[p["photoId"]]) for p in g["photos"] if by_photo.get(p["photoId"])]

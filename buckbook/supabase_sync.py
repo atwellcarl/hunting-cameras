@@ -60,6 +60,16 @@ def rest(method, table, body=None, query="", prefer=None):
     return out
 
 
+def rest_all(table, query="?select=*", order="id"):
+    """Every row, paging past Supabase's 1,000-rows-per-request cap. `order` keeps pages stable."""
+    rows, sep = [], "&" if "?" in query else "?"
+    while True:
+        page = rest("GET", table, query=f"{query}{sep}order={order}&limit=1000&offset={len(rows)}")
+        rows += page
+        if len(page) < 1000:
+            return rows
+
+
 def upload(object_path, data, content_type):
     status, out = call("POST", f"/storage/v1/object/{BUCKET}/{urllib.parse.quote(object_path)}",
                        headers={"Content-Type": content_type, "x-upsert": "true"}, raw=data)
@@ -92,7 +102,7 @@ def mb(n):
 
 def push(assume_yes=False, skip=(), only=None):
     conn = connect()
-    remote = {r["id"] for r in rest("GET", "cards", query="?select=id")}
+    remote = {r["id"] for r in rest_all("cards", "?select=id")}
     rows = [r for r in conn.execute("SELECT * FROM cards ORDER BY camera, taken_at")
             if r["id"] not in remote and r["camera"] not in skip and (only is None or r["id"] in only)]
     held = [] if only is not None else conn.execute(f"SELECT camera, COUNT(*) FROM cards WHERE camera IN ({','.join('?' * len(skip))}) GROUP BY camera",
@@ -149,8 +159,8 @@ def push(assume_yes=False, skip=(), only=None):
 
 
 def prune(assume_yes=False, only=""):
-    ready = {r["card_id"] for r in rest("GET", "card_drop", query="?droppable=is.true&select=card_id")}
-    cards = rest("GET", "cards", query="?select=id,camera,property,crop_path,frame_path,dropped_at")
+    ready = {r["card_id"] for r in rest_all("card_drop", "?droppable=is.true&select=card_id", order="card_id")}
+    cards = rest_all("cards", "?select=id,camera,property,crop_path,frame_path,dropped_at")
     todo = [c for c in cards if c["id"] in ready and not c["dropped_at"] and c["id"].startswith(only)]
     if not todo:
         print("Nothing to drop.")
@@ -200,7 +210,8 @@ def prune(assume_yes=False, only=""):
 
 
 def backup():
-    out = {t: rest("GET", t, query="?select=*") for t in ("crew", "bucks", "votes", "card_consensus", "rater_scores")}
+    order = {"crew": "user_id", "votes": "card_id,voter", "card_consensus": "card_id", "rater_scores": "member"}
+    out = {t: rest_all(t, order=order.get(t, "id")) for t in ("crew", "bucks", "votes", "card_consensus", "rater_scores")}
     folder = DATA_DIR.parent / "backups"
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"buckbook-{datetime.now():%Y%m%d-%H%M%S}.json"
