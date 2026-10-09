@@ -248,6 +248,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .thumb .c { position: absolute; right: 4px; bottom: 4px; font: 500 11px/1 var(--mono); background: rgba(0, 0, 0, .75); color: var(--ink); border-radius: 4px; padding: 3px 5px; }
 .thumb .t { position: absolute; left: 4px; top: 4px; font: 10px/1 var(--mono); background: rgba(0, 0, 0, .6); color: var(--ink); border-radius: 4px; padding: 3px 4px; }
 .thumb.disputed { outline: 2px solid var(--no); outline-offset: -2px; }
+#burstSheet { grid-template-rows: 1fr auto; }
+#burstSheet .sheet-body { padding-top: calc(var(--top) + 20px); }
+.burst-tools { display: flex; justify-content: space-between; align-items: center; font: 12px var(--mono); color: var(--muted); }
+.burstgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+@media (min-width: 560px) { .burstgrid { grid-template-columns: repeat(4, 1fr); } }
+.burstgrid .thumb { cursor: pointer; }
+.burstgrid .thumb .tick { position: absolute; right: 5px; top: 5px; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff; background: rgba(0, 0, 0, .35); display: grid; place-items: center; font: 700 14px/1 var(--body); color: transparent; }
+.burstgrid .thumb[aria-pressed="true"] { outline: 3px solid var(--blaze); outline-offset: -3px; }
+.burstgrid .thumb[aria-pressed="true"] .tick { background: var(--blaze); border-color: var(--blaze); color: var(--blaze-ink); }
 #profileGrid { grid-template-columns: repeat(2, 1fr); }
 #profileGrid .thumb { aspect-ratio: 16 / 10; }
 @media (min-width: 560px) { #profileGrid { grid-template-columns: repeat(3, 1fr); } }
@@ -405,6 +414,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
   box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
 }
 .toast .plus { color: var(--blaze); font: 800 20px var(--display); }
+.toast button.go { background: var(--blaze); color: var(--blaze-ink); }
 .toast button { appearance: none; border: 0; background: var(--bg); color: var(--ink); border-radius: 999px; padding: 8px 14px; font: 600 14px var(--body); cursor: pointer; }
 
 /* Wider screens: float the photo as a rounded card. */
@@ -602,6 +612,20 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 <button class="alert" id="alert" type="button" hidden><img alt=""><span></span></button>
 
 <!-- Chooser: move one photo to another buck, or merge a whole buck into another -->
+<div class="sheet" id="burstSheet" hidden role="dialog" aria-modal="true" aria-labelledby="burstTitle">
+  <div class="sheet-body">
+    <h2 id="burstTitle"></h2>
+    <p class="note" id="burstNote"></p>
+    <div class="burst-tools"><span id="burstCount"></span><button class="linkish" id="burstAll" type="button">Select all</button></div>
+    <div class="burstgrid" id="burstGrid"></div>
+  </div>
+  <div class="sheet-foot">
+    <button class="btn ghost" id="burstSkip" type="button">Done</button>
+    <span class="grow"></span>
+    <button class="btn" id="burstGo" type="button" disabled></button>
+  </div>
+</div>
+
 <div class="sheet" id="chooser" hidden role="dialog" aria-modal="true" aria-labelledby="chooserTitle">
   <button class="sheet-photo" id="chooserPhoto" type="button" aria-label="Zoom in"><img id="chooserImg" alt=""><span class="chip zoom">Tap to zoom</span></button>
   <div class="sheet-body">
@@ -1618,6 +1642,7 @@ async function commit(c, label, newBuck) {
   if (myCount && myCount % 25 === 0) Sound.play("milestone", { delay: 0.6 });
   if (conflict) { hideToast(); openDispute(c.id); }
   else toast(voteFeedback(c.id, label, newBuck), gained, true);
+  return { conflict, gained, msg: voteFeedback(c.id, label, newBuck) };
 }
 
 // After a blind vote, say how it lines up with the rest of the crew.
@@ -1909,15 +1934,85 @@ async function lockIn() {
   if (!sheetState) return;
   const { card, step, buckId, newName, points, confidence } = sheetState;
   closeSheet();
+  let done, id = buckId, conf = confidence;
   if (step === "new") {
     const newBuck = { id: newId(), name: newName };
     // A new buck's first photo defines him, so it counts as certain.
-    await commit(card, { verdict: "buck", buckId: newBuck.id, points, confidence: 5 }, newBuck);
+    id = newBuck.id; conf = 5;
+    done = await commit(card, { verdict: "buck", buckId: id, points, confidence: conf }, newBuck);
   } else {
-    await commit(card, { verdict: "buck", buckId, points, confidence });
+    done = await commit(card, { verdict: "buck", buckId: id, points, confidence: conf });
+  }
+  // Offer the rest of the burst, unless we're walking the Name-them queue or a dispute just opened.
+  const rest = burstRest(card);
+  if (rest.length && !nameQueue && !done.conflict) {
+    toast(done.msg, done.gained, true, { label: `See ${rest.length} more`, run: () => openBurst(card, id, conf) });
   }
   afterSheetVote();
 }
+
+// ---------- rest of the burst ----------
+// After naming a buck, tick the other photos in his burst that are him too: one vote each,
+// at the same confidence. Nothing starts selected, so every vote is a photo someone looked at.
+let burstState = null;
+function burstRest(card) {
+  return CARDS.filter(c => c.burst === card.burst && c.id !== card.id && !myVote(c.id) && !droppable(c.id))
+    .sort((a, b) => a.when.localeCompare(b.when));
+}
+function openBurst(card, buckId, confidence) {
+  const cards = burstRest(card);
+  if (!cards.length || !state.bucks[buckId]) return;
+  burstState = { cards, buckId, confidence, picked: new Set() };
+  const name = state.bucks[buckId].name;
+  $("burstTitle").textContent = `Is it ${name} in these?`;
+  $("burstNote").textContent = `The rest of this burst. Tap every photo where it's ${name}; they're tagged at the same "how sure" (${confidence} of 5). The others stay in your deck.`;
+  const grid = $("burstGrid");
+  grid.replaceChildren();
+  cards.forEach(c => {
+    const t = document.createElement("button");
+    t.type = "button"; t.className = "thumb"; t.dataset.id = c.id;
+    t.setAttribute("aria-pressed", "false");
+    t.setAttribute("aria-label", `CAM ${c.cam}, ${fmtWhen(c.when)}`);
+    t.innerHTML = `<img alt=""><span class="t"></span><span class="tick">✓</span>`;
+    t.querySelector("img").src = c.crop;
+    t.querySelector(".t").textContent = fmtWhen(c.when, false);
+    t.addEventListener("click", () => {
+      burstState.picked.has(c.id) ? burstState.picked.delete(c.id) : burstState.picked.add(c.id);
+      syncBurst();
+    });
+    grid.append(t);
+  });
+  $("burstSheet").hidden = false;
+  $("burstSheet").querySelector(".sheet-body").scrollTop = 0;
+  syncBurst();
+}
+function syncBurst() {
+  const { cards, picked, buckId } = burstState;
+  $("burstGrid").querySelectorAll(".thumb").forEach(t => t.setAttribute("aria-pressed", String(picked.has(t.dataset.id))));
+  $("burstCount").textContent = `${picked.size} of ${cards.length} selected`;
+  $("burstAll").textContent = picked.size === cards.length ? "Clear" : "Select all";
+  $("burstGo").disabled = !picked.size;
+  $("burstGo").textContent = picked.size ? `Tag ${picked.size} as ${state.bucks[buckId]?.name}` : "Pick his photos";
+}
+function closeBurst() { burstState = null; $("burstSheet").hidden = true; }
+$("burstAll").addEventListener("click", () => {
+  const { cards, picked } = burstState;
+  if (picked.size === cards.length) picked.clear(); else cards.forEach(c => picked.add(c.id));
+  syncBurst();
+});
+$("burstSkip").addEventListener("click", closeBurst);
+$("burstGo").addEventListener("click", async () => {
+  const { picked, buckId, confidence } = burstState;
+  const ids = [...picked], name = state.bucks[buckId]?.name;
+  closeBurst();
+  for (const id of ids) {
+    await writeDoc("votes/" + id, { verdict: "buck", buckId, points: null, confidence, by: state.me, at: new Date().toISOString() });
+  }
+  state.streak += ids.length;
+  lastAction = null;                          // Undo covers single votes only
+  Sound.play("knownBuck");
+  toast(`Tagged ${ids.length} more as ${name}`, ids.length * 10);
+});
 // In the Name-them queue, move straight on to the next photo (unless a dispute just opened).
 function afterSheetVote() {
   if (!nameQueue) return;
@@ -2322,7 +2417,7 @@ function noticeDisputes() {
 
 // ---------- toast ----------
 let toastTimer = null;
-function toast(msg, gained = 0, canUndo = false) {
+function toast(msg, gained = 0, canUndo = false, action = null) {
   const t = $("toast");
   t.replaceChildren();
   if (gained) { const p = document.createElement("span"); p.className = "plus"; p.textContent = `+${gained}`; t.append(p); }
@@ -2331,9 +2426,13 @@ function toast(msg, gained = 0, canUndo = false) {
     const b = document.createElement("button"); b.type = "button"; b.textContent = "Undo";
     b.addEventListener("click", undo); t.append(b);
   }
+  if (action) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "go"; b.textContent = action.label;
+    b.addEventListener("click", () => { hideToast(); action.run(); }); t.append(b);
+  }
   t.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(hideToast, 4000);
+  toastTimer = setTimeout(hideToast, action ? 9000 : 4000);
 }
 function hideToast() { $("toast").hidden = true; }
 
@@ -2358,6 +2457,7 @@ document.addEventListener("keydown", e => {
     else if (e.key === "-") zoomBy(1 / 1.4);
     return;
   }
+  if (burstState) { if (e.key === "Escape") closeBurst(); return; }
   if (chooser) { if (e.key === "Escape") closeChooser(); return; }
   if (disputeId) { if (e.key === "Escape") closeDispute(); return; }
   if (sheetState) { if (e.key === "Escape") { if (!$("pickPrompt").hidden) closePickPrompt(); else exitSheet(); } return; }
