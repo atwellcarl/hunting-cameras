@@ -200,7 +200,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .gbar span { flex: 1; font: 600 14px var(--mono); }
 .gbar .btn { min-height: 44px; padding: 8px 16px; }
 .chips.gcams::-webkit-scrollbar { display: none; }
-.chips.gfilter { margin-bottom: 12px; gap: 6px; flex-wrap: nowrap; }
+.chips.gfilter { margin: 0 -16px 12px; padding: 0 16px; gap: 6px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.chips.gfilter::-webkit-scrollbar { display: none; }
+.chips.gfilter button { flex-shrink: 0; }
 .chips.gfilter button { min-height: 38px; min-width: 0; padding: 6px 10px; font-size: 12px; white-space: nowrap; }
 .chips.gfilter button small { color: var(--muted); margin-left: 4px; }
 .chips.gfilter button[aria-pressed="true"] small { color: inherit; opacity: .7; }
@@ -1192,14 +1194,15 @@ function renderRoster() {
 }
 
 // Gallery: every photo nobody has named yet, newest first, for scanning fast for the bucks worth tagging.
-// Leaves out photos already named, called "can't ID", or passed on.
+// Leaves out photos already named or passed on.
+// "Buck, no name" covers keepers nobody has named, including ones someone marked can't ID.
 const GALLERY_FILTERS = [["all", "All"], ["new", "New"], ["buck", "Buck, no name"]];
 let galleryFilter = "all";
 function galleryKind(c) {
   const k = state.consensus[c.id];
   if (!k) return "new";                                      // nobody has voted
   if (k.top_buck || k.verdict === "not") return null;        // named, or passed on
-  if (k.verdict === "buck") return k.cant_id_votes > 0 ? null : "buck";
+  if (k.verdict === "buck") return "buck";                   // a keeper with no name (can't ID included)
   return "undecided";                                        // tied buck / not
 }
 function galleryCards() {
@@ -1227,7 +1230,8 @@ function renderGallery() {
   if (state.mode === "loading") return wrap.replaceChildren();
   const view = $("view-gallery"), keep = view.scrollTop;   // live updates redraw; don't jump the scroll
   const all = galleryCards();
-  const counts = { all: all.length, new: all.filter(([, k]) => k === "new").length, buck: all.filter(([, k]) => k === "buck").length };
+  const count = kind => all.filter(([, k]) => k === kind).length;
+  const counts = { all: all.length, new: count("new"), buck: count("buck") };
   const filtered = all.filter(([, k]) => galleryFilter === "all" || k === galleryFilter).map(([c]) => c);
 
   const chipRowOf = (cls, items, isOn, onPick) => {
