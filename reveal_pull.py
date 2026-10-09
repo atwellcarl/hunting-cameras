@@ -23,8 +23,9 @@ PAGE_SIZE = 100
 
 
 def folder_for(camera_name):
-    """'#8' -> 'cam8', 'East Valley Plot' -> 'east-valley-plot'."""
-    name = camera_name.replace("#", "cam")
+    """'#8' -> 'cam8', 'East Valley Plot' -> 'east-valley-plot'.
+    A note in brackets is dropped, so renaming '#6' to '#6 (northridge)' keeps its folder."""
+    name = re.sub(r"\s*\(.*?\)", "", camera_name).replace("#", "cam")
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 

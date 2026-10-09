@@ -88,7 +88,8 @@ def apply(member, assume_yes=False):
     if needed - remote:
         print(f"{len(needed - remote)} Hit List cards aren't in Buck Book yet.")
         push(assume_yes=assume_yes, only=needed - remote)
-        remote = {r["id"] for r in rest("GET", "cards", query="?select=id")}
+    # Only vote on photos still in the book; dropped ones (passed by the crew) stay dropped.
+    remote = {r["id"] for r in rest("GET", "cards", query="?select=id&dropped_at=is.null")}
 
     # 2. Plan bucks and votes.
     bucks = {b["id"]: b for b in rest("GET", "bucks", query="?select=id,name,property")}

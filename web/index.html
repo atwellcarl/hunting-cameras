@@ -14,7 +14,7 @@
 /* One dark look on purpose: trail-cam photos (mostly night IR) read best on a dark surround. */
 [hidden] { display: none !important; }
 /* Viewers can look at everything but change nothing (the database enforces it too). */
-body.viewer :is(#tab-sort, #view-sort, .cleanup, #profileEdit, #vCover, #vMove, #vResort, .mrow .btnrow, .switch, #composer, .queuebar .btn, .drow .go) { display: none !important; }
+body.viewer :is(#tab-sort, #view-sort, #vTag, .cleanup, #profileEdit, #vCover, #vMove, #vResort, .mrow .btnrow, .switch, #composer, .queuebar .btn, .drow .go) { display: none !important; }
 body.viewer .drow:not(.mine) { pointer-events: none; }   /* "Weigh in" leads to Sort */
 :root {
   color-scheme: dark;
@@ -70,7 +70,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .view { position: absolute; inset: 0; }
 .view.scroll { overflow-y: auto; padding: 16px 16px 24px; -webkit-overflow-scrolling: touch; }
 
-.tabbar { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); background: var(--bg); padding-bottom: var(--bottom); }
+.tabbar { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border-top: 1px solid var(--line); background: var(--bg); padding-bottom: var(--bottom); }
 .tabbar button {
   appearance: none; border: 0; background: none; padding: 8px 0 7px; cursor: pointer; color: var(--muted);
   display: flex; flex-direction: column; align-items: center; gap: 2px;
@@ -173,6 +173,22 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .pick small { font: 11px var(--mono); color: var(--muted); }
 .pick[aria-pressed="true"] { border-color: var(--blaze); }
 .pick .sugg { position: absolute; top: 6px; left: 6px; font: 500 10px var(--mono); text-transform: uppercase; letter-spacing: .06em; background: var(--blaze); color: var(--blaze-ink); border-radius: 999px; padding: 3px 7px; }
+/* Bursts flow side by side: a burst takes as many columns as it has photos (up to a full row),
+   so one-photo bursts don't each eat a whole row. JS sets --k per burst; --cols matches the media query. */
+.gbursts { --cols: 3; --g: 4px; display: flex; flex-wrap: wrap; column-gap: var(--g); row-gap: 12px; }
+@media (min-width: 560px) { .gbursts { --cols: 5; } }
+.gburst { width: calc((100% - (var(--cols) - 1) * var(--g)) / var(--cols) * var(--k) + (var(--k) - 1) * var(--g)); min-width: 0; }
+.gburst .label { margin: 0 0 4px; font-size: 10px; letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gburst .label b { color: var(--blaze); font-weight: 600; }
+.ggrid { display: grid; grid-template-columns: repeat(var(--k), 1fr); gap: var(--g); }
+.ggrid .thumb { border-radius: 4px; }
+.chips.gcams { overflow-x: auto; scrollbar-width: none; margin: 0 -16px 14px; padding: 0 16px; }
+.chips.gcams button { flex-shrink: 0; }
+.chips.gcams::-webkit-scrollbar { display: none; }
+.chips.gfilter { margin-bottom: 12px; gap: 6px; flex-wrap: nowrap; }
+.chips.gfilter button { min-height: 38px; min-width: 0; padding: 6px 10px; font-size: 12px; white-space: nowrap; }
+.chips.gfilter button small { color: var(--muted); margin-left: 4px; }
+.chips.gfilter button[aria-pressed="true"] small { color: inherit; opacity: .7; }
 .chooser-or { margin-top: 16px; }
 .chooser-cant { width: 100%; }
 .chooser-cant[aria-pressed="true"] { background: var(--ink); color: #000; border-color: var(--ink); }
@@ -417,13 +433,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
     <section id="view-sort" class="view" hidden>
       <div class="stack" id="stack"></div>
       <div class="actions">
-        <span class="act-wrap"><button class="act not" id="btnNot" type="button" aria-label="Not a buck">
+        <span class="act-wrap"><button class="act not" id="btnNot" type="button" aria-label="Pass: not worth naming">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
-        </button><small>Nope</small></span>
-        <span class="act-wrap"><button class="act buck" id="btnBuck" type="button" aria-label="Buck">
+        </button><small>Pass</small></span>
+        <span class="act-wrap"><button class="act buck" id="btnBuck" type="button" aria-label="Keeper: a buck worth naming">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
-        </button><small>Buck</small></span>
+        </button><small>Keeper</small></span>
       </div>
+    </section>
+
+    <section id="view-gallery" class="view scroll" hidden>
+      <div id="gallery"></div>
     </section>
 
     <section id="view-roster" class="view scroll">
@@ -444,6 +464,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
   <nav class="tabbar" role="tablist">
     <button role="tab" id="tab-sort" aria-selected="false" data-tab="sort">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="6" y="3" width="13" height="16" rx="2"/><path d="M4 7v12a2 2 0 0 0 2 2h9"/></svg>Sort</button>
+    <button role="tab" id="tab-gallery" aria-selected="false" data-tab="gallery">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Gallery</button>
     <button role="tab" id="tab-disputes" aria-selected="false" data-tab="disputes">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5h11v8H9l-4 3.5V13H4z"/><path d="M15 9h5v8h-1v3l-3.5-3H10v-2"/></svg>Disputes<span class="badge" id="dBadge" hidden></span></button>
     <button role="tab" id="tab-roster" aria-selected="true" data-tab="roster">
@@ -603,7 +625,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 
 <div class="viewer" id="viewer" hidden role="dialog" aria-modal="true" aria-label="Photo zoom">
   <div class="vtop">
-    <div class="vacts"><button class="vbtn" id="vCover" type="button" hidden >Make Cover Image</button><button class="vbtn" id="vMove" type="button" hidden aria-label="Move this photo to another buck">Move</button><button class="vbtn" id="vResort" type="button" hidden aria-label="Change my vote">Revote</button><button class="vbtn go" id="vThisBuck" type="button" hidden></button><button class="vbtn" id="vClose" type="button">Close</button></div>
+    <div class="vacts"><button class="vbtn" id="vCover" type="button" hidden >Make Cover Image</button><button class="vbtn" id="vMove" type="button" hidden aria-label="Move this photo to another buck">Move</button><button class="vbtn" id="vResort" type="button" hidden aria-label="Change my vote">Revote</button><button class="vbtn go" id="vThisBuck" type="button" hidden></button><button class="vbtn go" id="vTag" type="button" hidden>Tag him</button><button class="vbtn" id="vClose" type="button">Close</button></div>
     <span id="vcap"></span>
   </div>
   <div class="vvotes" id="vvotes" hidden></div>
@@ -707,7 +729,7 @@ function agrees(a, b) {
 }
 function answerName(v) {
   if (v.verdict === "buck" && !v.buckId && v.cantId) return "Can't ID";
-  return v.verdict === "not" ? "Not a buck" : v.buckId ? (state.bucks[v.buckId]?.name || "A buck") : "Buck, unnamed";
+  return v.verdict === "not" ? "Pass" : v.buckId ? (state.bucks[v.buckId]?.name || "A buck") : "Buck, unnamed";
 }
 // Photos where someone's vote conflicts with mine.
 function myDisputes() {
@@ -720,8 +742,17 @@ function crewDisputes() {
 // A photo is settled once two or more members agree; nobody needs to see it again.
 function settled(id) { const c = state.consensus[id]; return !!c && c.votes >= 2 && c.status === "agreed"; }
 // Your deck: photos you haven't voted on and that aren't settled. Disputes first, to get more eyes.
+// Passed photos leave the book (009_pass_and_drop.sql): two passes, or one pass 14+ days old,
+// and nobody called it a keeper. Same rule as the card_drop view; `supabase_sync prune` deletes the files.
+const DROP_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
+function droppable(id) {
+  const votes = Object.values(state.votes[id] || {});
+  if (votes.some(v => v.verdict === "buck")) return false;
+  const passes = votes.filter(v => v.verdict === "not");
+  return passes.length >= 2 || (passes.length === 1 && Date.now() - new Date(passes[0].at) >= DROP_AFTER_MS);
+}
 function deck() {
-  const open = CARDS.filter(c => !myVote(c.id) && !settled(c.id));
+  const open = CARDS.filter(c => !myVote(c.id) && !settled(c.id) && !droppable(c.id));
   const first = open.filter(c => c.id === forcedTop);
   const disputed = open.filter(c => c.id !== forcedTop && state.consensus[c.id]?.status === "disputed");
   return first.concat(disputed, open.filter(c => c.id !== forcedTop && state.consensus[c.id]?.status !== "disputed"));
@@ -928,6 +959,7 @@ function renderAll() {
   renderHeader();
   renderSort();
   if (!$("view-roster").hidden) renderRoster();
+  if (!$("view-gallery").hidden) renderGallery();
   if (!$("view-crew").hidden) renderCrew();
   if (!$("view-disputes").hidden) renderDisputes();
   if (profileId) renderProfile();
@@ -961,8 +993,8 @@ function cardEl(c, cls) {
   el.dataset.id = c.id;
   el.innerHTML = `
     <img class="photo" alt="Trail camera photo of a buck">
-    <span class="verdict buck">Buck</span>
-    <span class="verdict not">Nope</span>
+    <span class="verdict buck">Keeper</span>
+    <span class="verdict not">Pass</span>
     <div class="stamp"></div>`;
   el.querySelector("img").src = c.crop;
   const mates = burstSize(c);
@@ -1067,7 +1099,7 @@ function renderRoster() {
   if (!bucks.length) {
     const e = document.createElement("div");
     e.className = "empty";
-    e.textContent = "No bucks in the book yet. Swipe right on a buck in Sort and give him a name.";
+    e.textContent = "No bucks in the book yet. Swipe right on a keeper in Sort and give him a name.";
     wrap.append(e);
   } else {
     const grid = document.createElement("div");
@@ -1117,6 +1149,103 @@ function renderRoster() {
     });
     wrap.append(box);
   }
+}
+
+// Gallery: every photo nobody has named yet, newest first, for scanning fast for the bucks worth tagging.
+// Leaves out photos already named, called "can't ID", or passed on.
+const GALLERY_FILTERS = [["all", "All"], ["new", "New"], ["buck", "Buck, no name"]];
+let galleryFilter = "all";
+function galleryKind(c) {
+  const k = state.consensus[c.id];
+  if (!k) return "new";                                      // nobody has voted
+  if (k.top_buck || k.verdict === "not") return null;        // named, or passed on
+  if (k.verdict === "buck") return k.cant_id_votes > 0 ? null : "buck";
+  return "undecided";                                        // tied buck / not
+}
+function galleryCards() {
+  return CARDS.map(c => [c, galleryKind(c)]).filter(([, kind]) => kind)
+    .sort((a, b) => b[0].when.localeCompare(a[0].when));
+}
+// One camera at a time (keeps each page light), its photos grouped into bursts: newest burst first,
+// each burst read in order. #2 and #8 share bursts; here each camera shows its own half.
+let galleryCam = null;
+function renderGallery() {
+  const wrap = $("gallery");
+  if (state.mode === "loading") return wrap.replaceChildren();
+  const view = $("view-gallery"), keep = view.scrollTop;   // live updates redraw; don't jump the scroll
+  const all = galleryCards();
+  const counts = { all: all.length, new: all.filter(([, k]) => k === "new").length, buck: all.filter(([, k]) => k === "buck").length };
+  const filtered = all.filter(([, k]) => galleryFilter === "all" || k === galleryFilter).map(([c]) => c);
+
+  const chipRowOf = (cls, items, isOn, onPick) => {
+    const row = document.createElement("div");
+    row.className = "chips " + cls;
+    items.forEach(([key, label, count]) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.setAttribute("aria-pressed", String(isOn(key)));
+      b.innerHTML = "<span></span><small></small>";
+      b.querySelector("span").textContent = label;
+      b.querySelector("small").textContent = count;
+      b.addEventListener("click", () => { onPick(key); view.scrollTop = 0; renderGallery(); });
+      row.append(b);
+    });
+    return row;
+  };
+  const filters = chipRowOf("gfilter", GALLERY_FILTERS.map(([k, l]) => [k, l, counts[k]]), k => galleryFilter === k, k => { galleryFilter = k; });
+
+  // Cameras, the one with the newest photo first (filtered is already newest first).
+  const cams = new Map();
+  filtered.forEach(c => { if (!cams.has(c.cam)) cams.set(c.cam, []); cams.get(c.cam).push(c); });
+  if (!cams.has(galleryCam)) galleryCam = cams.keys().next().value ?? null;
+  const camRow = chipRowOf("gfilter gcams", [...cams].map(([cam, cs]) => [cam, cam, cs.length]), k => galleryCam === k, k => { galleryCam = k; });
+
+  if (!filtered.length) {
+    const e = document.createElement("div");
+    e.className = "empty";
+    e.textContent = galleryFilter === "buck" ? "No buck photos waiting for a name." : "Every photo here has been sorted. Nice work.";
+    wrap.replaceChildren(filters, e);
+    view.scrollTop = keep;
+    return;
+  }
+
+  // Bursts on this camera: newest burst first, photos inside oldest to newest.
+  const bursts = new Map();
+  cams.get(galleryCam).forEach(c => { if (!bursts.has(c.burst)) bursts.set(c.burst, []); bursts.get(c.burst).push(c); });
+  const groups = [...bursts.values()].map(cs => cs.slice().reverse());
+  const order = groups.flat();                                   // what the viewer swipes through
+
+  const list = document.createElement("div");
+  list.className = "gbursts";
+  const cols = matchMedia("(min-width: 560px)").matches ? 5 : 3;
+  let i = 0;
+  groups.forEach(cs => {
+    const block = document.createElement("section");
+    block.className = "gburst";
+    block.style.setProperty("--k", Math.min(cs.length, cols));
+    const h = document.createElement("p");
+    h.className = "label";
+    h.textContent = fmtWhen(cs[0].when);
+    if (cs.length > 1) { const n = document.createElement("b"); n.textContent = ` ×${cs.length}`; h.append(n); }
+    h.title = `${fmtWhen(cs[0].when)} · ${cs.length} photo${cs.length === 1 ? "" : "s"}`;
+    const grid = document.createElement("div");
+    grid.className = "ggrid";
+    cs.forEach(c => {
+      const idx = i++;
+      const t = document.createElement("button");
+      t.type = "button"; t.className = "thumb";
+      t.innerHTML = `<img alt="" loading="lazy">`;
+      const img = t.querySelector("img");
+      if (idx < 18) { img.loading = "eager"; img.fetchPriority = "high"; }   // the first screenful jumps the queue
+      img.src = c.crop;
+      t.setAttribute("aria-label", `CAM ${c.cam}, ${fmtWhen(c.when)}`);
+      t.addEventListener("click", () => openViewer(c, "crop", { list: order, idx, tag: true, resort: true }));
+      grid.append(t);
+    });
+    block.append(h, grid);
+    list.append(block);
+  });
+  wrap.replaceChildren(filters, camRow, list);
+  view.scrollTop = keep;
 }
 
 function openProfile(id) {
@@ -1482,7 +1611,7 @@ async function commit(c, label, newBuck) {
 // After a blind vote, say how it lines up with the rest of the crew.
 function voteFeedback(cardId, vote, newBuck) {
   const others = othersVotes(cardId);
-  const nameOf = v => v.verdict === "not" ? "not a buck" : v.buckId ? (state.bucks[v.buckId]?.name || "a buck") : v.cantId ? "a buck, can't ID" : "a buck";
+  const nameOf = v => v.verdict === "not" ? "a pass" : v.buckId ? (state.bucks[v.buckId]?.name || "a buck") : v.cantId ? "a buck, can't ID" : "a buck";
   const mine = newBuck ? newBuck.name : nameOf(vote);
   if (!others.length) return newBuck ? `New buck: ${newBuck.name} · first call` : `${mine[0].toUpperCase() + mine.slice(1)} · first call`;
   const agrees = others.filter(o => o.verdict === vote.verdict && (vote.verdict === "not" || !o.buckId || !vote.buckId || o.buckId === vote.buckId));
@@ -1719,7 +1848,7 @@ function comparePhotos(buckId, exclude) {
 // Compare: the candidate buck full screen, the photo being sorted as a small inset. Tap the inset to swap.
 function openCompare(card, buckId) {
   V.compare = { unknown: card, buckId, idx: 0, showing: "buck" };
-  ["vResort", "vMove", "vCover", "vvotes"].forEach(id => { $(id).hidden = true; });
+  ["vResort", "vMove", "vCover", "vvotes", "vTag"].forEach(id => { $(id).hidden = true; });
   $("vpip").hidden = false; $("vbucks").hidden = false; $("vThisBuck").hidden = false;
   renderCompareBucks();
   renderCompare();
@@ -2079,6 +2208,7 @@ function showTab(name) {
   document.querySelectorAll(".tabbar button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
   document.querySelectorAll(".view").forEach(v => v.hidden = v.id !== "view-" + name);
   if (name === "roster") renderRoster();
+  if (name === "gallery") renderGallery();
   if (name === "crew") renderCrew();
   if (name === "disputes") renderDisputes();
 }
@@ -2112,6 +2242,7 @@ function openViewer(c, mode = "crop", opts = {}) {
   V.card = c;
   V.opts = opts;
   V.gallery = opts.list && opts.list.length > 1 ? opts : null;
+  $("vTag").hidden = !opts.tag;
   $("vResort").hidden = !(opts.resort && myVote(c.id));
   V.buck = opts.buck || null;
   $("vMove").hidden = !(V.buck || opts.move);
@@ -2224,6 +2355,7 @@ const endPointer = e => {
 stage.addEventListener("pointerup", endPointer);
 stage.addEventListener("pointercancel", endPointer);
 $("vClose").addEventListener("click", closeViewer);
+$("vTag").addEventListener("click", () => { const c = V.card; closeViewer(); openSheet(c); });
 $("vMove").addEventListener("click", () => { const card = V.card, buck = V.buck; closeViewer(); openChooser({ mode: "move", card, buck }); });
 $("vCover").addEventListener("click", async () => {
   const b = state.bucks[V.buck];
@@ -2286,7 +2418,7 @@ async function signUrls(paths) {
 }
 
 async function loadCards() {
-  const data = await fetchAll("cards", q => q.order("camera").order("taken_at").order("id"));
+  const data = (await fetchAll("cards", q => q.order("camera").order("taken_at").order("id"))).filter(r => !r.dropped_at);
   const urls = await signUrls([...new Set(data.flatMap(r => [r.crop_path, r.frame_path]))]);
   ALL_CARDS = data.map(r => ({
     id: r.id, cam: r.camera, property: r.property, when: r.taken_at, daylight: r.daylight,

@@ -7,6 +7,9 @@ Commands:
             --yes skips the question; nothing is sent if it would pass the safety limit.
             --skip="Poll plot,North Valley 300" holds those cameras back for now.
   backup    Save Supabase crew, bucks, votes and per-photo consensus to data/backups/<timestamp>.json.
+  prune     Delete the photo files of passed photos (009_pass_and_drop.sql): two passes, or one pass
+            14+ days old, and no keeper vote. Shows what goes and the space it frees, backs up, and
+            asks first (--yes skips the question). The card row stays, marked dropped.
 
 Usage: .venv/bin/python -m buckbook.supabase_sync push
 """
@@ -144,6 +147,56 @@ def push(assume_yes=False, skip=(), only=None):
     print(f"Uploaded {len(rows)} cards.")
 
 
+def prune(assume_yes=False):
+    ready = {r["card_id"] for r in rest("GET", "card_drop", query="?droppable=is.true&select=card_id")}
+    cards = rest("GET", "cards", query="?select=id,camera,property,crop_path,frame_path,dropped_at")
+    todo = [c for c in cards if c["id"] in ready and not c["dropped_at"]]
+    if not todo:
+        print("Nothing to drop.")
+        return
+    # A full frame can hold several deer; keep it while any card that isn't being dropped uses it.
+    in_use = {c["frame_path"] for c in cards if c["id"] not in ready and not c["dropped_at"] and c["frame_path"]}
+    crops = [c["crop_path"] for c in todo if c["crop_path"]]
+    frames = sorted({c["frame_path"] for c in todo if c["frame_path"] and c["frame_path"] not in in_use})
+
+    sizes = {}
+    for prefix in ("crop", "frame"):
+        offset = 0
+        while True:
+            status, items = call("POST", f"/storage/v1/object/list/{BUCKET}", {"prefix": prefix, "limit": 1000, "offset": offset})
+            if status >= 300:
+                raise SystemExit(f"Listing storage failed (HTTP {status}): {items}")
+            sizes.update({f"{prefix}/{it['name']}": (it.get("metadata") or {}).get("size", 0) for it in items})
+            if len(items) < 1000:
+                break
+            offset += 1000
+    freed = sum(sizes.get(p, 0) for p in crops + frames)
+    by_cam = {}
+    for c in todo:
+        by_cam[(c["property"], c["camera"])] = by_cam.get((c["property"], c["camera"]), 0) + 1
+    print(f"Drop {len(todo)} passed photos: {len(crops)} close-ups + {len(frames)} full frames = {mb(freed)} freed")
+    for (prop, cam), n in sorted(by_cam.items()):
+        print(f"  {prop} · {cam}: {n}")
+    if not assume_yes and input("Delete these photo files? [y/N] ").strip().lower() != "y":
+        print("Nothing deleted.")
+        return
+
+    backup()
+    paths = crops + frames
+    for i in range(0, len(paths), 100):
+        status, out = call("DELETE", f"/storage/v1/object/{BUCKET}", {"prefixes": paths[i:i + 100]})
+        if status >= 300:
+            raise SystemExit(f"Deleting files failed (HTTP {status}): {out}")
+    now = datetime.utcnow().isoformat() + "Z"
+    gone_frames = set(frames)
+    for c in todo:
+        patch = {"dropped_at": now, "crop_path": None}
+        if c["frame_path"] in gone_frames:
+            patch["frame_path"] = None
+        rest("PATCH", "cards", patch, query=f"?id=eq.{urllib.parse.quote(c['id'])}")
+    print(f"Dropped {len(todo)} photos, freed {mb(freed)}.")
+
+
 def backup():
     out = {t: rest("GET", t, query="?select=*") for t in ("crew", "bucks", "votes", "card_consensus", "rater_scores")}
     folder = DATA_DIR.parent / "backups"
@@ -161,5 +214,7 @@ if __name__ == "__main__":
         push(assume_yes="--yes" in sys.argv, skip={c.strip() for c in skip.split(",") if c.strip()})
     elif cmd == "backup":
         backup()
+    elif cmd == "prune":
+        prune(assume_yes="--yes" in sys.argv)
     else:
         raise SystemExit(__doc__)
