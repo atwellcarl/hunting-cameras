@@ -55,6 +55,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .wordmark span { color: var(--blaze); }
 .count { font: 500 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 .count b { color: var(--ink); font-weight: 500; }
+.sndbtn { appearance: none; border: 0; background: none; color: var(--muted); width: 36px; height: 36px; padding: 6px; cursor: pointer; margin-left: auto; margin-right: 6px; }
+.sndbtn svg { width: 100%; height: 100%; display: block; }
+.sndbtn[aria-pressed="true"] { color: var(--ink); }
 .scorepill { display: flex; align-items: baseline; gap: 6px; background: var(--panel); border-radius: 999px; padding: 4px 11px; }
 .scorepill b { font: 800 18px/1 var(--display); font-variant-numeric: tabular-nums; }
 .scorepill small { font: 10px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
@@ -421,6 +424,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
     <div class="topbar-row">
       <h1 class="wordmark">Buck <span>Book</span></h1>
       <span class="count"><b id="sortedCount">0</b> / <span id="totalCount">0</span> <span id="streak"></span></span>
+      <button class="sndbtn" id="sndBtn" type="button" aria-pressed="true" aria-label="Sound on"></button>
       <span class="scorepill"><b id="myScore">0</b><small id="myRank">Scout</small></span>
     </div>
     <div class="proptoggle" id="propToggle" role="group" aria-label="Property"></div>
@@ -1583,6 +1587,7 @@ function flyOut(dir) {
 function decide(verdict) {
   const c = deck()[0];
   if (!c || state.mode === "loading") return;
+  Sound.swipe(verdict === "buck" ? "keeper" : "pass");
   if (verdict === "buck") {
     snapBack($("stack").querySelector(".card.top"));
     return openSheet(c);
@@ -1604,6 +1609,13 @@ async function commit(c, label, newBuck) {
   await writeDoc("votes/" + c.id, { ...label, ...stamp });
   lastAction = { cardId: c.id, newBuckId: newBuck?.id ?? null };
   const conflict = othersVotes(c.id).some(o => !agrees(label, o));
+  // Sounds: a shot for naming him (the full shot for a new buck), antlers rattling for a dispute,
+  // and a chime every 25 photos sorted.
+  if (newBuck) Sound.play("newBuck");
+  else if (label.buckId) Sound.play("knownBuck");
+  if (conflict) Sound.play("rattle", { delay: label.buckId || newBuck ? 0.55 : 0 });
+  const myCount = Object.values(state.votes).filter(vs => vs[state.myUid]).length;
+  if (myCount && myCount % 25 === 0) Sound.play("milestone", { delay: 0.6 });
   if (conflict) { hideToast(); openDispute(c.id); }
   else toast(voteFeedback(c.id, label, newBuck), gained, true);
 }
@@ -1630,6 +1642,112 @@ async function undo() {
   if (newBuckId && !stillUsed) await writeDoc("bucks/" + newBuckId, null);
   hideToast();
 }
+
+// ---------- sound ----------
+// Made in the browser (Web Audio), so there are no files to load. To use a real recording instead,
+// put it in web/sounds/ and list it here, e.g. newBuck: "sounds/new-buck.mp3"; it replaces the made-up one.
+const SOUND_FILES = {};
+const Sound = (() => {
+  let ctx = null, noise = null, on = store.get("buckbook-sound") !== "off";
+  const files = {};
+  let run = 0, lastSwipe = 0;
+  const ac = () => {
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const n = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate), d = n.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      noise = n;
+      Object.entries(SOUND_FILES).forEach(([k, url]) =>
+        fetch(url).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b)).then(buf => { files[k] = buf; }).catch(() => {}));
+    }
+    if (ctx.state === "suspended") ctx.resume();
+    return ctx;
+  };
+  // A pitched tone with a fast attack and exponential decay, optionally gliding to another pitch.
+  const tone = (t, { f, to = f, dur, type = "sine", gain = 0.2 }) => {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f, t);
+    o.frequency.exponentialRampToValueAtTime(to, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(ctx.destination);
+    o.start(t); o.stop(t + dur + 0.02);
+  };
+  // Filtered noise: clicks, hiss, slaps and antler clacks.
+  const hiss = (t, { dur, filter = "bandpass", f, to = f, q = 1, gain = 0.2, attack = 0.003 }) => {
+    const src = ctx.createBufferSource(), bq = ctx.createBiquadFilter(), g = ctx.createGain();
+    src.buffer = noise;
+    bq.type = filter; bq.Q.value = q;
+    bq.frequency.setValueAtTime(f, t);
+    bq.frequency.exponentialRampToValueAtTime(to, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(bq).connect(g).connect(ctx.destination);
+    src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.02);
+  };
+  const release = t => {                       // string and cams snapping forward
+    hiss(t, { dur: 0.035, filter: "highpass", f: 2500, gain: 0.35 });
+    tone(t, { f: 130, to: 60, dur: 0.12, type: "triangle", gain: 0.5 });
+    tone(t + 0.004, { f: 196, to: 180, dur: 0.22, type: "sawtooth", gain: 0.05 });
+  };
+  const flight = t => hiss(t, { dur: 0.26, f: 3200, to: 700, q: 2, gain: 0.12, attack: 0.08 });
+  const impact = t => {                        // hollow "thwock"
+    tone(t, { f: 95, to: 42, dur: 0.24, gain: 0.8 });
+    hiss(t, { dur: 0.07, filter: "lowpass", f: 1400, to: 300, gain: 0.5 });
+    tone(t + 0.01, { f: 320, to: 210, dur: 0.09, type: "triangle", gain: 0.18 });
+  };
+  const SYNTH = {
+    keeper: (t, step) => tone(t, { f: 520 * 2 ** (step / 12), dur: 0.07, type: "triangle", gain: 0.18 }),
+    pass: (t, step) => tone(t, { f: 150 * 2 ** (step / 24), to: 90, dur: 0.09, gain: 0.35 }),
+    knownBuck: t => { release(t); impact(t + 0.17); },
+    newBuck: t => { release(t); flight(t + 0.03); impact(t + 0.31); },
+    rattle: t => {                              // two bucks sparring: bursts of clacks over a grind
+      let at = t;
+      [5, 7, 4].forEach((n, burst) => {
+        hiss(at, { dur: n * 0.09 + 0.1, filter: "lowpass", f: 700, gain: 0.05, attack: 0.03 });
+        for (let i = 0; i < n; i++) {
+          hiss(at, { dur: 0.035, f: 1600 + Math.random() * 2200, q: 9, gain: 0.5 + Math.random() * 0.3 });
+          tone(at, { f: 900 + Math.random() * 700, dur: 0.05, type: "triangle", gain: 0.05 });
+          at += 0.05 + Math.random() * 0.09;
+        }
+        at += burst < 2 ? 0.22 : 0;
+      });
+    },
+    milestone: t => [784, 988, 1175, 1568].forEach((f, i) => tone(t + i * 0.09, { f, dur: 0.35, gain: 0.12 })),
+  };
+  const play = (name, { delay = 0, step = 0 } = {}) => {
+    if (!on) return;
+    try {
+      const t = ac().currentTime + 0.01 + delay;
+      if (files[name]) {
+        const src = ctx.createBufferSource(); src.buffer = files[name];
+        src.connect(ctx.destination); src.start(t);
+      } else SYNTH[name]?.(t, step);
+    } catch {}
+  };
+  // Swipes climb a semitone per quick swipe (up to an octave); a pause of 6 s starts over.
+  const swipe = kind => {
+    const now = Date.now();
+    run = now - lastSwipe < 6000 ? Math.min(run + 1, 12) : 0;
+    lastSwipe = now;
+    play(kind, { step: run });
+  };
+  const icon = () => {
+    $("sndBtn").setAttribute("aria-pressed", String(on));
+    $("sndBtn").setAttribute("aria-label", on ? "Sound on" : "Sound off");
+    $("sndBtn").innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/>${on
+      ? '<path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>' : '<path d="M17 9l5 6M22 9l-5 6"/>'}</svg>`;
+  };
+  return {
+    play, swipe, icon,
+    toggle() { on = !on; store.set("buckbook-sound", on ? "on" : "off"); icon(); if (on) play("keeper"); },
+  };
+})();
+Sound.icon();
+$("sndBtn").addEventListener("click", () => Sound.toggle());
 
 // ---------- name sheet ----------
 // Steps: "ask" (seen him before?) -> "known" (pick from the book) or "new" (name him).
@@ -2162,6 +2280,7 @@ function noticeDisputes() {
     const fresh = [...now].filter(id => !knownMine.has(id) && id !== justVoted);
     const settledNow = [...knownMine].filter(id => !now.has(id));
     if (fresh.length) {
+      Sound.play("rattle");
       const id = fresh[0], c = CARD[id], m = myVote(id);
       const against = othersVotes(id).filter(o => !agrees(m, o));
       const a = $("alert");
