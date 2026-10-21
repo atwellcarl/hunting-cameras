@@ -14,7 +14,7 @@
 /* One dark look on purpose: trail-cam photos (mostly night IR) read best on a dark surround. */
 [hidden] { display: none !important; }
 /* Viewers can look at everything but change nothing (the database enforces it too). */
-body.viewer :is(#tab-sort, #view-sort, #vTag, .gtools button, .cleanup, #profileEdit, #vCover, #vMove, #vResort, .mrow .btnrow, .switch, #composer, .queuebar .btn, .drow .go) { display: none !important; }
+body.viewer :is(#tab-sort, #view-sort, #tab-sits, #view-sits, .htile.sits, .htile.sort, #vTag, .gtools button, .cleanup, #profileEdit, #vCover, #vMove, #vResort, .mrow .btnrow, .switch, #composer, .queuebar .btn, .drow .go) { display: none !important; }
 body.viewer .drow:not(.mine) { pointer-events: none; }   /* "Weigh in" leads to Sort */
 :root {
   color-scheme: dark;
@@ -53,6 +53,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .topbar-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 36px; }
 .wordmark { font: 800 22px/1 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 0; }
 .wordmark span { color: var(--blaze); }
+.wordmark button { appearance: none; border: 0; background: none; padding: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; line-height: inherit; cursor: pointer; }
+.home { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.htile { appearance: none; text-align: left; border: 2px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 16px; padding: 16px 14px; min-height: 92px; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; cursor: pointer; }
+.htile b { font: 800 24px/1 var(--display); text-transform: uppercase; }
+.htile small { font: 12px/1.4 var(--mono); color: var(--muted); }
+.htile.big { grid-column: 1 / -1; min-height: 120px; border-color: var(--blaze); }
+.htile.big b { font-size: 32px; }
+.htile.live small { color: var(--blaze); }
+body.nophotos .count, body.nophotos .bar, body.nophotos .proptoggle small { visibility: hidden; }
 .count { font: 500 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 .count b { color: var(--ink); font-weight: 500; }
 .sndbtn { appearance: none; border: 0; background: none; color: var(--muted); width: 36px; height: 36px; padding: 6px; cursor: pointer; margin-left: auto; margin-right: 6px; }
@@ -137,7 +146,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
   appearance: none; border: 0; border-radius: 999px; cursor: pointer; font: 600 16px var(--body);
   padding: 13px 22px; background: var(--blaze); color: var(--blaze-ink); min-height: 48px;
 }
-.btn.ghost { background: none; color: var(--ink); border: 1.5px solid var(--line); }
+/* Every pill button is orange; only Delete (.danger) stands apart. Choice pills (.chips, compass) are toggles, not buttons. */
+.btn.ghost { background: var(--blaze); color: var(--blaze-ink); border: 0; }
 .btn:disabled { opacity: .35; cursor: default; }
 .linkish { appearance: none; border: 0; background: none; color: var(--muted); font: 13px var(--mono); cursor: pointer; padding: 6px 0; text-decoration: underline; }
 .label { font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin: 0 0 8px; }
@@ -337,6 +347,81 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .editform { display: flex; flex-direction: column; gap: 16px; }
 .editform textarea { width: 100%; min-height: 84px; font: 16px/1.4 var(--body); padding: 12px 14px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); resize: vertical; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+/* ---------- sits ---------- */
+.sitsheet { grid-template-rows: 1fr auto; }
+#sitSheet, #eventSheet { z-index: 22; }   /* opened from a sit's page, so they sit above it */
+.sitsheet .sheet-body { padding-top: calc(var(--top) + 20px); }
+.sitsheet label { display: block; }
+.sitsheet .label small { text-transform: none; letter-spacing: 0; color: var(--muted); }
+.sitgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sitgrid > label:has(#sitDate) { grid-column: 1 / -1; }   /* the day gets its own row */
+.sitgrid .newname { padding: 12px 10px; font-size: 16px; }
+#sitSheet.live .notlive { display: none !important; }
+#sitSheet.nogps .gpswrap { display: none; }
+#sitSheet.downonly .sheet-body > :not(h2):not(.downfield), #sitSheet.downonly .notdown { display: none !important; }
+.gpsrow small { flex: 1; min-width: 0; }
+.gpsrow small b { color: var(--ink); font-weight: 500; }
+.sitsmall { margin-top: 8px; font-size: 15px; padding: 10px 12px; }
+.sitchips button { min-height: 40px; padding: 6px 12px; font-size: 13px; }
+.compass { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.compass.small { grid-template-columns: repeat(8, 1fr); }
+.compass button { appearance: none; min-height: 40px; border: 2px solid var(--line); background: var(--panel); border-radius: 10px; font: 600 13px var(--mono); color: var(--ink); cursor: pointer; padding: 0; }
+.compass button.wide { grid-column: span 4; }
+.compass.small button { min-height: 36px; font-size: 11px; }
+.compass button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.sitadd { margin-top: 8px; }
+.sitadd .btn { width: 100%; }
+/* Time wheels: hour, minute and AM/PM each scroll on their own and snap; the middle row is the value. */
+.twheel { position: relative; display: grid; grid-template-columns: 1fr 1fr .9fr; height: 120px; border: 2px solid var(--line); border-radius: 12px; background: var(--panel); overflow: hidden; margin-top: 2px; }
+.twheel::before { content: ""; position: absolute; left: 4px; right: 4px; top: 40px; height: 40px; border-radius: 8px; background: rgba(255, 255, 255, .07); pointer-events: none; }
+.twheel .col { overflow-y: scroll; scroll-snap-type: y mandatory; scrollbar-width: none; overscroll-behavior: contain; padding: 40px 0; -webkit-overflow-scrolling: touch; }
+.twheel .col::-webkit-scrollbar { display: none; }
+.twheel .col div { height: 40px; scroll-snap-align: center; display: grid; place-items: center; font: 600 18px var(--mono); color: var(--muted); cursor: pointer; user-select: none; }
+.twheel .col div.on { color: var(--ink); }
+.tbox { text-align: left; cursor: pointer; padding: 12px 14px; margin-top: 2px; font: 600 17px var(--mono); }
+.tbox.empty { color: var(--muted); font-weight: 500; }
+.tbox.open { border-color: var(--blaze); }
+/* Done: a full-width pill under the wheels, easy to hit with cold fingers; Clear sits above it. */
+.ttools { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.ttools .linkish { align-self: flex-start; padding: 2px 0; }
+.ttools .tdone { width: 100%; min-height: 48px; }
+.gpsrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.gpsrow small { font: 12px var(--mono); color: var(--muted); }
+.countrow { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+.buckrow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.buckrow .newname { font-size: 14px; padding: 10px; }
+#evBucks:not(:empty) { margin: 4px 0 6px; }
+.evtimes { grid-template-columns: 1fr 1fr; }
+.countrow .label { flex: 1; margin: 0; }
+.countrow b { font: 800 24px var(--display); min-width: 24px; text-align: center; }
+.countrow .btn { min-width: 48px; min-height: 44px; padding: 0; font-size: 20px; }
+.sitbar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.sitbar .btnrow { flex-wrap: nowrap; }
+.sitbar .btnrow .btn { flex: 1; }
+.sitopen { background: var(--panel); border: 2px solid var(--blaze); border-radius: 14px; padding: 12px 14px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px; }
+.sitopen b { font: 800 20px/1.1 var(--display); text-transform: uppercase; }
+.sitopen small { font: 12px/1.5 var(--mono); color: var(--muted); }
+.sitopen .btnrow .btn { flex: 1 1 auto; min-height: 44px; }
+.sitlist { display: flex; flex-direction: column; gap: 8px; }
+.sitrow { appearance: none; text-align: left; background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; color: var(--ink); cursor: pointer; display: flex; flex-direction: column; gap: 3px; }
+.sitrow b { font-weight: 600; }
+.sitrow small { font: 12px/1.45 var(--mono); color: var(--muted); }
+.sitrow .est { color: var(--blaze); }
+.svfoot { gap: 8px; }
+.svfoot .btn { flex: 1; min-height: 50px; padding: 8px 6px; }
+.svmore { align-self: flex-start; color: var(--muted); }
+#svEvents .svevent { padding: 12px; font-size: 15px; }
+#svEvents .empty { margin: 0; }
+#eventView { z-index: 21; }                    /* above the sit page, below the edit sheet */
+.evtype { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--panel); border: 2px solid var(--line); border-radius: 14px; padding: 3px; gap: 3px; }
+#sitProp { grid-template-columns: 1fr 1fr; }
+.evtype button { appearance: none; border: 0; background: none; color: var(--muted); border-radius: 10px; min-height: 44px; font: 600 14px var(--body); cursor: pointer; }
+.evtype button[aria-selected="true"] { background: var(--ink); color: var(--bg); }
+.svevents { display: flex; flex-direction: column; gap: 6px; }
+.svevent { appearance: none; text-align: left; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 10px; padding: 8px 10px; font: 14px/1.4 var(--body); }
+.svevent small { display: block; font: 12px var(--mono); color: var(--muted); }
+.svweather { display: grid; grid-template-columns: auto 1fr 1fr 1fr; gap: 2px 12px; font: 12px var(--mono); color: var(--muted); }
+.svweather b { color: var(--ink); font-weight: 500; }
 .chips button { appearance: none; min-height: 44px; min-width: 56px; border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 8px 14px; font: 500 15px var(--mono); cursor: pointer; }
 .chips button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -354,6 +439,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .mrow .btnrow { flex-wrap: wrap; }
 .mrow .btnrow .btn { flex: 1 1 auto; }
 .mrow.proposed { border-color: var(--blaze); }
+#profileSits:not(:empty) { margin-bottom: 22px; }
 #profileSuggest:not(:empty) { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
 .confirm { background: var(--panel); border: 2px solid var(--no); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
 .confirm p { margin: 0; }
@@ -444,12 +530,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 }
 </style>
 </head>
-<body>
+<body class="nophotos">
 
 <div class="app">
   <header class="topbar">
     <div class="topbar-row">
-      <h1 class="wordmark">Buck <span>Book</span></h1>
+      <h1 class="wordmark"><button type="button" id="homeLink" aria-label="Home">Buck <span>Book</span></button></h1>
       <span class="count"><b id="sortedCount">0</b> / <span id="totalCount">0</span> <span id="streak"></span></span>
       <button class="sndbtn" id="sndBtn" type="button" aria-pressed="true" aria-label="Sound on"></button>
       <span class="scorepill"><b id="myScore">0</b><small id="myRank">Scout</small></span>
@@ -478,12 +564,20 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
     </section>
     <div class="gbar" id="gbar" hidden><span id="gbarCount"></span><button class="btn ghost" id="gbarPass" type="button">Pass</button><button class="btn" id="gbarTag" type="button">Tag as…</button></div>
 
-    <section id="view-roster" class="view scroll">
+    <section id="view-home" class="view scroll">
+      <div id="home"></div>
+    </section>
+
+    <section id="view-roster" class="view scroll" hidden>
       <div id="roster"></div>
     </section>
 
     <section id="view-disputes" class="view scroll" hidden>
       <div id="disputes"></div>
+    </section>
+
+    <section id="view-sits" class="view scroll" hidden>
+      <div id="sits"></div>
     </section>
 
     <section id="view-crew" class="view scroll" hidden>
@@ -500,8 +594,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Gallery</button>
     <button role="tab" id="tab-disputes" aria-selected="false" data-tab="disputes">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5h11v8H9l-4 3.5V13H4z"/><path d="M15 9h5v8h-1v3l-3.5-3H10v-2"/></svg>Disputes<span class="badge" id="dBadge" hidden></span></button>
-    <button role="tab" id="tab-roster" aria-selected="true" data-tab="roster">
+    <button role="tab" id="tab-roster" aria-selected="false" data-tab="roster">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21v-7M12 14c-3 0-5-2-5-5V4M7 8H4M12 14c3 0 5-2 5-5V4M17 8h3M9.5 11.5L7 10M14.5 11.5L17 10"/></svg>Roster</button>
+    <button role="tab" id="tab-sits" aria-selected="false" data-tab="sits">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l6 8h-3l4 6H5l4-6H6z"/><path d="M12 17v4"/></svg>Sits</button>
     <button role="tab" id="tab-crew" aria-selected="false" data-tab="crew">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c1.8.8 3 2.6 3.5 5.2"/></svg>Crew</button>
   </nav>
@@ -591,6 +687,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
       <div class="pgrid" id="profileGrid"></div>
     </div>
     <div>
+      <div id="profileSits" class="svevents"></div>
       <div id="profileSuggest"></div>
       <p class="label cleanup">Clean up</p>
       <div class="btnrow cleanup"><button class="btn ghost" id="profileMerge" type="button">Merge into another buck…</button><button class="btn danger" id="profileDelete" type="button">Delete buck</button></div>
@@ -630,6 +727,96 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 <button class="alert" id="alert" type="button" hidden><img alt=""><span></span></button>
 
 <!-- Chooser: move one photo to another buck, or merge a whole buck into another -->
+<div class="sheet sitsheet" id="sitSheet" hidden role="dialog" aria-modal="true" aria-labelledby="sitTitle">
+  <div class="sheet-body">
+    <h2 id="sitTitle">Start a sit</h2>
+    <div class="evtype" id="sitProp" role="radiogroup" aria-label="Property"></div>
+    <div class="sitgrid">
+      <label class="notlive"><span class="label">Day</span><input id="sitDate" class="newname" type="date"></label>
+      <div><span class="label">Set</span><input id="sitSet" type="hidden" data-wheel="required"></div>
+      <div><span class="label">Planned down</span><input id="sitPlanTime" type="hidden" data-wheel="pick"></div>
+    </div>
+    <div class="notlive downfield"><span class="label">Down <small class="notdown">(leave empty while you're still in the tree)</small></span><input id="sitDown" type="hidden" data-wheel="optional"></div>
+    <div>
+      <p class="label">Wind you feel</p>
+      <div class="compass" id="sitWind"></div>
+    </div>
+    <div>
+      <p class="label gpswrap">Where you are</p>
+      <div class="gpsrow gpswrap"><small id="sitGpsInfo"></small></div>
+      <input id="sitSpot" class="newname sitsmall notlive" type="text" maxlength="60" placeholder="Spot name (optional), e.g. Pole plot" autocomplete="off">
+    </div>
+    <div class="notlive">
+      <p class="label">Events</p>
+      <div class="svevents" id="sitEvents"></div>
+      <div class="sitadd" id="sitAddEv"></div>
+    </div>
+    <div class="editform notlive"><textarea id="sitNotes" maxlength="2000" placeholder="Notes"></textarea></div>
+  </div>
+  <div class="sheet-foot">
+    <button class="btn ghost" id="sitCancel" type="button">Cancel</button>
+    <span class="grow"></span>
+    <button class="btn" id="sitSave" type="button">Save</button>
+  </div>
+</div>
+
+<div class="sheet sitsheet" id="eventSheet" hidden role="dialog" aria-modal="true" aria-labelledby="eventTitle">
+  <div class="sheet-body">
+    <h2 id="eventTitle">Add event</h2>
+    <div class="evtype" id="evType" role="tablist"></div>
+    <div class="chips sitchips" id="evKind"></div>
+    <input id="evSpecies" class="newname sitsmall" type="text" maxlength="40" placeholder="What animal?" autocomplete="off">
+    <div id="evAnimal">
+      <div id="evCounts"></div>
+      <div id="evBucks"></div>
+      <p class="label">Came from</p><div class="compass small" id="evFrom"></div>
+      <p class="label">Headed</p><div class="compass small" id="evTo"></div>
+      <label><span class="label">Yards (optional)</span><input id="evYards" class="newname sitsmall" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="e.g. 75"></label>
+    </div>
+    <div id="evWindWrap"><p class="label">Wind now</p><div class="compass" id="evWind"></div></div>
+    <div class="sitgrid evtimes">
+      <div><span class="label">Time <small>(optional)</small></span><input id="evTime" type="hidden" data-wheel="optional"></div>
+      <div class="evend"><span class="label">Ended <small>(optional)</small></span><input id="evEnd" type="hidden" data-wheel="optional"></div>
+    </div>
+    <div class="evend"><p class="label">How it ended <small>(optional)</small></p><div class="chips sitchips" id="evHow"></div></div>
+    <div class="editform"><textarea id="evNote" maxlength="500" placeholder="What he did: bedded, stood up, headed east…"></textarea></div>
+  </div>
+  <div class="sheet-foot">
+    <button class="btn ghost" id="evCancel" type="button">Cancel</button>
+    <button class="btn danger" id="evDelete" type="button" hidden>Delete</button>
+    <span class="grow"></span>
+    <button class="btn" id="evSave" type="button">Add</button>
+  </div>
+</div>
+
+<div class="sheet sitsheet" id="sitView" hidden role="dialog" aria-modal="true" aria-labelledby="svTitle">
+  <div class="sheet-body">
+    <h2 id="svTitle"></h2>
+    <p class="note" id="svMeta"></p>
+    <div class="svevents" id="svEvents"></div>
+    <button class="linkish svmore" id="svMore" type="button" aria-expanded="false">Details ▾</button>
+    <div id="svDetails" hidden>
+      <dl class="facts" id="svFacts"></dl>
+      <div id="svWeatherWrap"><p class="label" id="svWeatherLabel">Weather service, by the hour</p><div class="svweather" id="svWeather"></div></div>
+      <div class="btnrow" id="svActs"></div>
+      <div id="svConfirm"></div>
+    </div>
+  </div>
+  <div class="sheet-foot svfoot" id="svFoot"></div>
+</div>
+
+<div class="sheet sitsheet" id="eventView" hidden role="dialog" aria-modal="true" aria-labelledby="evvTitle">
+  <div class="sheet-body">
+    <h2 id="evvTitle"></h2>
+    <p class="note" id="evvMeta"></p>
+    <dl class="facts" id="evvFacts"></dl>
+  </div>
+  <div class="sheet-foot svfoot">
+    <button class="btn ghost" id="evvBack" type="button">Back</button>
+    <button class="btn" id="evvEdit" type="button">Edit</button>
+  </div>
+</div>
+
 <div class="sheet" id="burstSheet" hidden role="dialog" aria-modal="true" aria-labelledby="burstTitle">
   <div class="sheet-body">
     <h2 id="burstTitle"></h2>
@@ -690,6 +877,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mgrs@2.1.0/dist/mgrs.js"></script>
 <script src="config.js"></script>
 <script>
 let ALL_CARDS = [];   // every photo, both properties
@@ -899,16 +1087,46 @@ const voteFromRow = r => ({ verdict: r.verdict, buckId: r.buck_id, cantId: !!r.c
 
 let syncing = false, syncAgain = false;
 // Full reload of every table: on start, after a merge or buck change, and after time away.
+// The photo sections (Sort, Gallery, Disputes, Roster, Crew) need the photo list, votes and consensus.
+// Those load the first time one of them opens; Home and Sits only need the small tables.
+const PHOTO_TABS = ["sort", "gallery", "disputes", "roster", "crew"];
+let photosLoading = null;
+function ensurePhotos() {
+  if (state.photosLoaded) return Promise.resolve();
+  if (!photosLoading) photosLoading = (async () => {
+    state.mode = "loading"; renderHeader();
+    try {
+      await loadCards();
+      state.photosLoaded = true;
+      document.body.classList.remove("nophotos");
+      renderedTop = null;
+      await sync();
+      // Signed photo links expire; refresh them well before they do.
+      clearInterval(refreshTimer);
+      refreshTimer = setInterval(async () => { try { await loadCards(); renderedTop = null; renderAll(); } catch {} }, (URL_TTL - 30 * 60) * 1000);
+    } catch (e) {
+      state.mode = "offline"; renderHeader();
+      toast("Couldn't load the photos. Try again when you have signal.");
+    } finally { photosLoading = null; }
+  })();
+  return photosLoading;
+}
+
 async function sync() {
-  if (!CARDS.length) return;
   if (syncing) { syncAgain = true; return; }
   syncing = true;
   try {
+    const photos = !!state.photosLoaded;
+    const none = Promise.resolve([]);
     const [v, b, c, cons, sc, mp] = await Promise.all([
-      fetchAll("votes"), fetchAll("bucks"), fetchAll("crew"), fetchAll("card_consensus"), fetchAll("rater_scores"),
+      photos ? fetchAll("votes") : none, fetchAll("bucks"), fetchAll("crew"),
+      photos ? fetchAll("card_consensus") : none, photos ? fetchAll("rater_scores") : none,
       fetchAll("merge_proposals").catch(() => []),   // table arrives with 008_member_types.sql
     ]);
-    const cm = await fetchAll("comments", q => q.order("at"));
+    // Sits (010_sits.sql): admins and users only; viewers get nothing back.
+    const [st, se, sw, props, sm] = await Promise.all(["sits", "sit_events", "sit_weather", "properties", "sit_event_members"]
+      .map(t => fetchAll(t, q => t === "sit_weather" ? q.order("hour") : t === "sits" ? q.order("set_at") : t === "sit_events" ? q.order("created_at") : q).catch(() => [])));
+    const cm = photos ? await fetchAll("comments", q => q.order("at")) : [];
     const comments = {};
     cm.forEach(r => (comments[r.card_id] ||= []).push(r));
     const users = {};
@@ -932,9 +1150,17 @@ async function sync() {
     document.body.classList.toggle("viewer", myType === "viewer");
     const crewById = Object.fromEntries(c.map(r => [r.user_id, r.name]));
     const proposals = Object.fromEntries(mp.map(r => [r.buck_a + "|" + r.buck_b, r]));
-    Object.assign(state, { votes, bucks, users, consensus, scores, comments, isAdmin, crewById, proposals, mode: "shared" });
+    const sitEvents = {}, sitWeather = {};
+    const membersOf = {};
+    sm.forEach(r => (membersOf[r.event_id] ||= []).push(r));
+    se.forEach(r => (sitEvents[r.sit_id] ||= []).push({ ...r, members: membersOf[r.id] || [] }));
+    sw.forEach(r => (sitWeather[r.sit_id] ||= []).push(r));
+    Object.assign(state, { votes, bucks, users, consensus, scores, comments, isAdmin, crewById, proposals,
+      sits: Object.fromEntries(st.map(r => [r.id, r])), sitEvents, sitWeather,
+      properties: Object.fromEntries(props.map(r => [r.name, r])), mode: "shared" });
     renderAll();
-    noticeDisputes();
+    if (photos) noticeDisputes();
+    autoCloseSits().then(renderAll);
   } catch (e) {
     if (state.mode !== "offline") { state.mode = "offline"; renderAll(); }
   } finally {
@@ -958,6 +1184,7 @@ async function flushLive() {
   if (sheetState) { liveTimer = setTimeout(flushLive, 1000); return; }   // don't redraw under the naming sheet
   const batch = liveQueue.splice(0);
   if (!batch.length) return;
+  if (!state.photosLoaded && batch.every(b => ["votes", "comments"].includes(b.table))) return;
   if (state.mode !== "shared" || batch.some(b => !["votes", "comments"].includes(b.table))) return sync();
   const touched = new Set();
   for (const { table, payload: { eventType, new: row, old } } of batch) {
@@ -1002,6 +1229,10 @@ function renderAll() {
   renderSort();
   if (!$("view-roster").hidden) renderRoster();
   if (!$("view-gallery").hidden) renderGallery();
+  if (!$("view-sits").hidden) renderSits();
+  if (!$("view-home").hidden) renderHome();
+  if (sitViewId) renderSitView();
+  if (eventViewAt) renderEventView();
   if (!$("view-crew").hidden) renderCrew();
   if (!$("view-disputes").hidden) renderDisputes();
   if (profileId) renderProfile();
@@ -1399,6 +1630,22 @@ function renderProfile() {
   });
 
   $("profileMerge").textContent = state.isAdmin ? "Merge into another buck…" : "Propose a merge…";
+  const seen = Object.values(state.sitEvents || {}).flat().filter(e => (e.members || []).some(m => m.buck_id === profileId))
+    .map(e => [e, state.sits[e.sit_id]]).filter(([, st]) => st).sort((a, b) => (b[0].at || b[1].set_at).localeCompare(a[0].at || a[1].set_at));
+  const ss = $("profileSits"); ss.replaceChildren();
+  if (seen.length) {
+    const h = document.createElement("p"); h.className = "label"; h.textContent = `Seen on sits · ${seen.length}`; ss.append(h);
+    seen.forEach(([e, st]) => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "svevent";
+      b.append(`${fmtDay(st.set_at)} · ${sitPart(st)}${st.spot ? " · " + st.spot : ""}`);
+      const sm = document.createElement("small");
+      sm.textContent = [st.hunter_name, eventWhen(e), whoText(e), travel(e), e.ended_how ? endingLabel(e.ended_how).toLowerCase() : "",
+        e.distance_yd != null ? `${e.distance_yd} yd` : "", st.wind_dir ? `wind ${st.wind_dir}` : "", e.note || ""].filter(Boolean).join(" · ");
+      b.append(sm);
+      b.addEventListener("click", () => openSitView(st.id));
+      ss.append(b);
+    });
+  }
   const sugg = $("profileSuggest");
   sugg.replaceChildren();
   const merges = mergePairs(profileId);
@@ -2538,12 +2785,732 @@ function toast(msg, gained = 0, canUndo = false, action = null) {
 }
 function hideToast() { $("toast").hidden = true; }
 
+// ---------- sits (hunt notes) ----------
+// A sit is one time in one tree. The hunter enters set/down times and the wind they felt; the phone
+// averages GPS for the tree; the weather service's hourly values (at the property's town, never the
+// tree) are stored beside the hunter's and never overwrite them. See supabase/010_sits.sql.
+const WIND16 = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+const DIR8 = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+// Three kinds of event: a deer sighting, another animal, or a wind change.
+const DEER = [["doe", "Doe"], ["fawn", "Fawn"], ["buck", "Buck"]];
+const ANIMALS = [["turkey", "Turkey"], ["coyote", "Coyote"], ["raccoon", "Raccoon"], ["bear", "Bear"], ["other", "Other"]];
+const ENDINGS = [["unnoticed", "Unnoticed"], ["busted", "Busted"], ["winded", "Winded"], ["heard", "Heard"], ["spooked", "Spooked"], ["shot", "Shot"], ["other", "Other"]];
+const endingLabel = v => (ENDINGS.find(([k]) => k === v) || [, v])[1];
+const typeOf = kind => kind === "wind" ? "wind" : ["doe", "fawn", "buck", "deer"].includes(kind) ? "deer" : "animal";
+const SIT_AUTO_CLOSE_MS = 8 * 60 * 60 * 1000;
+let sitForm = null, eventForm = null, sitViewId = null;
+
+const pad2 = n => String(n).padStart(2, "0");
+const localDate = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const localTime = d => `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+const fromLocal = (date, time) => time ? new Date(`${date}T${time}`) : null;
+const degToCompass = deg => deg == null ? "" : WIND16[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
+const sitPart = s => new Date(s.set_at).getHours() < 12 ? "Morning" : "Evening";
+function mgrsOf(lat, lon) {
+  try {
+    const g = mgrs.forward([lon, lat], 5);
+    return `${g.slice(0, 3)} ${g.slice(3, 5)} ${g.slice(5, 10)} ${g.slice(10)}`;
+  } catch { return ""; }
+}
+const sitsHere = () => Object.values(state.sits || {}).filter(s => s.property === state.property)
+  .sort((a, b) => b.set_at.localeCompare(a.set_at));
+const eventsOf = id => (state.sitEvents?.[id] || []).slice().sort((a, b) => (a.at || "").localeCompare(b.at || ""));
+const canChangeSit = s => s && (s.hunter === state.myUid || state.isAdmin);
+const lastEventAt = id => eventsOf(id).map(e => e.at).filter(Boolean).sort().pop() || null;
+// If the down time wasn't entered: the later of the planned down time and the last event.
+function estimateDown(s) {
+  const planned = s.planned_down_at, last = lastEventAt(s.id);
+  if (planned && (!last || planned >= last)) return [planned, "planned"];
+  if (last) return [last, "last_event"];
+  return [null, "auto"];
+}
+
+async function saveSit(row) {
+  // Keep the row as saved: the database stamps the hunter, which decides who may change it.
+  const { data, error } = await sb.from("sits").upsert(row).select().single();
+  if (error) { toast(friendly(error)); return false; }
+  state.sits[row.id] = data;
+  return true;
+}
+
+// Weather service values for the hours of a sit, at the property's town. Fills sit_weather and the
+// sit's sunrise/sunset; never touches what the hunter entered.
+async function fetchSitWeather(sit) {
+  const town = state.properties?.[sit.property];
+  if (!town?.weather_lat || !canChangeSit(sit)) return;
+  // Only hours that have already happened: a sit still in progress gets no forecast for the hours ahead.
+  const start = new Date(sit.set_at);
+  const end = new Date(Math.min(Date.now(), new Date(sit.down_at || sit.planned_down_at || start.getTime() + 3 * 3600e3).getTime()));
+  if (start > new Date()) return;
+  const day = d => localDate(d);
+  const q = new URLSearchParams({ latitude: town.weather_lat, longitude: town.weather_lon,
+    hourly: "temperature_2m,wind_direction_10m,wind_speed_10m,wind_gusts_10m,pressure_msl,cloud_cover",
+    daily: "sunrise,sunset", start_date: day(start), end_date: day(end), temperature_unit: "fahrenheit",
+    wind_speed_unit: "mph", timezone: "America/Chicago" });
+  try {
+    const r = await fetch("https://api.open-meteo.com/v1/forecast?" + q);
+    if (!r.ok) return;
+    const w = await r.json(), h = w.hourly;
+    const from = new Date(start); from.setMinutes(0, 0, 0);
+    const rows = h.time.map((t, i) => ({ t: new Date(t), i }))
+      .filter(({ t }) => t >= from && t <= end)
+      .map(({ t, i }) => ({ sit_id: sit.id, hour: t.toISOString(), temp_f: h.temperature_2m[i], wind_from_deg: h.wind_direction_10m[i],
+        wind_mph: h.wind_speed_10m[i], gust_mph: h.wind_gusts_10m[i], pressure_hpa: h.pressure_msl[i], cloud_pct: h.cloud_cover[i] }));
+    if (rows.length) {
+      await sb.from("sit_weather").delete().eq("sit_id", sit.id);
+      const { error } = await sb.from("sit_weather").upsert(rows);
+      if (error) return;
+      state.sitWeather[sit.id] = rows;
+    }
+    const di = w.daily.time.indexOf(day(start));
+    await saveSit({ id: sit.id, property: sit.property, set_at: sit.set_at,
+      sunrise: di >= 0 ? new Date(w.daily.sunrise[di]).toISOString() : null,
+      sunset: di >= 0 ? new Date(w.daily.sunset[di]).toISOString() : null, weather_at: new Date().toISOString() });
+  } catch {}
+}
+const weatherAt = (id, when) => {
+  const rows = state.sitWeather?.[id] || [];
+  if (!rows.length || !when) return null;
+  const t = new Date(when).getTime();
+  return rows.reduce((best, r) => Math.abs(new Date(r.hour) - t) < Math.abs(new Date(best.hour) - t) ? r : best);
+};
+
+// Close a forgotten sit after 8 hours, at its best estimate; it stays marked estimated.
+async function autoCloseSits() {
+  for (const s of Object.values(state.sits || {})) {
+    if (s.down_at || s.hunter !== state.myUid || Date.now() - new Date(s.set_at) < SIT_AUTO_CLOSE_MS) continue;
+    const [at, source] = estimateDown(s);
+    await saveSit({ id: s.id, property: s.property, set_at: s.set_at, down_at: at || new Date(new Date(s.set_at).getTime() + SIT_AUTO_CLOSE_MS).toISOString(), down_source: at ? source : "auto" });
+  }
+}
+
+// "7:20 PM–7:35 PM", or just the start or the end if only one was noted.
+const eventWhen = e => e.at && e.ended_at ? `${fmtWhen(e.at, false)}–${fmtWhen(e.ended_at, false)}` : e.at ? fmtWhen(e.at, false) : e.ended_at ? `ended ${fmtWhen(e.ended_at, false)}` : "";
+const travel = e => e.from_dir && e.to_dir ? `${e.from_dir} → ${e.to_dir}` : e.from_dir ? `from ${e.from_dir}` : e.to_dir ? `headed ${e.to_dir}` : "";
+// "2 doe · 1 fawn · Tall Eight · spike", "6 turkey"
+const memberText = m => m.kind === "buck" ? (state.bucks[m.buck_id]?.name || m.buck_note || "buck")
+  : `${m.count} ${m.kind === "animal" ? (m.species || "animal") : m.kind}`;
+function whoText(e) { return (e.members || []).map(memberText).join(" · ") || (e.kind === "animal" ? "an animal" : "deer"); }
+function eventText(e) {
+  if (e.kind === "wind") return `Wind now ${e.wind_dir}`;
+  return whoText(e) + (travel(e) ? ` · ${travel(e)}` : "") + (e.distance_yd != null ? ` · ${e.distance_yd} yd` : "")
+    + (e.ended_how ? ` · ${endingLabel(e.ended_how).toLowerCase()}` : "");
+}
+// Save events and the animals in them. Members are replaced each time, so edits can't leave strays.
+async function saveEvents(sitId, events, removedIds = []) {
+  const rows = events.map(({ members, ...row }) => ({ ...row, sit_id: sitId }));
+  if (rows.length) {
+    const r = await sb.from("sit_events").upsert(rows);
+    if (r.error) return r.error;
+    const ids = rows.map(r => r.id);
+    const d = await sb.from("sit_event_members").delete().in("event_id", ids);
+    if (d.error) return d.error;
+    const members = events.flatMap(e => (e.members || []).map(m => ({ ...m, id: m.id || crypto.randomUUID(), event_id: e.id })));
+    if (members.length) { const m = await sb.from("sit_event_members").insert(members); if (m.error) return m.error; }
+  }
+  if (removedIds.length) { const x = await sb.from("sit_events").delete().in("id", removedIds); if (x.error) return x.error; }
+  return null;
+}
+function compass(el, dirs, current, onPick, extra = []) {
+  el.replaceChildren();
+  [...dirs, ...extra].forEach(([v, label, cls]) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = label ?? v; if (cls) b.className = cls;
+    b.setAttribute("aria-pressed", String(v === current));
+    b.addEventListener("click", () => onPick(v === current ? null : v));
+    el.append(b);
+  });
+}
+
+// ----- the Sits tab -----
+function renderSits() {
+  const wrap = $("sits");
+  if (state.mode === "loading") return wrap.replaceChildren();
+  const all = sitsHere();
+  const open = all.find(s => !s.down_at && s.hunter === state.myUid);
+  wrap.replaceChildren();
+
+  const bar = document.createElement("div");
+  bar.className = "sitbar";
+  bar.innerHTML = `<p class="label" style="margin:0"></p><span class="btnrow"></span>`;
+  bar.querySelector("p").textContent = `${all.length} sit${all.length === 1 ? "" : "s"} · ${state.property}`;
+  const add = (label, cls, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn " + cls; b.textContent = label; b.addEventListener("click", fn); bar.querySelector(".btnrow").append(b); };
+  if (!open) add("Start a sit", "", () => openSitForm());
+  add("Log a past sit", "ghost", () => openSitForm(null, { past: true }));
+  wrap.append(bar);
+
+  if (open) {
+    const card = document.createElement("div");
+    card.className = "sitopen";
+    const planned = open.planned_down_at ? ` · planned down ${fmtWhen(open.planned_down_at, false)}` : "";
+    const n = eventsOf(open.id).length;
+    card.innerHTML = `<b></b><small></small><div class="btnrow"></div>`;
+    card.querySelector("b").textContent = `In the tree${open.spot ? " · " + open.spot : ""}`;
+    card.querySelector("small").textContent = `Set ${fmtWhen(open.set_at, false)}${planned} · wind ${open.wind_dir || "—"} · ${n} event${n === 1 ? "" : "s"}`;
+    const row = card.querySelector(".btnrow");
+    [["Open sit", "", () => openSitView(open.id)], ["I'm down", "ghost", () => markDown(open.id)]].forEach(([l, c, f]) => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "btn " + c; b.textContent = l; b.addEventListener("click", f); row.append(b);
+    });
+    card.addEventListener("click", e => { if (e.target === card || e.target.tagName === "B" || e.target.tagName === "SMALL") openSitView(open.id); });
+    wrap.append(card);
+  }
+
+  const list = document.createElement("div");
+  list.className = "sitlist";
+  all.filter(s => s !== open).forEach(s => list.append(sitRow(s)));
+  if (!all.length) {
+    const e = document.createElement("div"); e.className = "empty";
+    e.textContent = "No sits logged here yet. Start one when you're set, or log a past sit from your notes.";
+    list.append(e);
+  }
+  wrap.append(list);
+}
+function sitRow(s) {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "sitrow";
+  const tally = {};
+  eventsOf(s.id).flatMap(e => e.members || []).forEach(m => {
+    const k = m.kind === "buck" ? (state.bucks[m.buck_id]?.name || m.buck_note || "buck") : m.kind === "animal" ? (m.species || "animal") : m.kind;
+    tally[k] = (tally[k] || 0) + (m.count || 1);
+  });
+  const wx = weatherAt(s.id, s.set_at);
+  b.innerHTML = `<b></b><small></small><small></small>`;
+  const [t, line1, line2] = b.children;
+  t.textContent = `${fmtDay(s.set_at)} · ${sitPart(s)}${s.spot ? " · " + s.spot : ""}`;
+  line1.innerHTML = "";
+  line1.append(`${s.hunter_name || "Someone"} · ${fmtWhen(s.set_at, false)}–`);
+  if (s.down_at) {
+    line1.append(fmtWhen(s.down_at, false));
+    if (s.down_source && s.down_source !== "entered") { const e = document.createElement("span"); e.className = "est"; e.textContent = " (est.)"; line1.append(e); }
+  } else line1.append("now");
+  line1.append(` · wind ${s.wind_dir || "—"}${wx ? ` (service ${degToCompass(wx.wind_from_deg)} ${Math.round(wx.wind_mph)} mph)` : ""}`);
+  line2.textContent = Object.entries(tally).map(([k, n]) => `${n} ${k}`).join(" · ") || "Nothing seen";
+  b.addEventListener("click", () => openSitView(s.id));
+  return b;
+}
+
+// I'm down: the time is now, saved straight away; "Change" opens just the down time.
+async function markDown(id) {
+  const s = state.sits[id];
+  if (!s) return;
+  const ok = await saveSit({ id, property: s.property, set_at: s.set_at, down_at: new Date().toISOString(), down_source: "entered" });
+  if (!ok) return;
+  renderAll();
+  toast(`Down at ${fmtWhen(state.sits[id].down_at, false)}`, 0, false, { label: "Change", run: () => openSitForm(id, { down: true }) });
+  fetchSitWeather(state.sits[id]).then(renderAll);      // re-check the weather now the sit is over
+}
+
+// ----- time wheels -----
+// Each <input type="hidden" data-wheel> keeps an "HH:MM" value (or "" for no time) that the rest of the
+// code reads and writes as before; the wheel shows it and updates it. data-wheel: "required" always has a
+// time, "optional" starts as "+ Add time" with a Clear link, "pick" starts empty but can't be cleared.
+const ROW = 40;
+function timeWheel(input) {
+  const mode = input.dataset.wheel;
+  const wrap = document.createElement("div"); wrap.className = "twheel-wrap";
+  const box = document.createElement("button"); box.type = "button"; box.className = "newname tbox";
+  const wheel = document.createElement("div"); wheel.className = "twheel"; wheel.hidden = true;
+  const tools = document.createElement("div"); tools.className = "ttools"; tools.hidden = true;
+  const clear = document.createElement("button"); clear.type = "button"; clear.className = "linkish"; clear.textContent = "Clear";
+  const done = document.createElement("button"); done.type = "button"; done.className = "btn tdone"; done.textContent = "Done";
+  tools.append(...(mode === "optional" ? [clear] : []), done);
+  const cols = [Array.from({ length: 12 }, (_, i) => String(i + 1)), Array.from({ length: 60 }, (_, i) => pad2(i)), ["AM", "PM"]].map(items => {
+    const col = document.createElement("div"); col.className = "col";
+    items.forEach((t, i) => { const d = document.createElement("div"); d.textContent = t; d.addEventListener("click", () => col.scrollTo({ top: i * ROW, behavior: "smooth" })); col.append(d); });
+    wheel.append(col); return col;
+  });
+  wrap.append(box, wheel, tools);
+  input.after(wrap);
+  const native = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+  const idx = col => Math.max(0, Math.min(col.children.length - 1, Math.round(col.scrollTop / ROW)));
+  const mark = () => cols.forEach(col => [...col.children].forEach((d, i) => d.classList.toggle("on", i === idx(col))));
+  const label = v => { if (!v) return mode === "optional" ? "Add time" : "Pick a time"; const [h, m] = v.split(":").map(Number); return `${(h + 11) % 12 + 1}:${pad2(m)} ${h >= 12 ? "PM" : "AM"}`; };
+  let open = false;
+  const show = () => {
+    const v = native.get.call(input);
+    box.textContent = label(v);
+    box.classList.toggle("empty", !v); box.classList.toggle("open", open);
+    wheel.hidden = tools.hidden = !open;
+    if (!v || !open) return;
+    const [h, m] = v.split(":").map(Number);
+    // Positioning the wheel to its own value reads back the same value, so no guard is needed.
+    cols[0].scrollTop = ((h + 11) % 12) * ROW; cols[1].scrollTop = m * ROW; cols[2].scrollTop = (h >= 12 ? 1 : 0) * ROW;
+    mark();
+  };
+  const read = () => {
+    if (wheel.hidden) return;
+    const h12 = idx(cols[0]) + 1, m = idx(cols[1]), pm = idx(cols[2]) === 1;
+    native.set.call(input, `${pad2((h12 % 12) + (pm ? 12 : 0))}:${pad2(m)}`);
+    box.textContent = label(native.get.call(input));
+    mark();
+  };
+  cols.forEach(col => { let t; col.addEventListener("scroll", () => { mark(); clearTimeout(t); t = setTimeout(read, 90); }); });
+  // Code that sets .value (opening a form, defaults) moves the wheel too.
+  Object.defineProperty(input, "value", { get() { return native.get.call(this); }, set(v) { native.set.call(this, v || ""); show(); } });
+  const close = () => { open = false; show(); };
+  box.addEventListener("click", () => {
+    if (open) return close();
+    document.querySelectorAll("input[data-wheel]").forEach(i => i !== input && i._wheelClose?.());   // one open at a time
+    if (!native.get.call(input)) native.set.call(input, localTime(new Date()));
+    open = true; show();
+  });
+  done.addEventListener("click", close);
+  clear.addEventListener("click", () => { native.set.call(input, ""); close(); });
+  input._wheelClose = close;
+  // A wheel inside a hidden sheet can't scroll yet, so forms call refreshWheels() once they're shown.
+  input._wheelShow = show;
+  show();
+}
+document.querySelectorAll("input[data-wheel]").forEach(timeWheel);
+// Opening a form shows each time as its box, folded.
+const refreshWheels = root => root.querySelectorAll("input[data-wheel]").forEach(i => i._wheelClose?.());
+
+// ----- start / edit a sit -----
+function openSitForm(id = null, opts = {}) {
+  const s = id ? state.sits[id] : null, now = new Date();
+  const set = s ? new Date(s.set_at) : now;
+  const live = !s && !opts.past;                 // starting a sit now: set, planned down, wind; GPS is taken automatically
+  $("sitSheet").classList.toggle("live", live);
+  $("sitSheet").classList.toggle("downonly", !!opts.down);
+  $("sitSheet").classList.toggle("nogps", !live && !s?.lat);
+  sitForm = { id: id || crypto.randomUUID(), isNew: !s, live, wind: s?.wind_dir || null,
+    property: s?.property || state.property, propPicked: !!s,        // GPS may choose it until you tap one
+    gps: s?.lat ? { lat: s.lat, lon: s.lon, acc: s.gps_accuracy_m, at: s.gps_at || null } : null,
+    // Events are edited here with the rest of the sit and saved together.
+    events: id ? eventsOf(id).map(e => ({ ...e, members: (e.members || []).map(m => ({ ...m })) })) : [], keptIds: new Set(id ? eventsOf(id).map(e => e.id) : []) };
+  $("sitTitle").textContent = opts.down ? "Down time" : s ? "Edit sit" : opts.past ? "Log a past sit" : "Start a sit";
+  $("sitDate").value = localDate(set);
+  $("sitSet").value = opts.past && !s ? "" : localTime(set);
+  $("sitPlanTime").value = s?.planned_down_at ? localTime(new Date(s.planned_down_at)) : "";
+  if (opts.down && s && !s.down_at) {
+    // Default to now, unless the planned time has passed and nothing was logged after it.
+    const [est] = estimateDown(s);
+    $("sitDown").value = est && new Date(est) < now ? localTime(new Date(est)) : localTime(now);
+  } else $("sitDown").value = s?.down_at ? localTime(new Date(s.down_at)) : "";
+  $("sitSpot").value = s?.spot || "";
+  $("sitNotes").value = s?.notes || "";
+  $("sitSave").textContent = opts.down ? "Save" : s ? "Save" : opts.past ? "Save sit" : "Start Sit";
+  syncSitForm();
+  $("sitSheet").hidden = false;
+  refreshWheels($("sitSheet"));
+  $("sitSheet").querySelector(".sheet-body").scrollTop = 0;
+  if (live) startGps();
+}
+function syncSitForm() {
+  const pr = $("sitProp"); pr.replaceChildren();
+  PROPERTIES.forEach(name => {
+    const b = document.createElement("button"); b.type = "button"; b.role = "radio"; b.textContent = name;
+    b.setAttribute("aria-selected", String(sitForm.property === name));
+    b.addEventListener("click", () => { sitForm.property = name; sitForm.propPicked = true; syncSitForm(); });
+    pr.append(b);
+  });
+  compass($("sitWind"), WIND16.map(d => [d]), sitForm.wind, v => { sitForm.wind = v; syncSitForm(); }, [["variable", "Swirling / variable", "wide"]]);
+  if (!gpsWatch) showGpsInfo();
+  renderSitFormEvents();
+}
+function renderSitFormEvents() {
+  const list = $("sitEvents"); list.replaceChildren();
+  sitForm.events.slice().sort((a, b) => (a.at || "").localeCompare(b.at || "")).forEach(e => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "svevent"; b.append(eventText(e));
+    const sm = [eventWhen(e), e.note || ""].filter(Boolean).join(" · ");
+    if (sm) { const x = document.createElement("small"); x.textContent = sm; b.append(x); }
+    b.addEventListener("click", () => openEventForm(sitForm.id, e.id, null, true));
+    list.append(b);
+  });
+  const add = $("sitAddEv"); add.replaceChildren();
+  const b = document.createElement("button"); b.type = "button"; b.className = "btn ghost"; b.textContent = "Add Event";
+  b.addEventListener("click", () => openEventForm(sitForm.id, null, "deer", true));
+  add.append(b);
+}
+$("sitCancel").addEventListener("click", () => { stopGps(); sitForm = null; $("sitSheet").hidden = true; });
+
+// GPS for the tree: average readings for up to 45 s, weighting the more accurate ones, and note when the fix
+// was taken. Starts by itself when you start a sit; works with no signal.
+let gpsWatch = null, gpsReads = [], gpsTimer = null;
+function stopGps() {
+  if (gpsWatch != null) navigator.geolocation.clearWatch(gpsWatch);
+  clearTimeout(gpsTimer); gpsWatch = null;
+}
+function showGpsInfo(text) {
+  const el = $("sitGpsInfo"), g = sitForm?.gps;
+  if (text) return el.textContent = text;
+  if (!g) return el.textContent = "Not marked";
+  el.innerHTML = "";
+  const b = document.createElement("b"); b.textContent = `GPS fixed${g.at ? " " + fmtWhen(g.at, false) : ""}`;
+  el.append(b, document.createElement("br"), mgrsOf(g.lat, g.lon));
+}
+function finishGps() {
+  stopGps();
+  if (gpsReads.length && sitForm) {
+    let w = 0, lat = 0, lon = 0;
+    gpsReads.forEach(r => { const k = 1 / (r.acc * r.acc); w += k; lat += r.lat * k; lon += r.lon * k; });
+    const best = Math.min(...gpsReads.map(r => r.acc));
+    sitForm.gps = { lat: lat / w, lon: lon / w, acc: Math.max(best / Math.sqrt(gpsReads.length), best / 2), at: new Date().toISOString() };
+    const towns = Object.values(state.properties || {}).filter(t => t.weather_lat != null);
+    if (!sitForm.propPicked && towns.length) {
+      const d = t => (t.weather_lat - sitForm.gps.lat) ** 2 + ((t.weather_lon - sitForm.gps.lon) * Math.cos(sitForm.gps.lat * Math.PI / 180)) ** 2;
+      sitForm.property = towns.reduce((a, b) => d(a) <= d(b) ? a : b).name;
+      syncSitForm();
+    }
+  }
+  showGpsInfo(gpsReads.length || sitForm?.gps ? null : "No GPS fix this time");
+}
+function startGps() {
+  if (!navigator.geolocation) return showGpsInfo("This phone won't share its location");
+  stopGps();
+  gpsReads = [];
+  const started = Date.now();
+  gpsWatch = navigator.geolocation.watchPosition(p => {
+    gpsReads.push({ lat: p.coords.latitude, lon: p.coords.longitude, acc: Math.max(p.coords.accuracy, 1) });
+    showGpsInfo("Getting GPS… hold still");
+    if (gpsReads.length >= 20 || Date.now() - started > 45000) finishGps();
+  }, err => { stopGps(); showGpsInfo(err.code === 1 ? "Location is off for this site. Allow it in Settings." : "No GPS fix this time"); },
+  { enableHighAccuracy: true, maximumAge: 0, timeout: 45000 });
+  showGpsInfo("Getting GPS… hold still");
+  gpsTimer = setTimeout(() => { if (gpsWatch != null) finishGps(); }, 46000);
+}
+
+$("sitSave").addEventListener("click", async () => {
+  if (gpsWatch != null) finishGps();             // saving mid-read keeps the readings so far
+  const f = sitForm, date = $("sitDate").value;
+  const set = fromLocal(date, $("sitSet").value);
+  if (!set) { $("sitSet").focus(); return toast("When were you set?"); }
+  if (f.live && !$("sitPlanTime").value) { $("sitPlanTime").focus(); return toast("When do you plan to get down?"); }
+  let down = fromLocal(date, $("sitDown").value);
+  if (down && down < set) down = new Date(down.getTime() + 24 * 3600e3);    // got down after midnight
+  let planned = fromLocal(date, $("sitPlanTime").value);
+  if (planned && planned < set) planned = new Date(planned.getTime() + 24 * 3600e3);
+  const prev = state.sits[f.id];
+  const row = { id: f.id, property: f.property, set_at: set.toISOString(),
+    planned_down_at: planned?.toISOString() || null, down_at: down?.toISOString() || null,
+    down_source: down ? "entered" : null, wind_dir: f.wind, spot: $("sitSpot").value.trim() || null,
+    notes: $("sitNotes").value.trim() || null, lat: f.gps?.lat ?? null, lon: f.gps?.lon ?? null, gps_accuracy_m: f.gps?.acc ?? null, gps_at: f.gps?.at ?? null };
+  stopGps();
+  $("sitSave").disabled = true;
+  const ok = await saveSit(row);
+  if (ok) {
+    const events = f.events.map(e => ({ ...e, sit_id: f.id }));
+    const gone = [...f.keptIds].filter(id => !events.some(e => e.id === id));
+    const err = await saveEvents(f.id, events, gone);
+    if (err) toast(friendly(err));
+    else state.sitEvents[f.id] = events;
+  }
+  $("sitSave").disabled = false;
+  if (!ok) return;
+  sitForm = null; $("sitSheet").hidden = true;
+  if (row.property !== state.property) setProperty(row.property);
+  toast(down ? "Sit saved" : "You're set. Good luck.");
+  if (f.live) openSitView(row.id);              // the sit's page is where events get logged
+  renderAll();
+  await fetchSitWeather(state.sits[row.id]);
+  renderAll();
+});
+
+// ----- events -----
+function openEventForm(sitId, eventId = null, kind = null, draft = false) {
+  const pool = draft ? sitForm.events : (state.sitEvents[sitId] || []);
+  const e = eventId ? pool.find(x => x.id === eventId) : null;
+  const type = e ? e.kind : typeOf(kind || "deer");
+  const ms = e?.members || [];
+  const animalM = ms.find(m => m.kind === "animal");
+  const animal = animalM ? (ANIMALS.some(([a]) => a === animalM.species) ? animalM.species : "other") : (ANIMALS.some(([a]) => a === kind) ? kind : "turkey");
+  eventForm = { sitId, draft, type, id: e?.id || crypto.randomUUID(), isNew: !e,
+    doe: ms.filter(m => m.kind === "doe").reduce((n, m) => n + m.count, 0) || (kind === "doe" ? 1 : 0),
+    fawn: ms.filter(m => m.kind === "fawn").reduce((n, m) => n + m.count, 0) || (kind === "fawn" ? 1 : 0),
+    bucks: ms.filter(m => m.kind === "buck").map(m => ({ buck_id: m.buck_id || "", buck_note: m.buck_note || "" })),
+    animal, count: animalM?.count || 1,
+    from: e?.from_dir || null, to: e?.to_dir || null, wind: e?.wind_dir || null, how: e?.ended_how || null };
+  if (!e && kind === "buck") eventForm.bucks.push({ buck_id: "", buck_note: "" });
+  $("evEnd").value = e?.ended_at ? localTime(new Date(e.ended_at)) : "";
+  $("eventTitle").textContent = e ? "Edit event" : "Add event";
+  $("evSpecies").value = animalM && animal === "other" ? (animalM.species || "") : "";
+  $("evYards").value = e?.distance_yd ?? "";
+  // New events default to now only while you're actually in the tree; a past sit starts blank.
+  const sit = state.sits[sitId], live = draft ? !$("sitDown").value && $("sitDate").value === localDate(new Date()) : sit && !sit.down_at;
+  $("evTime").value = e ? (e.at ? localTime(new Date(e.at)) : "") : (live ? localTime(new Date()) : "");
+  $("evNote").value = e?.note || "";
+  $("evNote").placeholder = type === "deer" ? "What they did: bedded, stood up, headed east…" : "Anything worth noting";
+  $("evDelete").hidden = !e;
+  $("evSave").textContent = e ? "Save" : "Add";
+  syncEventForm();
+  $("eventSheet").hidden = false;
+  refreshWheels($("eventSheet"));
+  $("eventSheet").querySelector(".sheet-body").scrollTop = 0;
+}
+function counterRow(label, value, onChange) {
+  const row = document.createElement("div");
+  row.className = "countrow";
+  row.innerHTML = `<span class="label"></span><button class="btn ghost" type="button" aria-label="Fewer">−</button><b></b><button class="btn ghost" type="button" aria-label="More">+</button>`;
+  row.querySelector(".label").textContent = label;
+  row.querySelector("b").textContent = value;
+  const [minus, plus] = row.querySelectorAll("button");
+  minus.disabled = value <= 0;
+  minus.addEventListener("click", () => onChange(Math.max(0, value - 1)));
+  plus.addEventListener("click", () => onChange(Math.min(50, value + 1)));
+  return row;
+}
+function syncEventForm() {
+  const f = eventForm, kinds = $("evKind"); kinds.replaceChildren();
+  // Deer | Other animal | Wind change. An event already saved keeps its type.
+  const tabs = $("evType"); tabs.replaceChildren();
+  [["deer", "Deer"], ["animal", "Other animal"], ["wind", "Wind change"]].forEach(([v, l]) => {
+    const b = document.createElement("button"); b.type = "button"; b.role = "tab"; b.textContent = l;
+    b.setAttribute("aria-selected", String(f.type === v));
+    b.addEventListener("click", () => { f.type = v; syncEventForm(); });
+    tabs.append(b);
+  });
+  tabs.hidden = !f.isNew;
+  $("evNote").placeholder = f.type === "deer" ? "What they did: bedded, stood up, headed east…" : "Anything worth noting";
+  // Another animal: pick which one (Other asks you to type it).
+  if (f.type === "animal") ANIMALS.forEach(([v, l]) => {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = l;
+    b.setAttribute("aria-pressed", String(f.animal === v));
+    b.addEventListener("click", () => { f.animal = v; syncEventForm(); });
+    kinds.append(b);
+  });
+  kinds.hidden = f.type !== "animal";
+  $("evSpecies").hidden = !(f.type === "animal" && f.animal === "other");
+  const wind = f.type === "wind";
+  $("evAnimal").hidden = wind; $("evWindWrap").hidden = !wind;
+  $("eventSheet").querySelectorAll(".evend").forEach(el => { el.hidden = wind; });
+  const how = $("evHow"); how.replaceChildren();
+  ENDINGS.forEach(([v, l]) => {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = l;
+    b.setAttribute("aria-pressed", String(f.how === v));
+    b.addEventListener("click", () => { f.how = f.how === v ? null : v; syncEventForm(); });
+    how.append(b);
+  });
+
+  // Counts: doe / fawn / buck for a deer sighting (each buck gets his own row), or one count for an animal.
+  const counts = $("evCounts"); counts.replaceChildren();
+  if (f.type === "deer") {
+    counts.append(counterRow("Doe", f.doe, n => { f.doe = n; syncEventForm(); }),
+      counterRow("Fawn", f.fawn, n => { f.fawn = n; syncEventForm(); }),
+      counterRow("Buck", f.bucks.length, n => {
+        while (f.bucks.length < n) f.bucks.push({ buck_id: "", buck_note: "" });
+        f.bucks.length = n; syncEventForm();
+      }));
+  } else if (f.type === "animal") counts.append(counterRow("How many", f.count, n => { f.count = Math.max(1, n); syncEventForm(); }));
+  const bucks = $("evBucks"); bucks.replaceChildren();
+  if (f.type === "deer") f.bucks.forEach((b, i) => {
+    const row = document.createElement("div");
+    row.className = "buckrow";
+    const sel = document.createElement("select"); sel.className = "newname";
+    sel.append(new Option(f.bucks.length > 1 ? `Buck ${i + 1}: not named` : "Not one we've named", ""));
+    bucksHere().sort((x, y) => x[1].name.localeCompare(y[1].name)).forEach(([id, bk]) => sel.append(new Option(bk.name, id)));
+    sel.value = b.buck_id;
+    sel.addEventListener("change", () => { b.buck_id = sel.value; });
+    const note = document.createElement("input"); note.className = "newname"; note.type = "text"; note.maxLength = 60;
+    note.placeholder = "or describe: spike, small 6…"; note.value = b.buck_note;
+    note.addEventListener("input", () => { b.buck_note = note.value; });
+    row.append(sel, note);
+    bucks.append(row);
+  });
+  compass($("evFrom"), DIR8.map(d => [d]), f.from, v => { f.from = v; syncEventForm(); });
+  compass($("evTo"), DIR8.map(d => [d]), f.to, v => { f.to = v; syncEventForm(); });
+  compass($("evWind"), WIND16.map(d => [d]), f.wind, v => { f.wind = v; syncEventForm(); }, [["variable", "Swirling / variable", "wide"]]);
+}
+$("evCancel").addEventListener("click", () => { eventForm = null; $("eventSheet").hidden = true; });
+// Yards: typed digits only (no spinner or scroll-to-change); the phone shows its number pad.
+$("evYards").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, ""); });
+$("evSave").addEventListener("click", async () => {
+  const f = eventForm, sit = state.sits[f.sitId];
+  const day = f.draft ? $("sitDate").value : localDate(new Date(sit.set_at));
+  const setAt = f.draft ? (fromLocal(day, $("sitSet").value) || new Date(`${day}T00:00`)) : new Date(sit.set_at);
+  let at = fromLocal(day, $("evTime").value);
+  if (at && at < setAt - 3600e3) at = new Date(at.getTime() + 24 * 3600e3);
+  let ended = fromLocal(day, $("evEnd").value);
+  if (ended && ended < (at || setAt) - 3600e3) ended = new Date(ended.getTime() + 24 * 3600e3);
+  const wind = f.type === "wind";
+  if (wind && !f.wind) return toast("Which way is it blowing now?");
+  let members = [];
+  if (f.type === "deer") {
+    members = [f.doe && { kind: "doe", count: f.doe }, f.fawn && { kind: "fawn", count: f.fawn },
+      ...f.bucks.map(b => ({ kind: "buck", count: 1, buck_id: b.buck_id || null, buck_note: b.buck_note.trim() || null }))].filter(Boolean);
+    if (!members.length) return toast("How many deer? Tap + on doe, fawn or buck.");
+  } else if (f.type === "animal") {
+    const species = f.animal === "other" ? $("evSpecies").value.trim() : f.animal;
+    if (!species) { $("evSpecies").focus(); return toast("What animal was it?"); }
+    members = [{ kind: "animal", species, count: f.count }];
+  }
+  const ev = { id: f.id, sit_id: f.sitId, at: at?.toISOString() || null, kind: f.type,
+    from_dir: wind ? null : f.from, to_dir: wind ? null : f.to,
+    distance_yd: wind || !$("evYards").value.replace(/\D/g, "") ? null : Math.min(1000, +$("evYards").value.replace(/\D/g, "")),
+    wind_dir: wind ? f.wind : null, note: $("evNote").value.trim() || null,
+    ended_at: wind ? null : ended?.toISOString() || null, ended_how: wind ? null : f.how, members };
+  if (f.draft) {                       // part of the sit form; saved with the sit
+    sitForm.events = [...sitForm.events.filter(e => e.id !== ev.id), ev];
+    eventForm = null; $("eventSheet").hidden = true;
+    return renderSitFormEvents();
+  }
+  const err = await saveEvents(f.sitId, [ev]);
+  if (err) return toast(friendly(err));
+  state.sitEvents[f.sitId] = [...(state.sitEvents[f.sitId] || []).filter(e => e.id !== ev.id), ev];
+  eventForm = null; $("eventSheet").hidden = true;
+  if (members.some(m => m.buck_id)) Sound.play("knownBuck");
+  toast(wind ? `Wind now ${ev.wind_dir}` : `Logged ${whoText(ev)}`);
+  renderAll();
+});
+$("evDelete").addEventListener("click", async () => {
+  const f = eventForm;
+  if (f.draft) {
+    sitForm.events = sitForm.events.filter(e => e.id !== f.id);
+    eventForm = null; $("eventSheet").hidden = true;
+    return renderSitFormEvents();
+  }
+  const { error } = await sb.from("sit_events").delete().eq("id", f.id);
+  if (error) return toast(friendly(error));
+  state.sitEvents[f.sitId] = (state.sitEvents[f.sitId] || []).filter(e => e.id !== f.id);
+  eventForm = null; $("eventSheet").hidden = true;
+  renderAll();
+});
+
+// ----- one sit -----
+function openSitView(id) {
+  sitViewId = id;
+  // Details start folded every time a sit opens; only an explicit tap opens them.
+  $("svDetails").hidden = true; $("svMore").textContent = "Details ▾"; $("svMore").setAttribute("aria-expanded", "false");
+  $("sitView").hidden = false; renderSitView(); $("sitView").querySelector(".sheet-body").scrollTop = 0;
+}
+function closeSitView() { sitViewId = null; $("sitView").hidden = true; }
+function renderSitView() {
+  const s = state.sits?.[sitViewId];
+  if (!s) return closeSitView();
+  const mine = canChangeSit(s), live = !s.down_at;
+  $("svTitle").textContent = `${fmtDay(s.set_at)} · ${sitPart(s)}${s.spot ? " · " + s.spot : ""}`;
+  // One line of the essentials; everything else is under Details.
+  const down = s.down_at ? `down ${fmtWhen(s.down_at, false)}${s.down_source && s.down_source !== "entered" ? " (est.)" : ""}`
+    : s.planned_down_at ? `planned down ${fmtWhen(s.planned_down_at, false)}` : "in the tree";
+  $("svMeta").textContent = [s.hunter_name || "Someone", s.property, `set ${fmtWhen(s.set_at, false)}`, down, s.wind_dir ? `wind ${s.wind_dir}` : ""].filter(Boolean).join(" · ");
+
+  // Events, newest last; tap one for its own page.
+  const ev = $("svEvents"); ev.replaceChildren();
+  const evs = eventsOf(s.id);
+  if (!evs.length) {
+    const e = document.createElement("div"); e.className = "empty";
+    e.textContent = live ? "Nothing yet. Tap Add Event when you see something or the wind shifts." : "Nothing logged on this sit.";
+    ev.append(e);
+  }
+  evs.forEach(e => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "svevent";
+    b.append(eventText(e));
+    const sm = document.createElement("small");
+    sm.textContent = [eventWhen(e), e.note || ""].filter(Boolean).join(" · ");
+    if (sm.textContent) b.append(sm);
+    b.addEventListener("click", () => openEventView(s.id, e.id));
+    ev.append(b);
+  });
+
+  // Details: your wind beside the service's, temperature, GPS, hourly weather, and sit-level actions.
+  const wxSet = weatherAt(s.id, s.set_at);
+  const town = state.properties?.[s.property]?.weather_label;
+  const facts = [
+    ["Set", fmtWhen(s.set_at, false)],
+    ["Down", s.down_at ? fmtWhen(s.down_at, false) + (s.down_source && s.down_source !== "entered" ? ` · estimated (${s.down_source === "planned" ? "planned time" : s.down_source === "last_event" ? "last event" : "auto-closed"})` : "")
+      : `still in the tree${s.planned_down_at ? ` · planned ${fmtWhen(s.planned_down_at, false)}` : ""}`],
+    ["Wind (you)", s.wind_dir || "—"],
+    ["Wind (weather service)", wxSet ? `${degToCompass(wxSet.wind_from_deg)} ${Math.round(wxSet.wind_mph)} mph` : "—"],
+    ["Where", s.lat != null ? `${mgrsOf(s.lat, s.lon)}${s.gps_at ? ` · fixed ${fmtWhen(s.gps_at, false)}` : ""}` : "not marked"],
+    ["Notes", s.notes || "—"],
+  ];
+  const dl = $("svFacts"); dl.replaceChildren();
+  facts.forEach(([k, v]) => { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; dl.append(dt, dd); });
+  const rows = [];                                   // hourly weather is kept for analysis, not shown
+  $("svWeatherWrap").hidden = true;
+  $("svWeatherLabel").textContent = `Weather service, by the hour${town ? ` · ${town}` : ""}`;
+  const wx = $("svWeather"); wx.replaceChildren();
+  rows.slice().sort((a, b) => a.hour.localeCompare(b.hour)).forEach(r => {
+    [fmtWhen(r.hour, false), `${Math.round(r.temp_f)}°F`, `${degToCompass(r.wind_from_deg)} ${Math.round(r.wind_mph)} mph`, `${Math.round(r.cloud_pct)}% cloud`]
+      .forEach((v, i) => { const c = document.createElement(i === 0 ? "b" : "span"); c.textContent = v; wx.append(c); });
+  });
+  const acts = $("svActs"); acts.replaceChildren();
+  const btn = (box, label, cls, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn " + cls; b.textContent = label; b.addEventListener("click", fn); box.append(b); };
+  if (mine) {
+    if (s.down_at && s.down_source && s.down_source !== "entered") btn(acts, "Confirm down time", "ghost", async () => { await saveSit({ id: s.id, property: s.property, set_at: s.set_at, down_source: "entered" }); renderAll(); });
+    btn(acts, "Edit sit", "ghost", () => openSitForm(s.id));
+    btn(acts, "Delete sit", "danger", () => confirmBox($("svConfirm"), "Delete this sit and everything logged on it?", "Yes, delete it", async () => {
+      const { error } = await sb.from("sits").delete().eq("id", s.id);
+      if (error) return toast(friendly(error));
+      delete state.sits[s.id]; closeSitView(); renderAll(); toast("Sit deleted");
+    }, { safeFirst: true }));
+    if (!s.weather_at || (s.down_at && s.weather_at < s.down_at)) fetchSitWeather(s).then(() => { if (sitViewId === s.id) renderSitView(); });
+  }
+
+  // The bottom bar: Exit · I'm down · Add Event (only the hunter can add or end).
+  const foot = $("svFoot"); foot.replaceChildren();
+  btn(foot, "Exit", "ghost", closeSitView);
+  if (mine && live) btn(foot, "I'm down", "ghost", () => markDown(s.id));
+  if (mine) btn(foot, "Add Event", "", () => openEventForm(s.id, null, "deer"));
+}
+$("svMore").addEventListener("click", () => {
+  const open = $("svDetails").hidden;
+  $("svDetails").hidden = !open;
+  $("svMore").textContent = open ? "Details ▴" : "Details ▾";
+  $("svMore").setAttribute("aria-expanded", String(open));
+});
+
+// ----- one event, full page -----
+let eventViewAt = null;
+function openEventView(sitId, eventId) { eventViewAt = { sitId, eventId }; renderEventView(); $("eventView").hidden = false; }
+function closeEventView() { eventViewAt = null; $("eventView").hidden = true; }
+function renderEventView() {
+  if (!eventViewAt) return;
+  const { sitId, eventId } = eventViewAt, s = state.sits[sitId];
+  const e = (state.sitEvents[sitId] || []).find(x => x.id === eventId);
+  if (!s || !e) return closeEventView();
+  $("evvTitle").textContent = e.kind === "wind" ? `Wind now ${e.wind_dir}` : whoText(e);
+  $("evvMeta").textContent = `${fmtDay(s.set_at)} · ${sitPart(s)}${s.spot ? " · " + s.spot : ""} · ${s.hunter_name || "Someone"}`;
+  const facts = e.kind === "wind"
+    ? [["When", eventWhen(e) || "—"], ["Wind", e.wind_dir], ["Note", e.note || "—"]]
+    : [["When", eventWhen(e) || "—"],
+       ...(e.members || []).map(m => [m.kind === "buck" ? "Buck" : m.kind === "animal" ? (m.species || "Animal") : m.kind === "doe" ? "Doe" : "Fawn",
+         m.kind === "buck" ? (state.bucks[m.buck_id]?.name || m.buck_note || "not named") : String(m.count)]),
+       ["Came from", e.from_dir || "—"], ["Headed", e.to_dir || "—"], ["Distance", e.distance_yd != null ? `${e.distance_yd} yd` : "—"],
+       ["How it ended", e.ended_how ? endingLabel(e.ended_how) : "—"], ["Note", e.note || "—"]];
+  const dl = $("evvFacts"); dl.replaceChildren();
+  facts.forEach(([k, v]) => { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; dl.append(dt, dd); });
+  $("evvEdit").hidden = !canChangeSit(s);
+}
+$("evvBack").addEventListener("click", closeEventView);
+$("evvEdit").addEventListener("click", () => { const { sitId, eventId } = eventViewAt; openEventForm(sitId, eventId); });
+
+// ---------- home ----------
+// Where the app opens: pick a section. Only the photo sections load the photo list.
+function renderHome() {
+  const wrap = $("home");
+  const open = Object.values(state.sits || {}).find(s => !s.down_at && s.hunter === state.myUid);
+  const tiles = [
+    ["sits", "Sits", open ? `In the tree since ${fmtWhen(open.set_at, false)}${open.spot ? " · " + open.spot : ""}` : "Start a sit, or log one from your notes", "big sits" + (open ? " live" : "")],
+    ["sort", "Sort", "Keeper or pass", "sort"],
+    ["gallery", "Gallery", "Photos waiting for a name", ""],
+    ["disputes", "Disputes", "Settle the calls", ""],
+    ["roster", "Roster", "The named bucks", ""],
+    ["crew", "Crew", "Leaderboard", ""],
+  ];
+  wrap.className = "home";
+  wrap.replaceChildren(...tiles.map(([tab, name, note, cls]) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "htile " + cls;
+    b.innerHTML = "<b></b><small></small>";
+    b.querySelector("b").textContent = name;
+    b.querySelector("small").textContent = note + (PHOTO_TABS.includes(tab) && !state.photosLoaded ? " · loads photos" : "");
+    b.addEventListener("click", () => showTab(tab));
+    return b;
+  }));
+}
+$("homeLink").addEventListener("click", () => showTab("home"));
+
 // ---------- tabs & keys ----------
 function showTab(name) {
+  if (PHOTO_TABS.includes(name) && !state.photosLoaded) ensurePhotos().then(() => { if (state.photosLoaded && !$("view-" + name).hidden) renderAll(); });
   document.querySelectorAll(".tabbar button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
   document.querySelectorAll(".view").forEach(v => v.hidden = v.id !== "view-" + name);
   if (name === "roster") renderRoster();
   if (name === "gallery") renderGallery();
+  if (name === "sits") renderSits();
+  if (name === "home") renderHome();
   else if (gallerySel) exitGallerySelect();   // leaving the Gallery ends select mode
   if (name === "crew") renderCrew();
   if (name === "disputes") renderDisputes();
@@ -2770,13 +3737,9 @@ let channel = null, refreshTimer = null;
 async function start(myName) {
   state.me = nameKey(myName);
   state.myUid = (await sb.auth.getSession()).data.session?.user.id ?? null;
-  try {
-    await loadCards();
-  } catch (e) {
-    return showGate(friendly(e));
-  }
-  renderedTop = null;
+  document.body.classList.toggle("nophotos", !state.photosLoaded);
   await sync();
+  if (!$("view-home").hidden) renderHome();
   if (!channel) {
     const live = table => payload => onLive(table, payload);
     channel = sb.channel("buckbook")
@@ -2785,13 +3748,11 @@ async function start(myName) {
       .on("postgres_changes", { event: "*", schema: "public", table: "bucks" }, live("bucks"))
       .on("postgres_changes", { event: "*", schema: "public", table: "crew" }, live("crew"))
       .on("postgres_changes", { event: "*", schema: "public", table: "merge_proposals" }, live("merge_proposals"))
+      .on("postgres_changes", { event: "*", schema: "public", table: "sits" }, live("sits"))
+      .on("postgres_changes", { event: "*", schema: "public", table: "sit_events" }, live("sit_events"))
+      .on("postgres_changes", { event: "*", schema: "public", table: "sit_event_members" }, live("sit_event_members"))
       .subscribe();
   }
-  // Signed photo links expire; refresh them well before they do.
-  clearInterval(refreshTimer);
-  refreshTimer = setInterval(async () => {
-    try { await loadCards(); renderedTop = null; renderAll(); } catch {}
-  }, (URL_TTL - 30 * 60) * 1000);
 }
 // Phones pause the live connection in the background; after more than a minute away, reload once.
 let hiddenAt = 0;

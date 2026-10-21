@@ -29,8 +29,19 @@ def folder_for(camera_name):
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
-def pull_camera(token, cam, count, with_images, since=None):
-    out_dir = ROOT / "data" / "photos" / folder_for(cam["name"])
+def existing_folders():
+    """cameraId -> folder it already lives in, so a renamed camera keeps its folder."""
+    found = {}
+    for records in (ROOT / "data" / "photos").glob("*/records.json"):
+        recs = json.loads(records.read_text())
+        if recs:
+            found.setdefault(recs[0]["cameraId"], records.parent.name)
+    return found
+
+
+def pull_camera(token, cam, count, with_images, since=None, folders=None):
+    # Folders follow the camera's permanent ID; only a camera we've never pulled gets a new one from its name.
+    out_dir = ROOT / "data" / "photos" / ((folders or {}).get(cam["cameraId"]) or folder_for(cam["name"]))
     img_dir = out_dir / "images"
     img_dir.mkdir(parents=True, exist_ok=True)
     records_path = out_dir / "records.json"
@@ -109,8 +120,9 @@ def main():
     if not targets:
         raise SystemExit(f"No camera named {camera_name!r}. Have: {[c.get('name') for c in cameras]}")
 
+    folders = existing_folders()
     for cam in targets:
-        pull_camera(token, cam, count, with_images, since)
+        pull_camera(token, cam, count, with_images, since, folders)
 
 
 if __name__ == "__main__":

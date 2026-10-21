@@ -63,7 +63,7 @@ Git-ignored on purpose: `.env` (secrets), `data/` (photos, records with GPS and 
    SUPABASE_SECRET_KEY=sb_secret_...
    ```
    The secret key bypasses all database rules. It stays in `.env` and is only used by the Mac scripts.
-4. **Supabase**: run `supabase/schema.sql`, then `002`–`008` in order in the SQL Editor. In Authentication settings, turn **off** "Allow new users to sign up" and "Allow anonymous sign-ins". Crew accounts are created with `crew_admin.py`.
+4. **Supabase**: run `supabase/schema.sql`, then `002`–`012` in order in the SQL Editor. After `010`, set each property's weather town in the `properties` table (kept out of the repo). In Authentication settings, turn **off** "Allow new users to sign up" and "Allow anonymous sign-ins". Crew accounts are created with `crew_admin.py`.
 5. **GitHub Pages**: Settings → Pages → Source: GitHub Actions. Pushing `web/` publishes the app.
 
 ## Everyday commands
@@ -95,6 +95,11 @@ Upload new cards. It always shows the size against the free 1 GB and asks first;
 .venv/bin/python -m buckbook.supabase_sync push --skip="North Valley 300,Poll plot"
 ```
 
+Drop photos the crew passed on (two passes, or one pass 14+ days old, and no keeper). Shows what goes and asks first:
+```bash
+.venv/bin/python -m buckbook.supabase_sync prune
+```
+
 Back up crew, bucks, votes and consensus to `data/backups/`:
 ```bash
 .venv/bin/python -m buckbook.supabase_sync backup
@@ -117,18 +122,12 @@ To add a read-only member, run `add "Their Name"` first, then `type "Their Name"
 
 ### Camera folders and properties
 
-| Camera (Reveal name) | Folder | Property |
-|---|---|---|
-| #1 | `cam1` | Stoddard |
-| #2 | `cam2` | Stoddard |
-| #8 | `cam8` | Stoddard |
-| East valley food plot | `east-valley-food-plot` | Stoddard |
-| North Valley 300 | `north-valley-300` | Stoddard |
-| Poll plot | `poll-plot` | Stoddard |
-| South pine opening water whole | `south-pine-opening-water-whole` | Stoddard |
-| #3 – #6 (northridge) | `cam3` – `cam6` | North Ridge |
+Cameras get renamed and moved between properties, so neither the name nor Reveal's location label is trusted:
 
-`barn food plot` and `East Valley Plot` are ignored (no photos this season). #2 and #8 share bursts (`SHARED_BURSTS` in `import_deck.py`).
+- **Folders follow the camera's permanent ID** (`reveal_pull.py`). A renamed camera keeps its folder; only a camera never pulled before gets a new one, named from its first name (`#8` → `cam8`, `Poll plot` → `poll-plot`, which is now called Rock Wall).
+- **Each photo's property comes from its own GPS** (`import_deck.py`): whichever property's existing photos it sits nearest. A camera moved mid-season has its earlier photos on the old property and later ones on the new. Cameras that send no GPS (North Valley 300, Rock Wall, South pine) use the property passed on the command line.
+
+`barn food plot` and `East Valley Plot` are ignored. #2 and #8 share bursts (`SHARED_BURSTS` in `import_deck.py`) only while they're on the same property.
 
 ## The data model
 
@@ -138,15 +137,20 @@ To add a read-only member, run `add "Their Name"` first, then `type "Their Name"
 - **crew**: who may sign in. **comments**: a thread per photo for talking disputes out.
 - **card_consensus** (view): per photo. Buck-or-not by head count; which buck weighted by confidence. Status is `single`, `agreed`, `leaning` (a clear two-thirds winner) or `disputed`.
 - **rater_pairs** / **rater_scores** (views): how often each member agrees with the others on shared photos.
+- **card_drop** (view): photos ready to drop: two passes, or one pass 14+ days old, and no keeper vote.
+- **sits**: one time in one tree: hunter, property, set / planned down / down times, the wind the hunter felt, GPS averaged on the phone. **sit_events**: what happened: a deer group, another animal, or a wind change, with when, from → headed, yards, and when and how it ended. **sit_event_members**: who was in a group (doe and fawn counts, each buck named or described, other animals by species). **sit_weather**: the weather service's hourly values at the property's town, kept beside the hunter's wind, never instead of it. Admins and users see sits; viewers don't.
 
 Rules the database enforces: only crew can read or write anything; viewers can't change anything; merging two bucks needs both namers to agree, or an admin; votes, bucks and comments are stamped with the signed-in member; a vote can't name a buck from the other property; merges stay within one property.
 
 ## The app
 
+- **Home** is where it opens. Only the photo sections (Sort, Gallery, Disputes, Roster, Crew) load the photo list, the first time one is opened, so Sits works on a weak signal.
 - **Property switch** at the top: every screen works inside the chosen property.
+- **Sits**: Start a sit (set, planned down, wind; GPS taken automatically), then Add Event for deer, other animals or a wind change, and I'm down. Past sits can be logged from notes. Each buck's page lists the sits he was seen on.
 - **Sort**: swipe right (buck) or left (not). Then "Seen him before?": pick from the book, **Compare** (his photos full screen with yours as an inset; swipe through him, tap the inset to swap), name a new buck, or **Can't ID him**.
 - **Disputes**: called out the moment they happen, with who disagrees, a switch button, and a comment thread. The deck skips settled photos and puts disputed ones first.
-- **Roster**: photo grid of bucks, a **Name them** queue for buck photos nobody has named, and an **Unidentified** pile. Buck profiles support edit, merge, delete, move a photo, and make cover.
+- **Gallery**: photos nobody has named, one camera at a time, grouped by burst; Select (or long-press) to tag or pass several at once.
+- **Roster**: photo grid of bucks, and a **Name them** queue for buck photos nobody has named (can't-ID ones included). Buck profiles support edit, merge, delete, move a photo, and make cover.
 - **Crew**: leaderboard with each member's agreement rate.
 
 ## Limits and gotchas
