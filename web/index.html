@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E110D">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Buck Book</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -60,14 +59,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 
 /* ---------- shell: top bar / view / tab bar ---------- */
 .app { height: 100dvh; max-width: 640px; margin: 0 auto; display: grid; grid-template-rows: auto 1fr auto; }
-/* iOS 26 Home Screen apps report the screen short by the status bar's height (WebKit bug 301108), which left a
-   blank band under the tab bar. In the installed app, size the shell and every full-screen layer to the whole
-   screen instead. Safari tabs keep 100dvh, which is right there. */
-@media (display-mode: standalone) {
-  .app { height: 100lvh; }
-  .sheet, .gate, .viewer { bottom: auto; height: 100lvh; }
-}
-.topbar { padding: calc(var(--top) + 14px) 16px 0; }
+/* The Home Screen app uses iOS's normal status bar (no apple-mobile-web-app-status-bar-style meta): with
+   "black-translucent", iOS 26 blurs the strip under the status bar and reports the screen short by its height
+   (WebKit bug 301108), which blurred the header and left a band under the tab bar. Below a normal status bar
+   the page gets the real screen, so 100dvh fits. */
+.topbar { padding: calc(var(--top) + 8px) 16px 0; }
 .topbar-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 36px; }
 .wordmark { font: 800 22px/1 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 0; }
 .wordmark span { color: var(--blaze); }
