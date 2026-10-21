@@ -368,9 +368,9 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 #sitSheet, #eventSheet { z-index: 22; }   /* opened from a sit's page, so they sit above it */
 .sitsheet .sheet-body { padding-top: calc(var(--top) + 20px); }
 .sitsheet label { display: block; }
-/* Open Reveal on the sit page: outlined so it doesn't read as one of the sit's own actions. */
+/* Open Reveal on the sit page: in Reveal's own green and black, so it reads as "go to the Reveal app", not a sit action. */
 .revealbtn { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 16px; min-height: 52px;
-  border: 2px solid var(--blaze); border-radius: 999px; color: var(--blaze); font: 600 17px var(--body); text-decoration: none; }
+  background: #88d306; border-radius: 999px; color: #0b0c0a; font: 700 17px var(--body); text-decoration: none; }
 .revealbtn svg { width: 22px; height: 22px; flex: none; }
 .sitsheet .label small { text-transform: none; letter-spacing: 0; color: var(--muted); }
 .sitgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
