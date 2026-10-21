@@ -368,6 +368,10 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 #sitSheet, #eventSheet { z-index: 22; }   /* opened from a sit's page, so they sit above it */
 .sitsheet .sheet-body { padding-top: calc(var(--top) + 20px); }
 .sitsheet label { display: block; }
+/* Open Reveal on the sit page: outlined so it doesn't read as one of the sit's own actions. */
+.revealbtn { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 16px; min-height: 52px;
+  border: 2px solid var(--blaze); border-radius: 999px; color: var(--blaze); font: 600 17px var(--body); text-decoration: none; }
+.revealbtn svg { width: 22px; height: 22px; flex: none; }
 .sitsheet .label small { text-transform: none; letter-spacing: 0; color: var(--muted); }
 .sitgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .sitgrid > label:has(#sitDate) { grid-column: 1 / -1; }   /* the day gets its own row */
@@ -813,6 +817,7 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
   <div class="sheet-body">
     <h2 id="svTitle"></h2>
     <p class="note" id="svMeta"></p>
+    <a class="revealbtn" id="svReveal" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h3l2-3h8l2 3h3v11H3z"/><circle cx="12" cy="13" r="4"/></svg>Open Reveal</a>
     <div class="svevents" id="svEvents"></div>
     <button class="linkish svmore" id="svMore" type="button" aria-expanded="false">Details ▾</button>
     <div id="svDetails" hidden>
@@ -3427,6 +3432,9 @@ function renderSitView() {
     : s.planned_down_at ? `planned down ${fmtWhen(s.planned_down_at, false)}` : "in the tree";
   $("svMeta").textContent = [s.hunter_name || "Someone", s.property, `set ${fmtWhen(s.set_at, false)}`, down, s.wind_dir ? `wind ${s.wind_dir}` : ""].filter(Boolean).join(" · ");
 
+  // On the stand: one tap over to the Reveal app to check the cameras.
+  $("svReveal").hidden = !live;
+
   // Events, newest last; tap one for its own page.
   const ev = $("svEvents"); ev.replaceChildren();
   const evs = eventsOf(s.id);
@@ -3491,6 +3499,13 @@ function renderSitView() {
   if (mine && live) btn(foot, "I'm Down", "ghost", () => markDown(s.id));
   if (mine) btn(foot, "Add Event", "", () => openEventForm(s.id, null, "deer"));
 }
+// The Reveal app's own link (not its website), so it opens straight into the app.
+const REVEAL_APP_URL = "tactacam://";
+$("svReveal").href = REVEAL_APP_URL;
+$("svReveal").addEventListener("click", () => {
+  // If the app took over, this page is hidden by now; if not, Reveal probably isn't installed.
+  setTimeout(() => { if (document.visibilityState === "visible") toast("Reveal didn't open. Is the app on this phone?"); }, 1800);
+});
 $("svMore").addEventListener("click", () => {
   const open = $("svDetails").hidden;
   $("svDetails").hidden = !open;
