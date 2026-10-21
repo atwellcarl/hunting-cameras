@@ -1300,11 +1300,12 @@ function renderHeader() {
   $("streak").textContent = state.streak >= 3 ? `· ×${state.streak}` : "";
   const busy = state.mode === "loading";
   ["btnNot", "btnBuck"].forEach(id => $(id).disabled = busy || !deck().length);
-  const waiting = outbox.length ? ` · ${outbox.length} waiting to send` : "";
+  // No counts: the queue holds database writes, not the things you did, so a number would only confuse.
+  const waiting = outbox.length > 0;
   $("status").textContent =
     state.mode === "loading" ? "Connecting to the crew's book…" :
-    state.mode === "offline" || !navigator.onLine ? `No signal. Sits you log are kept on this phone and sent when you're back${waiting}.` :
-    waiting ? `Sending changes saved without signal${waiting}` : "";
+    state.mode === "offline" || !navigator.onLine ? "Offline mode. Sits you log are saved on this phone and sent when you're back." :
+    waiting ? "Sending what you saved offline…" : "";
   $("status").hidden = state.mode === "shared" && !waiting;
 }
 
@@ -3605,7 +3606,7 @@ async function flushOutbox() {
     }
   } finally { flushing = false; }
   if (sent) {
-    toast(`Sent ${sent} change${sent === 1 ? "" : "s"} saved without signal`);
+    toast("Back online. What you saved offline has been sent.");
     if (offlineBoot) return goOnline();
     await sync();
     weatherTried.clear();                                         // sits sent just now can get their weather
@@ -3873,7 +3874,7 @@ $("gateForm").addEventListener("submit", async e => {
 });
 
 $("signOut").addEventListener("click", async () => {
-  if (outbox.length) return toast(`${outbox.length} change${outbox.length === 1 ? " is" : "s are"} still waiting to send. Sign out once you have signal and they've gone.`);
+  if (outbox.length) return toast("Some of what you saved offline hasn't sent yet. Sign out once you have signal.");
   try { localStorage.removeItem(OFFLINE_COPY); } catch {}
   await sb.auth.signOut();
   location.reload();
