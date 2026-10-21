@@ -18,7 +18,7 @@
 [hidden] { display: none !important; }
 /* Viewers can look at everything but change nothing (the database enforces it too). */
 body.viewer :is(#tab-sort, #view-sort, #tab-sits, #view-sits, .htile.sits, .htile.sort, #vTag, .gtools button, .cleanup, #profileEdit, #vCover, #vMove, #vResort, .mrow .btnrow, .switch, #composer, .queuebar .btn, .drow .go) { display: none !important; }
-body.viewer .drow:not(.mine) { pointer-events: none; }   /* "Weigh in" leads to Sort */
+body.viewer .drow:not(.mine) { pointer-events: none; }   /* "Weigh In" leads to Sort */
 :root {
   color-scheme: dark;
   --bg: #0E110D;
@@ -41,6 +41,14 @@ body.viewer .drow:not(.mine) { pointer-events: none; }   /* "Weigh in" leads to 
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; }
+/* iPhone Safari / Home Screen: don't inflate text, and never let the page slide sideways. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body, .app, .views { overflow-x: hidden; max-width: 100%; }
+.view.scroll, .sheet-body { overflow-x: hidden; }
+/* Safari zooms the page when you tap a text box set smaller than 16px; keep every one at 16px or more. */
+input, select, textarea { font-size: max(16px, 1em); }
+/* No double-tap-to-zoom delay on buttons (pinch zoom still works). */
+button, .btn, select { touch-action: manipulation; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
   font: 16px/1.45 var(--body);
@@ -369,7 +377,7 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 #sitSheet.downonly .sheet-body > :not(h2):not(.downfield), #sitSheet.downonly .notdown { display: none !important; }
 .gpsrow small { flex: 1; min-width: 0; }
 .gpsrow small b { color: var(--ink); font-weight: 500; }
-.sitsmall { margin-top: 8px; font-size: 15px; padding: 10px 12px; }
+.sitsmall { margin-top: 8px; font-size: 16px; padding: 10px 12px; }
 .sitchips button { min-height: 40px; padding: 6px 12px; font-size: 13px; }
 .compass { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
 .compass.small { grid-template-columns: repeat(8, 1fr); }
@@ -396,8 +404,9 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 .gpsrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .gpsrow small { font: 12px var(--mono); color: var(--muted); }
 .countrow { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
-.buckrow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
-.buckrow .newname { font-size: 14px; padding: 10px; }
+/* One buck per block: who he is (full width), then a description; stacked so nothing is cut off at 16px. */
+.buckrow { display: grid; grid-template-columns: 1fr; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.buckrow .newname { font-size: 16px; padding: 10px; min-width: 0; }
 #evBucks:not(:empty) { margin: 4px 0 6px; }
 .evtimes { grid-template-columns: 1fr 1fr; }
 .countrow .label { flex: 1; margin: 0; }
@@ -571,7 +580,7 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
       <div class="proptoggle propfilter" role="group" aria-label="Property"></div>
       <div id="gallery"></div>
     </section>
-    <div class="gbar" id="gbar" hidden><span id="gbarCount"></span><button class="btn ghost" id="gbarPass" type="button">Pass</button><button class="btn" id="gbarTag" type="button">Tag as…</button></div>
+    <div class="gbar" id="gbar" hidden><span id="gbarCount"></span><button class="btn ghost" id="gbarPass" type="button">Pass</button><button class="btn" id="gbarTag" type="button">Tag As…</button></div>
 
     <section id="view-home" class="view scroll">
       <div id="home"></div>
@@ -594,7 +603,7 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
     <section id="view-crew" class="view scroll" hidden>
       <div class="crew" id="crew"></div>
       <p class="rules">Agreement is how often your calls match other members' on photos you both voted on. Votes are blind: you only see others' picks after you vote. +10 for every vote, +25 for every new buck you put in the book. Ranks: Scout, Tracker at 150, Guide at 400, Old Buck Whisperer at 800.</p>
-      <p class="signout"><button class="linkish" id="signOut" type="button">Sign out</button></p>
+      <p class="signout"><button class="linkish" id="signOut" type="button">Sign Out</button></p>
     </section>
   </div>
 
@@ -620,7 +629,7 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
     <p>Sort the crew's trail-cam bucks. Sign in with the name and password you were given.</p>
     <label for="gateName">Name<input id="gateName" type="text" maxlength="30" autocomplete="username" autocapitalize="words" required></label>
     <label for="gatePass">Password<input id="gatePass" type="password" autocomplete="current-password" required></label>
-    <button class="btn" type="submit" id="gateBtn">Get in</button>
+    <button class="btn" type="submit" id="gateBtn">Get In</button>
     <p class="err" id="gateErr" role="alert"></p>
   </form>
 </div>
@@ -640,7 +649,7 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
       <button class="bigchoice shortcut" id="askBurst" type="button" hidden><img alt=""><span><b></b><small>Same burst. Tap if it's him</small></span></button>
       <button class="bigchoice primary" id="askYes" type="button"><b>Yes</b><small>Pick him from the book</small></button>
       <button class="bigchoice" id="askNo" type="button"><b>No, new buck</b><small>Name him and add what you can see</small></button>
-      <button class="bigchoice" id="askCant" type="button"><b>Can't ID him</b><small>Bad angle or rough photo. It waits in Name them for a second look</small></button>
+      <button class="bigchoice" id="askCant" type="button"><b>Can't ID Him</b><small>Bad angle or rough photo. It waits in Name them for a second look</small></button>
     </div>
 
     <div id="stepKnown" hidden>
@@ -665,8 +674,8 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
   </div>
   <div class="sheet-foot">
     <button class="btn ghost" id="sheetBack" type="button">Back</button>
-    <button class="linkish grow" id="sheetSkip" type="button">Decide later</button>
-    <button class="btn" id="sheetLock" type="button" disabled>Lock it in</button>
+    <button class="linkish grow" id="sheetSkip" type="button">Decide Later</button>
+    <button class="btn" id="sheetLock" type="button" disabled>Lock It In</button>
   </div>
 </div>
 
@@ -677,7 +686,7 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
   <div class="pp-btns">
     <button class="btn ghost" id="ppCancel" type="button">Back</button>
     <button class="btn ghost" id="ppCompare" type="button">Compare</button>
-    <button class="btn" id="ppYes" type="button">It's this buck</button>
+    <button class="btn" id="ppYes" type="button">It's This Buck</button>
   </div>
 </div>
 
@@ -701,12 +710,12 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
       <div id="profileSits" class="svevents"></div>
       <div id="profileSuggest"></div>
       <p class="label cleanup">Clean up</p>
-      <div class="btnrow cleanup"><button class="btn ghost" id="profileMerge" type="button">Merge into another buck…</button><button class="btn danger" id="profileDelete" type="button">Delete buck</button></div>
+      <div class="btnrow cleanup"><button class="btn ghost" id="profileMerge" type="button">Merge into Another Buck…</button><button class="btn danger" id="profileDelete" type="button">Delete Buck</button></div>
       <div id="profileConfirm"></div>
     </div>
   </div>
   <div class="sheet-foot">
-    <button class="btn ghost grow" id="profileClose" type="button">Back to roster</button>
+    <button class="btn ghost grow" id="profileClose" type="button">Back to Roster</button>
   </div>
 </div>
 
@@ -740,7 +749,7 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 <!-- Chooser: move one photo to another buck, or merge a whole buck into another -->
 <div class="sheet sitsheet" id="sitSheet" hidden role="dialog" aria-modal="true" aria-labelledby="sitTitle">
   <div class="sheet-body">
-    <h2 id="sitTitle">Start a sit</h2>
+    <h2 id="sitTitle">Start a Sit</h2>
     <div class="evtype" id="sitProp" role="radiogroup" aria-label="Property"></div>
     <div class="sitgrid">
       <label class="notlive"><span class="label">Day</span><input id="sitDate" class="newname" type="date"></label>
@@ -773,7 +782,7 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 
 <div class="sheet sitsheet" id="eventSheet" hidden role="dialog" aria-modal="true" aria-labelledby="eventTitle">
   <div class="sheet-body">
-    <h2 id="eventTitle">Add event</h2>
+    <h2 id="eventTitle">Add Event</h2>
     <div class="evtype" id="evType" role="tablist"></div>
     <div class="chips sitchips" id="evKind"></div>
     <input id="evSpecies" class="newname sitsmall" type="text" maxlength="40" placeholder="What animal?" autocomplete="off">
@@ -832,7 +841,7 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
   <div class="sheet-body">
     <h2 id="burstTitle"></h2>
     <p class="note" id="burstNote"></p>
-    <div class="burst-tools"><span id="burstCount"></span><button class="linkish" id="burstAll" type="button">Select all</button></div>
+    <div class="burst-tools"><span id="burstCount"></span><button class="linkish" id="burstAll" type="button">Select All</button></div>
     <div class="burstgrid" id="burstGrid"></div>
   </div>
   <div class="sheet-foot">
@@ -850,9 +859,9 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
     <div class="bgrid" id="chooserGrid"></div>
     <div id="chooserNew" hidden>
       <p class="label">Or a new buck</p>
-      <input id="chooserNewName" class="newname" type="text" maxlength="40" placeholder="Name him" autocomplete="off" autocapitalize="words">
+      <input id="chooserNewName" class="newname" type="text" maxlength="40" placeholder="Name Him" autocomplete="off" autocapitalize="words">
       <p class="label chooser-or">Or not sure who he is</p>
-      <button class="btn ghost chooser-cant" id="chooserCant" type="button" aria-pressed="false">Can't ID him</button>
+      <button class="btn ghost chooser-cant" id="chooserCant" type="button" aria-pressed="false">Can't ID Him</button>
     </div>
     <div id="chooserConf" hidden>
       <p class="label">How sure are you it's him?</p>
@@ -869,7 +878,7 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 
 <div class="viewer" id="viewer" hidden role="dialog" aria-modal="true" aria-label="Photo zoom">
   <div class="vtop">
-    <div class="vacts"><button class="vbtn" id="vCover" type="button" hidden >Make Cover Image</button><button class="vbtn" id="vMove" type="button" hidden aria-label="Move this photo to another buck">Move</button><button class="vbtn" id="vResort" type="button" hidden aria-label="Change my vote">Revote</button><button class="vbtn go" id="vThisBuck" type="button" hidden></button><button class="vbtn go" id="vTag" type="button" hidden>Tag him</button><button class="vbtn" id="vClose" type="button">Close</button></div>
+    <div class="vacts"><button class="vbtn" id="vCover" type="button" hidden >Make Cover Image</button><button class="vbtn" id="vMove" type="button" hidden aria-label="Move this photo to another buck">Move</button><button class="vbtn" id="vResort" type="button" hidden aria-label="Change my vote">Revote</button><button class="vbtn go" id="vThisBuck" type="button" hidden></button><button class="vbtn go" id="vTag" type="button" hidden>Tag Him</button><button class="vbtn" id="vClose" type="button">Close</button></div>
     <span id="vcap"></span>
   </div>
   <div class="vvotes" id="vvotes" hidden></div>
@@ -881,7 +890,7 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
   <div class="vbucks" id="vbucks" hidden></div>
   <div class="vbar">
     <button class="vbtn" id="vCrop" type="button" aria-pressed="true">Close-up</button>
-    <button class="vbtn" id="vFrame" type="button" aria-pressed="false">Full frame</button>
+    <button class="vbtn" id="vFrame" type="button" aria-pressed="false">Full Frame</button>
   </div>
 </div>
 
@@ -904,7 +913,7 @@ const PAGE = 1000;           // Supabase returns at most 1000 rows per request
 // votes: card id -> { voter uuid -> vote }. consensus: card id -> card_consensus row.
 const state = { votes: {}, consensus: {}, scores: {}, comments: {}, bucks: {}, users: {}, me: null, myUid: null, mode: "loading", streak: 0 };
 let disputeId = null;       // card open in the dispute sheet
-let forcedTop = null;       // card moved to the top of the deck by "Weigh in"
+let forcedTop = null;       // card moved to the top of the deck by "Weigh In"
 let knownMine = null;       // my disputes at the last sync, to spot new ones
 let justVoted = null;       // my own vote just caused this dispute; don't alert about it
 const sb = supabase.createClient(BUCKBOOK_CONFIG.supabaseUrl, BUCKBOOK_CONFIG.publishableKey);
@@ -1112,6 +1121,7 @@ function ensurePhotos() {
     try {
       // A weak signal can hang a request; give up after 20 s rather than sit on "Connecting…".
       await Promise.race([loadCards(), new Promise((_, no) => setTimeout(() => no(new Error("timed out")), 20000))]);
+      if (!ALL_CARDS.length) throw new Error("no photos came back");   // e.g. sign-in not ready yet: try again next time
       state.photosLoaded = true;
       document.body.classList.remove("nophotos");
       renderedTop = null;
@@ -1305,14 +1315,14 @@ function cardEl(c, cls) {
 
   if (cls === "top") {
     const b = document.createElement("button");
-    b.className = "chip frame-btn"; b.type = "button"; b.textContent = "Full frame";
+    b.className = "chip frame-btn"; b.type = "button"; b.textContent = "Full Frame";
     b.addEventListener("pointerdown", e => e.stopPropagation());
     b.addEventListener("click", () => {
       const img = el.querySelector("img");
       const full = img.dataset.full === "1";
       img.src = full ? c.crop : c.frame;
       img.dataset.full = full ? "0" : "1";
-      b.textContent = full ? "Full frame" : "Close-up";
+      b.textContent = full ? "Full Frame" : "Close-up";
     });
     el.append(b);
   }
@@ -1341,7 +1351,7 @@ function renderSort() {
     const named = bucksHere().length;
     const done = document.createElement("div");
     done.className = "done";
-    done.innerHTML = `<h2>Deck cleared</h2><p></p><button class="btn" type="button">Open the roster</button>`;
+    done.innerHTML = `<h2>Deck cleared</h2><p></p><button class="btn" type="button">Open the Roster</button>`;
     done.querySelector("p").textContent = `Every buck photo is sorted. ${named} buck${named === 1 ? "" : "s"} in the book.`;
     done.querySelector("button").addEventListener("click", () => showTab("roster"));
     stack.append(done);
@@ -1418,7 +1428,7 @@ function renderRoster() {
     wrap.append(h);
     const bar = document.createElement("div");
     bar.className = "queuebar";
-    bar.innerHTML = `<span><b></b><small>buck photos waiting for a name</small></span><button class="btn" type="button">Name them</button>`;
+    bar.innerHTML = `<span><b></b><small>buck photos waiting for a name</small></span><button class="btn" type="button">Name Them</button>`;
     bar.querySelector("b").textContent = toName.length;
     bar.querySelector("button").addEventListener("click", startNameQueue);
     wrap.append(bar);
@@ -1427,8 +1437,8 @@ function renderRoster() {
 
 // Gallery: every photo nobody has named yet, newest first, for scanning fast for the bucks worth tagging.
 // Leaves out photos already named or passed on.
-// "Buck, no name" covers keepers nobody has named, including ones someone marked can't ID.
-const GALLERY_FILTERS = [["all", "All"], ["new", "New"], ["buck", "Buck, no name"]];
+// "Buck, No Name" covers keepers nobody has named, including ones someone marked can't ID.
+const GALLERY_FILTERS = [["all", "All"], ["new", "New"], ["buck", "Buck, No Name"]];
 let galleryFilter = "all";
 function galleryKind(c) {
   const k = state.consensus[c.id];
@@ -1648,7 +1658,7 @@ function renderProfile() {
     dl.append(dt, dd);
   });
 
-  $("profileMerge").textContent = state.isAdmin ? "Merge into another buck…" : "Propose a merge…";
+  $("profileMerge").textContent = state.isAdmin ? "Merge into Another Buck…" : "Propose a Merge…";
   const seen = Object.values(state.sitEvents || {}).flat().filter(e => (e.members || []).some(m => m.buck_id === profileId))
     .map(e => [e, state.sits[e.sit_id]]).filter(([, st]) => st).sort((a, b) => (b[0].at || b[1].set_at).localeCompare(a[0].at || a[1].set_at));
   const ss = $("profileSits"); ss.replaceChildren();
@@ -1734,9 +1744,9 @@ $("editForm").addEventListener("submit", e => {
 function confirmBox(where, text, goLabel, onGo, { safeFirst = false } = {}) {
   const box = document.createElement("div");
   box.className = "confirm";
-  // safeFirst: a big "Go back!" and a small, quiet way through, for things that are hard to redo.
+  // safeFirst: a big "Go Back!" and a small, quiet way through, for things that are hard to redo.
   box.innerHTML = safeFirst
-    ? `<p></p><button class="btn confirm-back" type="button">Go back!</button><button class="linkish confirm-go" type="button"></button>`
+    ? `<p></p><button class="btn confirm-back" type="button">Go Back!</button><button class="linkish confirm-go" type="button"></button>`
     : `<p></p><div class="btnrow"><button class="btn danger" type="button"></button><button class="btn ghost" type="button">Cancel</button></div>`;
   box.querySelector("p").textContent = text;
   const [go, cancel] = safeFirst ? [box.querySelector(".confirm-go"), box.querySelector(".confirm-back")] : box.querySelectorAll("button");
@@ -1749,7 +1759,7 @@ function confirmBox(where, text, goLabel, onGo, { safeFirst = false } = {}) {
 $("profileDelete").addEventListener("click", () => {
   const id = profileId, b = state.bucks[id], n = sightings(id).length;
   confirmBox($("profileConfirm"), `Are you sure? ${n === 1 ? "His 1 photo stays" : `His ${n} photos stay`}, back in the pile waiting for a name. His name, notes, age and status are gone for good.`,
-    `Yes, delete ${b.name}`, async () => {
+    `Yes, Delete ${b.name}`, async () => {
       const { error } = await sb.rpc("delete_buck", { buck: id });
       if (error) return toast(friendly(error));
       closeProfile(); sync(); toast(`Deleted ${b.name}`);
@@ -1814,12 +1824,12 @@ function syncChooser() {
   const go = $("chooserGo");
   if (mode === "move") {
     const n = chooser.cards?.length;
-    go.textContent = cant ? (n ? `Mark ${n} can't ID` : "Mark can't ID")
+    go.textContent = cant ? (n ? `Mark ${n} Can't ID` : "Mark Can't ID")
       : newName ? (n ? `Add ${newName} · ${n} photos` : `Add ${newName}`)
-      : target ? (n ? `Tag ${n} as ${state.bucks[target].name}` : `Move to ${state.bucks[target].name}`) : "Pick a buck";
+      : target ? (n ? `Tag ${n} as ${state.bucks[target].name}` : `Move to ${state.bucks[target].name}`) : "Pick a Buck";
     go.disabled = !(cant || newName || (target && confidence));
   } else {
-    go.textContent = target ? `${state.isAdmin ? "Merge" : "Propose merging"} into ${state.bucks[target].name}` : "Pick a buck";
+    go.textContent = target ? `${state.isAdmin ? "Merge" : "Propose Merging"} into ${state.bucks[target].name}` : "Pick a Buck";
     go.disabled = !target;
   }
 }
@@ -2273,10 +2283,10 @@ function syncSheet() {
   $("sheetLock").hidden = step === "ask";
   if (step === "known") {
     $("sheetLock").disabled = !(buckId && confidence);
-    $("sheetLock").textContent = buckId ? `That's ${state.bucks[buckId]?.name}` : "Pick a buck";
+    $("sheetLock").textContent = buckId ? `That's ${state.bucks[buckId]?.name}` : "Pick a Buck";
   } else if (step === "new") {
     $("sheetLock").disabled = !newName;
-    $("sheetLock").textContent = newName ? `Add ${newName}` : "Name him";
+    $("sheetLock").textContent = newName ? `Add ${newName}` : "Name Him";
   }
 }
 
@@ -2314,7 +2324,7 @@ async function lockIn() {
   // Offer the rest of the burst, unless we're walking the Name-them queue or a dispute just opened.
   const rest = burstRest(card);
   if (rest.length && !nameQueue && !done.conflict) {
-    toast(done.msg, done.gained, true, { label: `See ${rest.length} more`, run: () => openBurst(card, id, conf) });
+    toast(done.msg, done.gained, true, { label: `See ${rest.length} More`, run: () => openBurst(card, id, conf) });
   }
   afterSheetVote();
 }
@@ -2358,9 +2368,9 @@ function syncBurst() {
   const { cards, picked, buckId } = burstState;
   $("burstGrid").querySelectorAll(".thumb").forEach(t => t.setAttribute("aria-pressed", String(picked.has(t.dataset.id))));
   $("burstCount").textContent = `${picked.size} of ${cards.length} selected`;
-  $("burstAll").textContent = picked.size === cards.length ? "Clear" : "Select all";
+  $("burstAll").textContent = picked.size === cards.length ? "Clear" : "Select All";
   $("burstGo").disabled = !picked.size;
-  $("burstGo").textContent = picked.size ? `Tag ${picked.size} as ${state.bucks[buckId]?.name}` : "Pick his photos";
+  $("burstGo").textContent = picked.size ? `Tag ${picked.size} as ${state.bucks[buckId]?.name}` : "Pick His Photos";
 }
 function closeBurst() { burstState = null; $("burstSheet").hidden = true; }
 $("burstAll").addEventListener("click", () => {
@@ -2403,7 +2413,7 @@ $("sheetLock").addEventListener("click", lockIn);
 $("sheetSkip").addEventListener("click", async () => {
   const { card } = sheetState;
   if (nameQueue) {
-    // In the queue, "Decide later" just skips this photo for now.
+    // In the queue, "Decide Later" just skips this photo for now.
     (nameQueue.skipped ||= new Set()).add(card.id);
     return nextInQueue();
   }
@@ -2514,11 +2524,11 @@ function disputeRow(c, mine) {
     const m = myVote(c.id);
     const against = othersVotes(c.id).filter(o => !agrees(m, o));
     b.querySelector("b").textContent = `You: ${answerName(m)} · ${against.map(o => `${o.name}: ${answerName(o)}`).join(" · ")}`;
-    b.querySelector(".go").textContent = "Settle it";
+    b.querySelector(".go").textContent = "Settle It";
     b.addEventListener("click", () => openDispute(c.id));
   } else {
     b.querySelector("b").textContent = `${votes.length} votes, no clear call`;
-    b.querySelector(".go").textContent = "Weigh in";
+    b.querySelector(".go").textContent = "Weigh In";
     b.addEventListener("click", () => { forcedTop = c.id; renderedTop = null; showTab("sort"); renderAll(); });
   }
   const talk = (state.comments[c.id] || []).length;
@@ -2619,8 +2629,8 @@ function mergeRow(p) {
     el.querySelector("small").textContent = `${p.prop.proposed_by_name || "Someone"} proposed keeping ${name(keep)}. ` +
       `Agreed: ${agreed.join(", ") || "nobody yet"}. ` + (canFinish ? `Waiting on ${waiting.join(" and ")}.` : "Needs an admin to finish.");
     if (state.isAdmin) button(`Merge now`, "", () => adminMerge(keep));
-    if (!yes.includes(state.myUid)) button(`Agree: keep ${name(keep)}`, state.isAdmin ? "ghost" : "", () => agreeTo(keep));
-    if (iAmAuthor || state.isAdmin) button("Not the same buck", "ghost", () => voteMerge(p, keep, false));
+    if (!yes.includes(state.myUid)) button(`Agree: Keep ${name(keep)}`, state.isAdmin ? "ghost" : "", () => agreeTo(keep));
+    if (iAmAuthor || state.isAdmin) button("Not the Same Buck", "ghost", () => voteMerge(p, keep, false));
     if (!state.isAdmin && yes.includes(state.myUid) && !iAmAuthor) el.querySelector(".btnrow").hidden = true;
   }
   el.classList.toggle("proposed", !!p.prop);
@@ -2969,8 +2979,8 @@ function renderSits() {
   bar.innerHTML = `<p class="label" style="margin:0"></p><span class="btnrow"></span>`;
   bar.querySelector("p").textContent = `${all.length} sit${all.length === 1 ? "" : "s"}`;
   const add = (label, cls, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn " + cls; b.textContent = label; b.addEventListener("click", fn); bar.querySelector(".btnrow").append(b); };
-  if (!open) add("Start a sit", "", () => openSitForm());
-  add("Log a past sit", "ghost", () => openSitForm(null, { past: true }));
+  if (!open) add("Start a Sit", "", () => openSitForm());
+  add("Log a Past Sit", "ghost", () => openSitForm(null, { past: true }));
   wrap.append(bar);
 
   if (open) {
@@ -2982,7 +2992,7 @@ function renderSits() {
     card.querySelector("b").textContent = `In the tree${open.spot ? " · " + open.spot : ""}`;
     card.querySelector("small").textContent = `Set ${fmtWhen(open.set_at, false)}${planned} · wind ${open.wind_dir || "—"} · ${n} event${n === 1 ? "" : "s"}`;
     const row = card.querySelector(".btnrow");
-    [["Open sit", "", () => openSitView(open.id)], ["I'm down", "ghost", () => markDown(open.id)]].forEach(([l, c, f]) => {
+    [["Open Sit", "", () => openSitView(open.id)], ["I'm Down", "ghost", () => markDown(open.id)]].forEach(([l, c, f]) => {
       const b = document.createElement("button"); b.type = "button"; b.className = "btn " + c; b.textContent = l; b.addEventListener("click", f); row.append(b);
     });
     card.addEventListener("click", e => { if (e.target === card || e.target.tagName === "B" || e.target.tagName === "SMALL") openSitView(open.id); });
@@ -3058,7 +3068,7 @@ function timeWheel(input) {
   const native = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
   const idx = col => Math.max(0, Math.min(col.children.length - 1, Math.round(col.scrollTop / ROW)));
   const mark = () => cols.forEach(col => [...col.children].forEach((d, i) => d.classList.toggle("on", i === idx(col))));
-  const label = v => { if (!v) return mode === "optional" ? "Add time" : "Pick a time"; const [h, m] = v.split(":").map(Number); return `${(h + 11) % 12 + 1}:${pad2(m)} ${h >= 12 ? "PM" : "AM"}`; };
+  const label = v => { if (!v) return mode === "optional" ? "Add Time" : "Pick a Time"; const [h, m] = v.split(":").map(Number); return `${(h + 11) % 12 + 1}:${pad2(m)} ${h >= 12 ? "PM" : "AM"}`; };
   let open = false;
   const show = () => {
     const v = native.get.call(input);
@@ -3112,7 +3122,7 @@ function openSitForm(id = null, opts = {}) {
     gps: s?.lat ? { lat: s.lat, lon: s.lon, acc: s.gps_accuracy_m, at: s.gps_at || null } : null,
     // Events are edited here with the rest of the sit and saved together.
     events: id ? eventsOf(id).map(e => ({ ...e, members: (e.members || []).map(m => ({ ...m })) })) : [], keptIds: new Set(id ? eventsOf(id).map(e => e.id) : []) };
-  $("sitTitle").textContent = opts.down ? "Down time" : s ? "Edit sit" : opts.past ? "Log a past sit" : "Start a sit";
+  $("sitTitle").textContent = opts.down ? "Down Time" : s ? "Edit Sit" : opts.past ? "Log a Past Sit" : "Start a Sit";
   $("sitDate").value = localDate(set);
   $("sitSet").value = opts.past && !s ? "" : localTime(set);
   $("sitPlanTime").value = s?.planned_down_at ? localTime(new Date(s.planned_down_at)) : "";
@@ -3123,7 +3133,7 @@ function openSitForm(id = null, opts = {}) {
   } else $("sitDown").value = s?.down_at ? localTime(new Date(s.down_at)) : "";
   $("sitSpot").value = s?.spot || "";
   $("sitNotes").value = s?.notes || "";
-  $("sitSave").textContent = opts.down ? "Save" : s ? "Save" : opts.past ? "Save sit" : "Start Sit";
+  $("sitSave").textContent = opts.down ? "Save" : s ? "Save" : opts.past ? "Save Sit" : "Start Sit";
   syncSitForm();
   $("sitSheet").hidden = false;
   refreshWheels($("sitSheet"));
@@ -3138,7 +3148,7 @@ function syncSitForm() {
     b.addEventListener("click", () => { sitForm.property = name; sitForm.propPicked = true; syncSitForm(); });
     pr.append(b);
   });
-  compass($("sitWind"), WIND16.map(d => [d]), sitForm.wind, v => { sitForm.wind = v; syncSitForm(); }, [["variable", "Swirling / variable", "wide"]]);
+  compass($("sitWind"), WIND16.map(d => [d]), sitForm.wind, v => { sitForm.wind = v; syncSitForm(); }, [["variable", "Swirling / Variable", "wide"]]);
   if (!gpsWatch) showGpsInfo();
   renderSitFormEvents();
 }
@@ -3256,7 +3266,7 @@ function openEventForm(sitId, eventId = null, kind = null, draft = false) {
     from: e?.from_dir || null, to: e?.to_dir || null, wind: e?.wind_dir || null, how: e?.ended_how || null };
   if (!e && kind === "buck") eventForm.bucks.push({ buck_id: "", buck_note: "" });
   $("evEnd").value = e?.ended_at ? localTime(new Date(e.ended_at)) : "";
-  $("eventTitle").textContent = e ? "Edit event" : "Add event";
+  $("eventTitle").textContent = e ? "Edit Event" : "Add Event";
   $("evSpecies").value = animalM && animal === "other" ? (animalM.species || "") : "";
   $("evYards").value = e?.distance_yd ?? "";
   // New events default to now only while you're actually in the tree; a past sit starts blank.
@@ -3287,7 +3297,7 @@ function syncEventForm() {
   const f = eventForm, kinds = $("evKind"); kinds.replaceChildren();
   // Deer | Other animal | Wind change. An event already saved keeps its type.
   const tabs = $("evType"); tabs.replaceChildren();
-  [["deer", "Deer"], ["animal", "Other animal"], ["wind", "Wind change"]].forEach(([v, l]) => {
+  [["deer", "Deer"], ["animal", "Other Animal"], ["wind", "Wind Change"]].forEach(([v, l]) => {
     const b = document.createElement("button"); b.type = "button"; b.role = "tab"; b.textContent = l;
     b.setAttribute("aria-selected", String(f.type === v));
     b.addEventListener("click", () => { f.type = v; syncEventForm(); });
@@ -3335,14 +3345,14 @@ function syncEventForm() {
     sel.value = b.buck_id;
     sel.addEventListener("change", () => { b.buck_id = sel.value; });
     const note = document.createElement("input"); note.className = "newname"; note.type = "text"; note.maxLength = 60;
-    note.placeholder = "or describe: spike, small 6…"; note.value = b.buck_note;
+    note.placeholder = "Or describe him: spike, small 6…"; note.value = b.buck_note;
     note.addEventListener("input", () => { b.buck_note = note.value; });
     row.append(sel, note);
     bucks.append(row);
   });
   compass($("evFrom"), DIR8.map(d => [d]), f.from, v => { f.from = v; syncEventForm(); });
   compass($("evTo"), DIR8.map(d => [d]), f.to, v => { f.to = v; syncEventForm(); });
-  compass($("evWind"), WIND16.map(d => [d]), f.wind, v => { f.wind = v; syncEventForm(); }, [["variable", "Swirling / variable", "wide"]]);
+  compass($("evWind"), WIND16.map(d => [d]), f.wind, v => { f.wind = v; syncEventForm(); }, [["variable", "Swirling / Variable", "wide"]]);
 }
 $("evCancel").addEventListener("click", () => { eventForm = null; $("eventSheet").hidden = true; });
 // Yards: typed digits only (no spinner or scroll-to-change); the phone shows its number pad.
@@ -3461,9 +3471,9 @@ function renderSitView() {
   const acts = $("svActs"); acts.replaceChildren();
   const btn = (box, label, cls, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn " + cls; b.textContent = label; b.addEventListener("click", fn); box.append(b); };
   if (mine) {
-    if (s.down_at && s.down_source && s.down_source !== "entered") btn(acts, "Confirm down time", "ghost", async () => { await saveSit({ id: s.id, property: s.property, set_at: s.set_at, down_source: "entered" }); renderAll(); });
-    btn(acts, "Edit sit", "ghost", () => openSitForm(s.id));
-    btn(acts, "Delete sit", "danger", () => confirmBox($("svConfirm"), "Delete this sit and everything logged on it?", "Yes, delete it", async () => {
+    if (s.down_at && s.down_source && s.down_source !== "entered") btn(acts, "Confirm Down Time", "ghost", async () => { await saveSit({ id: s.id, property: s.property, set_at: s.set_at, down_source: "entered" }); renderAll(); });
+    btn(acts, "Edit Sit", "ghost", () => openSitForm(s.id));
+    btn(acts, "Delete Sit", "danger", () => confirmBox($("svConfirm"), "Delete this sit and everything logged on it?", "Yes, Delete It", async () => {
       const error = await removeRow("deleteSit", s.id);
       if (error) return toast(friendly(error));
       delete state.sits[s.id]; closeSitView(); renderAll(); toast("Sit deleted");
@@ -3478,7 +3488,7 @@ function renderSitView() {
   // The bottom bar: Exit · I'm down · Add Event (only the hunter can add or end).
   const foot = $("svFoot"); foot.replaceChildren();
   btn(foot, "Exit", "ghost", closeSitView);
-  if (mine && live) btn(foot, "I'm down", "ghost", () => markDown(s.id));
+  if (mine && live) btn(foot, "I'm Down", "ghost", () => markDown(s.id));
   if (mine) btn(foot, "Add Event", "", () => openEventForm(s.id, null, "deer"));
 }
 $("svMore").addEventListener("click", () => {
