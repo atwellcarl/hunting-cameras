@@ -7,6 +7,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Buck Book</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Buck Book">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -61,7 +64,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 .htile.big { grid-column: 1 / -1; min-height: 120px; border-color: var(--blaze); }
 .htile.big b { font-size: 32px; }
 .htile.live small { color: var(--blaze); }
-body.nophotos .count, body.nophotos .bar, body.nophotos .proptoggle small { visibility: hidden; }
+body.nophotos .count, body.nophotos .bar, body.nophotos .proptoggle small { visibility: hidden !important; }
 .count { font: 500 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 .count b { color: var(--ink); font-weight: 500; }
 .sndbtn { appearance: none; border: 0; background: none; color: var(--muted); width: 36px; height: 36px; padding: 6px; cursor: pointer; margin-left: auto; margin-right: 6px; }
@@ -71,6 +74,11 @@ body.nophotos .count, body.nophotos .bar, body.nophotos .proptoggle small { visi
 .scorepill b { font: 800 18px/1 var(--display); font-variant-numeric: tabular-nums; }
 .scorepill small { font: 10px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .proptoggle { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--panel); border-radius: 999px; padding: 3px; margin-top: 8px; }
+/* The property is a filter on the photo sections, not a global setting: each shows it at its top. */
+.propfilter { margin: 0 0 14px; }
+#view-sort .propfilter { margin: 10px 16px 0; flex: none; }
+/* Sort progress only means something on Sort. */
+body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 .proptoggle button { appearance: none; border: 0; background: none; color: var(--muted); border-radius: 999px; min-height: 36px; font: 600 14px var(--body); letter-spacing: .02em; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
 .proptoggle button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
 .proptoggle small { font: 500 11px var(--mono); opacity: .75; }
@@ -530,7 +538,7 @@ body.nophotos .count, body.nophotos .bar, body.nophotos .proptoggle small { visi
 }
 </style>
 </head>
-<body class="nophotos">
+<body class="nophotos" data-tab="home">
 
 <div class="app">
   <header class="topbar">
@@ -540,7 +548,6 @@ body.nophotos .count, body.nophotos .bar, body.nophotos .proptoggle small { visi
       <button class="sndbtn" id="sndBtn" type="button" aria-pressed="true" aria-label="Sound on"></button>
       <span class="scorepill"><b id="myScore">0</b><small id="myRank">Scout</small></span>
     </div>
-    <div class="proptoggle" id="propToggle" role="group" aria-label="Property"></div>
     <div class="bar"><i id="barFill"></i></div>
   </header>
 
@@ -548,6 +555,7 @@ body.nophotos .count, body.nophotos .bar, body.nophotos .proptoggle small { visi
     <p class="status" id="status">Connecting to the crew's book…</p>
 
     <section id="view-sort" class="view" hidden>
+      <div class="proptoggle propfilter" role="group" aria-label="Property"></div>
       <div class="stack" id="stack"></div>
       <div class="actions">
         <span class="act-wrap"><button class="act not" id="btnNot" type="button" aria-label="Pass: not worth naming">
@@ -560,6 +568,7 @@ body.nophotos .count, body.nophotos .bar, body.nophotos .proptoggle small { visi
     </section>
 
     <section id="view-gallery" class="view scroll" hidden>
+      <div class="proptoggle propfilter" role="group" aria-label="Property"></div>
       <div id="gallery"></div>
     </section>
     <div class="gbar" id="gbar" hidden><span id="gbarCount"></span><button class="btn ghost" id="gbarPass" type="button">Pass</button><button class="btn" id="gbarTag" type="button">Tag as…</button></div>
@@ -569,10 +578,12 @@ body.nophotos .count, body.nophotos .bar, body.nophotos .proptoggle small { visi
     </section>
 
     <section id="view-roster" class="view scroll" hidden>
+      <div class="proptoggle propfilter" role="group" aria-label="Property"></div>
       <div id="roster"></div>
     </section>
 
     <section id="view-disputes" class="view scroll" hidden>
+      <div class="proptoggle propfilter" role="group" aria-label="Property"></div>
       <div id="disputes"></div>
     </section>
 
@@ -926,7 +937,9 @@ function setProperty(p) {
 }
 
 function renderPropToggle() {
-  const el = $("propToggle");
+  document.querySelectorAll(".propfilter").forEach(el => fillPropToggle(el));
+}
+function fillPropToggle(el) {
   el.replaceChildren();
   PROPERTIES.forEach(p => {
     const b = document.createElement("button");
@@ -1093,10 +1106,12 @@ const PHOTO_TABS = ["sort", "gallery", "disputes", "roster", "crew"];
 let photosLoading = null;
 function ensurePhotos() {
   if (state.photosLoaded) return Promise.resolve();
+  if (!navigator.onLine) { toast("Photos need signal. Sits work without it."); return Promise.resolve(); }
   if (!photosLoading) photosLoading = (async () => {
     state.mode = "loading"; renderHeader();
     try {
-      await loadCards();
+      // A weak signal can hang a request; give up after 20 s rather than sit on "Connecting…".
+      await Promise.race([loadCards(), new Promise((_, no) => setTimeout(() => no(new Error("timed out")), 20000))]);
       state.photosLoaded = true;
       document.body.classList.remove("nophotos");
       renderedTop = null;
@@ -1105,7 +1120,7 @@ function ensurePhotos() {
       clearInterval(refreshTimer);
       refreshTimer = setInterval(async () => { try { await loadCards(); renderedTop = null; renderAll(); } catch {} }, (URL_TTL - 30 * 60) * 1000);
     } catch (e) {
-      state.mode = "offline"; renderHeader();
+      state.mode = offlineBoot ? "offline" : "shared"; renderHeader();
       toast("Couldn't load the photos. Try again when you have signal.");
     } finally { photosLoading = null; }
   })();
@@ -1158,6 +1173,8 @@ async function sync() {
     Object.assign(state, { votes, bucks, users, consensus, scores, comments, isAdmin, crewById, proposals,
       sits: Object.fromEntries(st.map(r => [r.id, r])), sitEvents, sitWeather,
       properties: Object.fromEntries(props.map(r => [r.name, r])), mode: "shared" });
+    applyOutbox();
+    saveOfflineCopy();
     renderAll();
     if (photos) noticeDisputes();
     autoCloseSits().then(renderAll);
@@ -1254,10 +1271,12 @@ function renderHeader() {
   $("streak").textContent = state.streak >= 3 ? `· ×${state.streak}` : "";
   const busy = state.mode === "loading";
   ["btnNot", "btnBuck"].forEach(id => $(id).disabled = busy || !deck().length);
+  const waiting = outbox.length ? ` · ${outbox.length} waiting to send` : "";
   $("status").textContent =
     state.mode === "loading" ? "Connecting to the crew's book…" :
-    state.mode === "offline" ? "Can't reach Buck Book. Changes may not save until the connection is back." : "";
-  $("status").hidden = state.mode === "shared";
+    state.mode === "offline" || !navigator.onLine ? `No signal. Sits you log are kept on this phone and sent when you're back${waiting}.` :
+    waiting ? `Sending changes saved without signal${waiting}` : "";
+  $("status").hidden = state.mode === "shared" && !waiting;
 }
 
 function cardEl(c, cls) {
@@ -2812,8 +2831,8 @@ function mgrsOf(lat, lon) {
     return `${g.slice(0, 3)} ${g.slice(3, 5)} ${g.slice(5, 10)} ${g.slice(10)}`;
   } catch { return ""; }
 }
-const sitsHere = () => Object.values(state.sits || {}).filter(s => s.property === state.property)
-  .sort((a, b) => b.set_at.localeCompare(a.set_at));
+// Sits aren't filtered by property: every sit, newest first, each labelled with its property.
+const sitsHere = () => Object.values(state.sits || {}).sort((a, b) => b.set_at.localeCompare(a.set_at));
 const eventsOf = id => (state.sitEvents?.[id] || []).slice().sort((a, b) => (a.at || "").localeCompare(b.at || ""));
 const canChangeSit = s => s && (s.hunter === state.myUid || state.isAdmin);
 const lastEventAt = id => eventsOf(id).map(e => e.at).filter(Boolean).sort().pop() || null;
@@ -2827,7 +2846,10 @@ function estimateDown(s) {
 
 async function saveSit(row) {
   // Keep the row as saved: the database stamps the hunter, which decides who may change it.
+  const local = { ...(state.sits[row.id] || { hunter: state.myUid, hunter_name: state.crewById?.[state.myUid] || null }), ...row };
+  if (mustQueue()) { queueOp({ kind: "sit", row }); state.sits[row.id] = local; return true; }
   const { data, error } = await sb.from("sits").upsert(row).select().single();
+  if (error && netError(error)) { queueOp({ kind: "sit", row }); state.sits[row.id] = local; return true; }
   if (error) { toast(friendly(error)); return false; }
   state.sits[row.id] = data;
   return true;
@@ -2835,13 +2857,18 @@ async function saveSit(row) {
 
 // Weather service values for the hours of a sit, at the property's town. Fills sit_weather and the
 // sit's sunrise/sunset; never touches what the hunter entered.
+// Returns true only when weather was fetched and saved. The sit page redraws on true only, and each
+// sit is tried once per visit (weatherTried), so a lookup that can't happen (offline, no weather town)
+// never loops.
+const weatherTried = new Set();
 async function fetchSitWeather(sit) {
+  if (!sit || !navigator.onLine || outbox.some(o => o.kind === "sit" && o.row.id === sit.id)) return false;   // once the sit has reached the server
   const town = state.properties?.[sit.property];
-  if (!town?.weather_lat || !canChangeSit(sit)) return;
+  if (!town?.weather_lat || !canChangeSit(sit)) return false;
   // Only hours that have already happened: a sit still in progress gets no forecast for the hours ahead.
   const start = new Date(sit.set_at);
   const end = new Date(Math.min(Date.now(), new Date(sit.down_at || sit.planned_down_at || start.getTime() + 3 * 3600e3).getTime()));
-  if (start > new Date()) return;
+  if (start > new Date()) return false;
   const day = d => localDate(d);
   const q = new URLSearchParams({ latitude: town.weather_lat, longitude: town.weather_lon,
     hourly: "temperature_2m,wind_direction_10m,wind_speed_10m,wind_gusts_10m,pressure_msl,cloud_cover",
@@ -2849,7 +2876,7 @@ async function fetchSitWeather(sit) {
     wind_speed_unit: "mph", timezone: "America/Chicago" });
   try {
     const r = await fetch("https://api.open-meteo.com/v1/forecast?" + q);
-    if (!r.ok) return;
+    if (!r.ok) return false;
     const w = await r.json(), h = w.hourly;
     const from = new Date(start); from.setMinutes(0, 0, 0);
     const rows = h.time.map((t, i) => ({ t: new Date(t), i }))
@@ -2859,14 +2886,14 @@ async function fetchSitWeather(sit) {
     if (rows.length) {
       await sb.from("sit_weather").delete().eq("sit_id", sit.id);
       const { error } = await sb.from("sit_weather").upsert(rows);
-      if (error) return;
+      if (error) return false;
       state.sitWeather[sit.id] = rows;
     }
     const di = w.daily.time.indexOf(day(start));
-    await saveSit({ id: sit.id, property: sit.property, set_at: sit.set_at,
+    return await saveSit({ id: sit.id, property: sit.property, set_at: sit.set_at,
       sunrise: di >= 0 ? new Date(w.daily.sunrise[di]).toISOString() : null,
       sunset: di >= 0 ? new Date(w.daily.sunset[di]).toISOString() : null, weather_at: new Date().toISOString() });
-  } catch {}
+  } catch { return false; }
 }
 const weatherAt = (id, when) => {
   const rows = state.sitWeather?.[id] || [];
@@ -2898,6 +2925,13 @@ function eventText(e) {
 }
 // Save events and the animals in them. Members are replaced each time, so edits can't leave strays.
 async function saveEvents(sitId, events, removedIds = []) {
+  const op = { kind: "events", sitId, events, removed: removedIds };
+  if (mustQueue()) { queueOp(op); return null; }
+  const err = await saveEventsOnline(sitId, events, removedIds);
+  if (err && netError(err)) { queueOp(op); return null; }
+  return err;
+}
+async function saveEventsOnline(sitId, events, removedIds = []) {
   const rows = events.map(({ members, ...row }) => ({ ...row, sit_id: sitId }));
   if (rows.length) {
     const r = await sb.from("sit_events").upsert(rows);
@@ -2933,7 +2967,7 @@ function renderSits() {
   const bar = document.createElement("div");
   bar.className = "sitbar";
   bar.innerHTML = `<p class="label" style="margin:0"></p><span class="btnrow"></span>`;
-  bar.querySelector("p").textContent = `${all.length} sit${all.length === 1 ? "" : "s"} · ${state.property}`;
+  bar.querySelector("p").textContent = `${all.length} sit${all.length === 1 ? "" : "s"}`;
   const add = (label, cls, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn " + cls; b.textContent = label; b.addEventListener("click", fn); bar.querySelector(".btnrow").append(b); };
   if (!open) add("Start a sit", "", () => openSitForm());
   add("Log a past sit", "ghost", () => openSitForm(null, { past: true }));
@@ -2976,7 +3010,7 @@ function sitRow(s) {
   const wx = weatherAt(s.id, s.set_at);
   b.innerHTML = `<b></b><small></small><small></small>`;
   const [t, line1, line2] = b.children;
-  t.textContent = `${fmtDay(s.set_at)} · ${sitPart(s)}${s.spot ? " · " + s.spot : ""}`;
+  t.textContent = `${fmtDay(s.set_at)} · ${sitPart(s)} · ${s.property}${s.spot ? " · " + s.spot : ""}`;
   line1.innerHTML = "";
   line1.append(`${s.hunter_name || "Someone"} · ${fmtWhen(s.set_at, false)}–`);
   if (s.down_at) {
@@ -3199,7 +3233,6 @@ $("sitSave").addEventListener("click", async () => {
   $("sitSave").disabled = false;
   if (!ok) return;
   sitForm = null; $("sitSheet").hidden = true;
-  if (row.property !== state.property) setProperty(row.property);
   toast(down ? "Sit saved" : "You're set. Good luck.");
   if (f.live) openSitView(row.id);              // the sit's page is where events get logged
   renderAll();
@@ -3359,7 +3392,7 @@ $("evDelete").addEventListener("click", async () => {
     eventForm = null; $("eventSheet").hidden = true;
     return renderSitFormEvents();
   }
-  const { error } = await sb.from("sit_events").delete().eq("id", f.id);
+  const error = await removeRow("deleteEvent", f.id);
   if (error) return toast(friendly(error));
   state.sitEvents[f.sitId] = (state.sitEvents[f.sitId] || []).filter(e => e.id !== f.id);
   eventForm = null; $("eventSheet").hidden = true;
@@ -3431,11 +3464,15 @@ function renderSitView() {
     if (s.down_at && s.down_source && s.down_source !== "entered") btn(acts, "Confirm down time", "ghost", async () => { await saveSit({ id: s.id, property: s.property, set_at: s.set_at, down_source: "entered" }); renderAll(); });
     btn(acts, "Edit sit", "ghost", () => openSitForm(s.id));
     btn(acts, "Delete sit", "danger", () => confirmBox($("svConfirm"), "Delete this sit and everything logged on it?", "Yes, delete it", async () => {
-      const { error } = await sb.from("sits").delete().eq("id", s.id);
+      const error = await removeRow("deleteSit", s.id);
       if (error) return toast(friendly(error));
       delete state.sits[s.id]; closeSitView(); renderAll(); toast("Sit deleted");
     }, { safeFirst: true }));
-    if (!s.weather_at || (s.down_at && s.weather_at < s.down_at)) fetchSitWeather(s).then(() => { if (sitViewId === s.id) renderSitView(); });
+    const stale = !s.weather_at || (s.down_at && s.weather_at < s.down_at);
+    if (stale && !weatherTried.has(s.id)) {
+      weatherTried.add(s.id);
+      fetchSitWeather(s).then(ok => { if (ok && sitViewId === s.id) renderSitView(); });
+    }
   }
 
   // The bottom bar: Exit · I'm down · Add Event (only the hunter can add or end).
@@ -3476,6 +3513,97 @@ function renderEventView() {
 $("evvBack").addEventListener("click", closeEventView);
 $("evvEdit").addEventListener("click", () => { const { sitId, eventId } = eventViewAt; openEventForm(sitId, eventId); });
 
+// ---------- offline ----------
+// Sits must work in the tree, where there's often no signal. The page keeps (1) a copy of what Home and
+// Sits need, saved after each load, to open with no signal, and (2) an outbox of sit changes that couldn't
+// be sent, replayed in order when signal returns. Everything is keyed by ids made on the phone, so
+// sending a change twice can't duplicate it. The app files themselves are kept by sw.js.
+const OFFLINE_COPY = "buckbook-offline-v1", OUTBOX = "buckbook-outbox-v1", OUTBOX_FAILED = "buckbook-outbox-failed";
+const netError = e => !navigator.onLine || /failed to fetch|networkerror|network request|load failed|fetch failed|timed out|offline/i.test(String(e?.message || e || ""));
+let outbox = (() => { try { return JSON.parse(localStorage.getItem(OUTBOX)) || []; } catch { return []; } })();
+const mustQueue = () => !navigator.onLine || outbox.length > 0;          // keep changes in order behind anything waiting
+function saveOutbox() { try { localStorage.setItem(OUTBOX, JSON.stringify(outbox)); } catch {} renderHeader(); }
+function queueOp(op) { outbox.push(op); saveOutbox(); }
+async function removeRow(kind, id) {
+  const table = kind === "deleteSit" ? "sits" : "sit_events";
+  if (mustQueue()) { queueOp({ kind, id }); return null; }
+  const { error } = await sb.from(table).delete().eq("id", id);
+  if (error && netError(error)) { queueOp({ kind, id }); return null; }
+  return error;
+}
+async function runOp(op) {
+  let error;
+  if (op.kind === "sit") ({ error } = await sb.from("sits").upsert(op.row));
+  else if (op.kind === "events") error = await saveEventsOnline(op.sitId, op.events, op.removed);
+  else if (op.kind === "deleteSit") ({ error } = await sb.from("sits").delete().eq("id", op.id));
+  else if (op.kind === "deleteEvent") ({ error } = await sb.from("sit_events").delete().eq("id", op.id));
+  if (error) throw error;
+}
+// Lay unsent changes back over freshly loaded data, so they don't vanish from the screen.
+function applyOutbox() {
+  for (const op of outbox) {
+    if (op.kind === "sit") state.sits[op.row.id] = { ...(state.sits[op.row.id] || { hunter: state.myUid, hunter_name: state.crewById?.[state.myUid] || null }), ...op.row };
+    else if (op.kind === "events") {
+      const keep = (state.sitEvents[op.sitId] || []).filter(e => !op.events.some(x => x.id === e.id) && !op.removed.includes(e.id));
+      state.sitEvents[op.sitId] = [...keep, ...op.events];
+    } else if (op.kind === "deleteSit") delete state.sits[op.id];
+    else if (op.kind === "deleteEvent") for (const k in state.sitEvents) state.sitEvents[k] = state.sitEvents[k].filter(e => e.id !== op.id);
+  }
+}
+let flushing = false;
+async function flushOutbox() {
+  if (flushing || !outbox.length || !navigator.onLine) return;
+  flushing = true;
+  let sent = 0;
+  try {
+    while (outbox.length) {
+      try { await runOp(outbox[0]); sent++; }
+      catch (e) {
+        if (netError(e)) break;                                    // still no real signal; try again later
+        // The server refused it (not a signal problem): set it aside rather than block everything behind it.
+        try { localStorage.setItem(OUTBOX_FAILED, JSON.stringify([...(JSON.parse(localStorage.getItem(OUTBOX_FAILED)) || []), outbox[0]])); } catch {}
+        toast(`One saved change couldn't be sent: ${friendly(e)}`);
+      }
+      outbox.shift(); saveOutbox();
+    }
+  } finally { flushing = false; }
+  if (sent) {
+    toast(`Sent ${sent} change${sent === 1 ? "" : "s"} saved without signal`);
+    if (offlineBoot) return goOnline();
+    await sync();
+    weatherTried.clear();                                         // sits sent just now can get their weather
+    Object.values(state.sits).filter(x => x.hunter === state.myUid && !x.weather_at).forEach(x => fetchSitWeather(x));
+  }
+}
+function saveOfflineCopy() {
+  try {
+    const keep = ["bucks", "users", "crewById", "isAdmin", "proposals", "sits", "sitEvents", "sitWeather", "properties", "me", "myUid"];
+    localStorage.setItem(OFFLINE_COPY, JSON.stringify({ at: Date.now(), name: state.crewById?.[state.myUid] || null,
+      viewer: document.body.classList.contains("viewer"), state: Object.fromEntries(keep.map(k => [k, state[k]])) }));
+  } catch {}
+}
+const offlineCopy = () => { try { return JSON.parse(localStorage.getItem(OFFLINE_COPY)); } catch { return null; } };
+let offlineBoot = false;
+// Open from the copy: Home and Sits work; photo sections wait for signal.
+function startOffline(copy) {
+  offlineBoot = true;
+  Object.assign(state, copy.state, { mode: "offline" });
+  document.body.classList.toggle("viewer", !!copy.viewer);
+  document.body.classList.add("nophotos");
+  applyOutbox();
+  renderAll();
+  showTab("home");
+}
+// Signal is back after an offline start: sign-in refreshes and everything loads as usual.
+async function goOnline() {
+  const copy = offlineCopy();
+  offlineBoot = false;
+  if (copy?.name) start(copy.name);
+}
+window.addEventListener("online", () => { if (outbox.length) flushOutbox(); else if (offlineBoot) goOnline(); });
+window.addEventListener("offline", () => renderHeader());
+setInterval(() => { if (outbox.length) flushOutbox(); }, 60000);
+
 // ---------- home ----------
 // Where the app opens: pick a section. Only the photo sections load the photo list.
 function renderHome() {
@@ -3504,6 +3632,7 @@ $("homeLink").addEventListener("click", () => showTab("home"));
 
 // ---------- tabs & keys ----------
 function showTab(name) {
+  document.body.dataset.tab = name;
   if (PHOTO_TABS.includes(name) && !state.photosLoaded) ensurePhotos().then(() => { if (state.photosLoaded && !$("view-" + name).hidden) renderAll(); });
   document.querySelectorAll(".tabbar button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
   document.querySelectorAll(".view").forEach(v => v.hidden = v.id !== "view-" + name);
@@ -3707,6 +3836,8 @@ $("gateForm").addEventListener("submit", async e => {
 });
 
 $("signOut").addEventListener("click", async () => {
+  if (outbox.length) return toast(`${outbox.length} change${outbox.length === 1 ? " is" : "s are"} still waiting to send. Sign out once you have signal and they've gone.`);
+  try { localStorage.removeItem(OFFLINE_COPY); } catch {}
   await sb.auth.signOut();
   location.reload();
 });
@@ -3739,6 +3870,7 @@ async function start(myName) {
   state.myUid = (await sb.auth.getSession()).data.session?.user.id ?? null;
   document.body.classList.toggle("nophotos", !state.photosLoaded);
   await sync();
+  flushOutbox();
   if (!$("view-home").hidden) renderHome();
   if (!channel) {
     const live = table => payload => onLive(table, payload);
@@ -3762,10 +3894,15 @@ document.addEventListener("visibilitychange", () => {
 });
 
 (async () => {
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
   renderAll();
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) return showGate();
+  const copy = offlineCopy();
+  if (!navigator.onLine && copy) return startOffline(copy);
+  let session = null;
+  try { session = (await sb.auth.getSession()).data.session; } catch {}
+  if (!session) return copy && !navigator.onLine ? startOffline(copy) : showGate();
   const { data, error } = await sb.from("crew").select("name").eq("user_id", session.user.id).maybeSingle();
+  if (error && netError(error) && copy) return startOffline(copy);   // signal too weak to reach the server
   if (error || !data) return showGate();
   start(data.name);
 })();
