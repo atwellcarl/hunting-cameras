@@ -60,7 +60,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blaze); out
 
 /* ---------- shell: top bar / view / tab bar ---------- */
 .app { height: 100dvh; max-width: 640px; margin: 0 auto; display: grid; grid-template-rows: auto 1fr auto; }
-.topbar { padding: calc(var(--top) + 8px) 16px 0; }
+/* iOS 26 Home Screen apps report the screen short by the status bar's height (WebKit bug 301108), which left a
+   blank band under the tab bar. In the installed app, size the shell and every full-screen layer to the whole
+   screen instead. Safari tabs keep 100dvh, which is right there. */
+@media (display-mode: standalone) {
+  .app { height: 100lvh; }
+  .sheet, .gate, .viewer { bottom: auto; height: 100lvh; }
+}
+.topbar { padding: calc(var(--top) + 14px) 16px 0; }
 .topbar-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 36px; }
 .wordmark { font: 800 22px/1 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 0; }
 .wordmark span { color: var(--blaze); }
@@ -92,7 +99,7 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 .proptoggle small { font: 500 11px var(--mono); opacity: .75; }
 .bar { height: 3px; background: var(--line); margin: 8px -16px 0; }
 .bar i { display: block; height: 100%; background: var(--blaze); width: 0; transition: width .3s ease; }
-.status { margin: 0; padding: 6px 16px; font: 12px var(--mono); color: var(--unsure); background: var(--panel); text-align: center; }
+.status { margin: 8px -16px 0; padding: 6px 16px; font: 12px var(--mono); color: var(--unsure); background: var(--panel); text-align: center; }
 
 .views { position: relative; min-height: 0; }
 .view { position: absolute; inset: 0; }
@@ -379,6 +386,13 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 #sitSheet.live .notlive { display: none !important; }
 #sitSheet.nogps .gpswrap { display: none; }
 #sitSheet.downonly .sheet-body > :not(h2):not(.downfield), #sitSheet.downonly .notdown { display: none !important; }
+/* I'm down: the time is the only thing on the page, so it sits in the middle, open, with no Clear. */
+#sitSheet.downonly .sheet-body { display: flex; flex-direction: column; justify-content: center; align-items: center; }
+#sitSheet.downonly .sheet-body > h2 { text-align: center; margin-bottom: 18px; }
+#sitSheet.downonly .downfield { width: 100%; max-width: 340px; }
+#sitSheet.downonly .downfield > .label { display: none; }   /* the page title already says Down Time */
+#sitSheet.downonly .tbox { text-align: center; font-size: 22px; }
+#sitSheet.downonly .ttools .linkish { display: none; }
 .gpsrow small { flex: 1; min-width: 0; }
 .gpsrow small b { color: var(--ink); font-weight: 500; }
 .sitsmall { margin-top: 8px; font-size: 16px; padding: 10px 12px; }
@@ -562,10 +576,10 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
       <span class="scorepill"><b id="myScore">0</b><small id="myRank">Scout</small></span>
     </div>
     <div class="bar"><i id="barFill"></i></div>
+    <p class="status" id="status">Connecting to the crew's book…</p>
   </header>
 
   <div class="views">
-    <p class="status" id="status">Connecting to the crew's book…</p>
 
     <section id="view-sort" class="view" hidden>
       <div class="proptoggle propfilter" role="group" aria-label="Property"></div>
@@ -3038,15 +3052,10 @@ function sitRow(s) {
   return b;
 }
 
-// I'm down: the time is now, saved straight away; "Change" opens just the down time.
-async function markDown(id) {
-  const s = state.sits[id];
-  if (!s) return;
-  const ok = await saveSit({ id, property: s.property, set_at: s.set_at, down_at: new Date().toISOString(), down_source: "entered" });
-  if (!ok) return;
-  renderAll();
-  toast(`Down at ${fmtWhen(state.sits[id].down_at, false)}`, 0, false, { label: "Change", run: () => openSitForm(id, { down: true }) });
-  fetchSitWeather(state.sits[id]).then(renderAll);      // re-check the weather now the sit is over
+// I'm down: a page with just the down time, set to now. Back leaves the sit open; Confirm ends it
+// and goes to the list of sits.
+function markDown(id) {
+  if (state.sits[id]) openSitForm(id, { down: true });
 }
 
 // ----- time wheels -----
@@ -3106,6 +3115,7 @@ function timeWheel(input) {
   done.addEventListener("click", close);
   clear.addEventListener("click", () => { native.set.call(input, ""); close(); });
   input._wheelClose = close;
+  input._wheelOpen = () => { if (!open) box.click(); };
   // A wheel inside a hidden sheet can't scroll yet, so forms call refreshWheels() once they're shown.
   input._wheelShow = show;
   show();
@@ -3131,17 +3141,16 @@ function openSitForm(id = null, opts = {}) {
   $("sitDate").value = localDate(set);
   $("sitSet").value = opts.past && !s ? "" : localTime(set);
   $("sitPlanTime").value = s?.planned_down_at ? localTime(new Date(s.planned_down_at)) : "";
-  if (opts.down && s && !s.down_at) {
-    // Default to now, unless the planned time has passed and nothing was logged after it.
-    const [est] = estimateDown(s);
-    $("sitDown").value = est && new Date(est) < now ? localTime(new Date(est)) : localTime(now);
-  } else $("sitDown").value = s?.down_at ? localTime(new Date(s.down_at)) : "";
+  if (opts.down && s && !s.down_at) $("sitDown").value = localTime(now);
+  else $("sitDown").value = s?.down_at ? localTime(new Date(s.down_at)) : "";
   $("sitSpot").value = s?.spot || "";
   $("sitNotes").value = s?.notes || "";
-  $("sitSave").textContent = opts.down ? "Save" : s ? "Save" : opts.past ? "Save Sit" : "Start Sit";
+  $("sitSave").textContent = opts.down ? "Confirm" : s ? "Save" : opts.past ? "Save Sit" : "Start Sit";
+  $("sitCancel").textContent = opts.down ? "Back" : "Cancel";
   syncSitForm();
   $("sitSheet").hidden = false;
   refreshWheels($("sitSheet"));
+  if (opts.down) $("sitDown")._wheelOpen();     // I'm down: straight to the scroller
   $("sitSheet").querySelector(".sheet-body").scrollTop = 0;
   if (live) startGps();
 }
@@ -3227,6 +3236,7 @@ $("sitSave").addEventListener("click", async () => {
   if (!set) { $("sitSet").focus(); return toast("When were you set?"); }
   if (f.live && !$("sitPlanTime").value) { $("sitPlanTime").focus(); return toast("When do you plan to get down?"); }
   let down = fromLocal(date, $("sitDown").value);
+  if (!down && $("sitSheet").classList.contains("downonly")) return toast("When did you get down?");
   if (down && down < set) down = new Date(down.getTime() + 24 * 3600e3);    // got down after midnight
   let planned = fromLocal(date, $("sitPlanTime").value);
   if (planned && planned < set) planned = new Date(planned.getTime() + 24 * 3600e3);
@@ -3247,9 +3257,11 @@ $("sitSave").addEventListener("click", async () => {
   }
   $("sitSave").disabled = false;
   if (!ok) return;
+  const endedNow = $("sitSheet").classList.contains("downonly");
   sitForm = null; $("sitSheet").hidden = true;
-  toast(down ? "Sit saved" : "You're set. Good luck.");
+  toast(endedNow ? `Down at ${fmtWhen(down.toISOString(), false)}` : down ? "Sit saved" : "You're set. Good luck.");
   if (f.live) openSitView(row.id);              // the sit's page is where events get logged
+  if (endedNow) { closeEventView(); closeSitView(); showTab("sits"); }   // I'm down: back to the list of sits
   renderAll();
   await fetchSitWeather(state.sits[row.id]);
   renderAll();
