@@ -104,8 +104,9 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 .tabbar { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border-top: 1px solid var(--line); background: var(--bg); padding-bottom: var(--bottom); }
 .tabbar button {
   appearance: none; border: 0; background: none; padding: 8px 0 7px; cursor: pointer; color: var(--muted);
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .08em;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0;
+  /* Seven tabs on a 375-wide phone leave 53 px each: "Disputes" fits only this tight. */
+  font: 500 10px var(--mono); text-transform: uppercase; letter-spacing: .01em;
 }
 .tabbar svg { width: 22px; height: 22px; }
 .tabbar button { position: relative; }
@@ -610,6 +611,12 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
       <div id="disputes"></div>
     </section>
 
+    <section id="view-map" class="view" hidden>
+      <div id="map"></div>
+      <div class="m-top"><div class="proptoggle propfilter" role="group" aria-label="Property"></div></div>
+      <p class="m-loading" id="mapLoading">Loading the map…</p>
+    </section>
+
     <section id="view-sits" class="view scroll" hidden>
       <div id="sits"></div>
     </section>
@@ -632,6 +639,8 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21v-7M12 14c-3 0-5-2-5-5V4M7 8H4M12 14c3 0 5-2 5-5V4M17 8h3M9.5 11.5L7 10M14.5 11.5L17 10"/></svg>Roster</button>
     <button role="tab" id="tab-sits" aria-selected="false" data-tab="sits">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l6 8h-3l4 6H5l4-6H6z"/><path d="M12 17v4"/></svg>Sits</button>
+    <button role="tab" id="tab-map" aria-selected="false" data-tab="map">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 6.5l6-2.5 6 2.5 6-2.5v13.5l-6 2.5-6-2.5-6 2.5z"/><path d="M9 4v13.5M15 6.5V20"/></svg>Map</button>
     <button role="tab" id="tab-crew" aria-selected="false" data-tab="crew">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c1.8.8 3 2.6 3.5 5.2"/></svg>Crew</button>
   </nav>
@@ -1166,6 +1175,11 @@ async function sync() {
     // Sits (010_sits.sql): admins and users only; viewers get nothing back.
     const [st, se, sw, props, sm] = await Promise.all(["sits", "sit_events", "sit_weather", "properties", "sit_event_members"]
       .map(t => fetchAll(t, q => t === "sit_weather" ? q.order("hour") : t === "sits" ? q.order("set_at") : t === "sit_events" ? q.order("created_at") : q).catch(() => [])));
+    // The map (013_map.sql): everyone signed in sees cameras, spots and parcel lines.
+    const [cs, spots, parcels] = await Promise.all([
+      fetchAll("camera_spots").catch(() => []), fetchAll("spots").catch(() => []),
+      state.parcels?.length ? Promise.resolve(state.parcels) : fetchAll("parcels").catch(() => []),
+    ]);
     const cm = photos ? await fetchAll("comments", q => q.order("at")) : [];
     const comments = {};
     cm.forEach(r => (comments[r.card_id] ||= []).push(r));
@@ -1197,7 +1211,8 @@ async function sync() {
     sw.forEach(r => (sitWeather[r.sit_id] ||= []).push(r));
     Object.assign(state, { votes, bucks, users, consensus, scores, comments, isAdmin, crewById, proposals,
       sits: Object.fromEntries(st.map(r => [r.id, r])), sitEvents, sitWeather,
-      properties: Object.fromEntries(props.map(r => [r.name, r])), mode: "shared" });
+      properties: Object.fromEntries(props.map(r => [r.name, r])), mode: "shared",
+      cameraSpots: cs, spots: Object.fromEntries(spots.map(r => [r.id, r])), parcels });
     applyOutbox();
     saveOfflineCopy();
     renderAll();
@@ -1277,6 +1292,7 @@ function renderAll() {
   if (eventViewAt) renderEventView();
   if (!$("view-crew").hidden) renderCrew();
   if (!$("view-disputes").hidden) renderDisputes();
+  if (!$("view-map").hidden) window.BBMap?.refresh();
   if (profileId) renderProfile();
   if (disputeId) renderDispute();
   const n = myDisputes().length;
@@ -3487,6 +3503,10 @@ function renderSitView() {
   });
   const acts = $("svActs"); acts.replaceChildren();
   const btn = (box, label, cls, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn " + cls; b.textContent = label; b.addEventListener("click", fn); box.append(b); };
+  if (s.lat != null) btn(acts, "Show on Map", "ghost", () => {
+    window.mapFocus = { lon: s.lon, lat: s.lat };            // the map centres here when it opens
+    closeEventView(); closeSitView(); setProperty(s.property); showTab("map");
+  });
   if (mine) {
     if (s.down_at && s.down_source && s.down_source !== "entered") btn(acts, "Confirm Down Time", "ghost", async () => { await saveSit({ id: s.id, property: s.property, set_at: s.set_at, down_source: "entered" }); renderAll(); });
     btn(acts, "Edit Sit", "ghost", () => openSitForm(s.id));
@@ -3558,8 +3578,9 @@ let outbox = (() => { try { return JSON.parse(localStorage.getItem(OUTBOX)) || [
 const mustQueue = () => !navigator.onLine || outbox.length > 0;          // keep changes in order behind anything waiting
 function saveOutbox() { try { localStorage.setItem(OUTBOX, JSON.stringify(outbox)); } catch {} renderHeader(); }
 function queueOp(op) { outbox.push(op); saveOutbox(); }
+const REMOVE_TABLE = { deleteSit: "sits", deleteEvent: "sit_events", deleteSpot: "spots", deleteCamSpot: "camera_spots" };
 async function removeRow(kind, id) {
-  const table = kind === "deleteSit" ? "sits" : "sit_events";
+  const table = REMOVE_TABLE[kind];
   if (mustQueue()) { queueOp({ kind, id }); return null; }
   const { error } = await sb.from(table).delete().eq("id", id);
   if (error && netError(error)) { queueOp({ kind, id }); return null; }
@@ -3569,8 +3590,9 @@ async function runOp(op) {
   let error;
   if (op.kind === "sit") ({ error } = await sb.from("sits").upsert(op.row));
   else if (op.kind === "events") error = await saveEventsOnline(op.sitId, op.events, op.removed);
-  else if (op.kind === "deleteSit") ({ error } = await sb.from("sits").delete().eq("id", op.id));
-  else if (op.kind === "deleteEvent") ({ error } = await sb.from("sit_events").delete().eq("id", op.id));
+  else if (op.kind === "spot") ({ error } = await sb.from("spots").upsert(op.row));
+  else if (op.kind === "camSpot") ({ error } = await sb.from("camera_spots").upsert(op.row));
+  else if (REMOVE_TABLE[op.kind]) ({ error } = await sb.from(REMOVE_TABLE[op.kind]).delete().eq("id", op.id));
   if (error) throw error;
 }
 // Lay unsent changes back over freshly loaded data, so they don't vanish from the screen.
@@ -3582,6 +3604,10 @@ function applyOutbox() {
       state.sitEvents[op.sitId] = [...keep, ...op.events];
     } else if (op.kind === "deleteSit") delete state.sits[op.id];
     else if (op.kind === "deleteEvent") for (const k in state.sitEvents) state.sitEvents[k] = state.sitEvents[k].filter(e => e.id !== op.id);
+    else if (op.kind === "spot") (state.spots ||= {})[op.row.id] = { ...(state.spots[op.row.id] || { created_by: state.myUid, created_by_name: state.crewById?.[state.myUid] || null }), ...op.row };
+    else if (op.kind === "deleteSpot") delete state.spots?.[op.id];
+    else if (op.kind === "camSpot") state.cameraSpots = [...(state.cameraSpots || []).filter(c => c.id !== op.row.id), { source: "placed", ...op.row }];
+    else if (op.kind === "deleteCamSpot") state.cameraSpots = (state.cameraSpots || []).filter(c => c.id !== op.id);
   }
 }
 let flushing = false;
@@ -3611,7 +3637,8 @@ async function flushOutbox() {
 }
 function saveOfflineCopy() {
   try {
-    const keep = ["bucks", "users", "crewById", "isAdmin", "proposals", "sits", "sitEvents", "sitWeather", "properties", "me", "myUid"];
+    const keep = ["bucks", "users", "crewById", "isAdmin", "proposals", "sits", "sitEvents", "sitWeather", "properties", "me", "myUid",
+      "cameraSpots", "spots", "parcels"];
     localStorage.setItem(OFFLINE_COPY, JSON.stringify({ at: Date.now(), name: state.crewById?.[state.myUid] || null,
       viewer: document.body.classList.contains("viewer"), state: Object.fromEntries(keep.map(k => [k, state[k]])) }));
   } catch {}
@@ -3645,6 +3672,7 @@ function renderHome() {
   const open = Object.values(state.sits || {}).find(s => !s.down_at && s.hunter === state.myUid);
   const tiles = [
     ["sits", "Sits", open ? `In the tree since ${fmtWhen(open.set_at, false)}${open.spot ? " · " + open.spot : ""}` : "Start a sit, or log one from your notes", "big sits" + (open ? " live" : "")],
+    ["map", "Map", "Cameras, spots and sits", ""],
     ["sort", "Sort", "Keeper or pass", "sort"],
     ["gallery", "Gallery", "Photos waiting for a name", ""],
     ["disputes", "Disputes", "Settle the calls", ""],
@@ -3677,6 +3705,29 @@ function showTab(name) {
   else if (gallerySel) exitGallerySelect();   // leaving the Gallery ends select mode
   if (name === "crew") renderCrew();
   if (name === "disputes") renderDisputes();
+  if (name === "map") openMap(); else window.BBMap?.hide();
+}
+// The map is its own files (map.js, map.css, and MapLibre), fetched the first time the Map tab opens and
+// kept by sw.js for offline use, so the rest of the app doesn't carry them.
+let mapLoading = null;
+function loadMapFiles() {
+  const add = (tag, attrs) => new Promise((ok, fail) => {
+    const el = Object.assign(document.createElement(tag), attrs);
+    el.onload = ok; el.onerror = () => fail(new Error("couldn't load " + (attrs.src || attrs.href)));
+    document.head.append(el);
+  });
+  return mapLoading ||= Promise.all([
+    add("link", { rel: "stylesheet", href: "https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" }),
+    add("link", { rel: "stylesheet", href: "map.css" }),
+    add("script", { src: "https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js" }),
+  ]).then(() => add("script", { src: "map.js" })).catch(e => { mapLoading = null; throw e; });
+}
+function openMap() {
+  if (window.BBMap) return window.BBMap.show();
+  $("mapLoading").hidden = false;
+  $("mapLoading").textContent = "Loading the map…";
+  loadMapFiles().then(() => { $("mapLoading").hidden = true; if (document.body.dataset.tab === "map") window.BBMap.show(); })
+    .catch(() => { $("mapLoading").textContent = navigator.onLine ? "The map didn't load. Try again in a moment." : "The map needs signal the first time it opens."; });
 }
 document.querySelectorAll(".tabbar button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
 $("btnNot").addEventListener("click", () => decide("not"));
@@ -3917,6 +3968,8 @@ async function start(myName) {
       .on("postgres_changes", { event: "*", schema: "public", table: "sits" }, live("sits"))
       .on("postgres_changes", { event: "*", schema: "public", table: "sit_events" }, live("sit_events"))
       .on("postgres_changes", { event: "*", schema: "public", table: "sit_event_members" }, live("sit_event_members"))
+      .on("postgres_changes", { event: "*", schema: "public", table: "spots" }, live("spots"))
+      .on("postgres_changes", { event: "*", schema: "public", table: "camera_spots" }, live("camera_spots"))
       .subscribe();
   }
 }

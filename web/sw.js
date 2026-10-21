@@ -2,6 +2,8 @@
 // The page and config are fetched fresh whenever there's signal (so updates arrive) and come from this
 // cache when there isn't. Libraries, fonts and icons are cached once. Crew data and photos (Supabase) and
 // weather lookups are never cached here; the page keeps its own small copy of what Sits needs.
+// Map tiles are saved by the page itself (map.js) in caches named "buckbook-tiles-…", which this file
+// leaves alone, so a new version of the app never throws away a downloaded map.
 const CACHE = "buckbook-v1";
 const SHELL = [
   "./", "index.html", "config.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png",
@@ -14,7 +16,7 @@ self.addEventListener("install", e => {
 });
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys()
-    .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+    .then(keys => Promise.all(keys.filter(k => k !== CACHE && !k.startsWith("buckbook-tiles")).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
@@ -22,9 +24,10 @@ self.addEventListener("fetch", e => {
   const req = e.request, url = new URL(req.url);
   if (req.method !== "GET") return;
   if (url.hostname.endsWith("supabase.co") || url.hostname.endsWith("open-meteo.com")) return;   // data stays live
+  if (url.hostname.endsWith("nationalmap.gov") || url.hostname.endsWith("dnrmaps.wi.gov")) return;   // map tiles: map.js keeps them
   const ours = url.origin === self.location.origin;
-  // The page itself and its config: network first, the saved copy when offline.
-  if (req.mode === "navigate" || (ours && /(\/|index\.html|config\.js)$/.test(url.pathname))) {
+  // The page itself, its config and the map's files: network first, the saved copy when offline.
+  if (req.mode === "navigate" || (ours && /(\/|index\.html|config\.js|map\.js|map\.css)$/.test(url.pathname))) {
     const key = req.mode === "navigate" ? "index.html" : req;
     e.respondWith(fetch(req)
       .then(res => { if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(key, copy)); } return res; })

@@ -101,6 +101,12 @@ Every app open starts from zero, because photo links change on each load.
 
 - **Tactacam Hit List import** (`buckbook/hitlist.py`, 2026-09-26): reads Hit List bucks read-only and imports them as bucks, with the photos credited as votes from the member who keeps the list. Photos with more than one buck in them are left for the crew. Re-running adds only new photos.
 - **Merge by agreement** (`008_member_types.sql`, 2026-09-26): name-merge suggestions from shared photos. Anyone proposes; it merges once both bucks' namers agree, and either namer can say "not the same buck". Admins merge straight away. Member types: admin / user / viewer.
+- **Map** (`013_map.sql`, `buckbook/map_data.py`, `web/map.js`, 2026-10-21): a mini onX for the two properties.
+  - **Layers:** Wisconsin DNR leaf-off photos (3-inch, from the regional orthophoto program; sharpest, and slow to load), USGS summer photos, USGS topo, USGS 3DEP lidar terrain shading, and 10 ft contours over any of them.
+  - **On the map:** cameras where they stand now, from the GPS on their photos, with where they stood before (cameras with no GPS are placed by hand). Spots anyone adds (stand, saddle tree, scrape, rub, bedding, crossing, food, water, parking). The trees we've sat, from sit GPS. Wisconsin statewide parcel lines, with our parcels bold; tap a parcel for owner and acres.
+  - **Offline:** "Download Map" saves a property's map on the phone (about 14 MB, 10 to 20 minutes on Wi-Fi, because the leaf-off server is slow). With the GPS dot, distance and direction to anything, and spots added with no signal, it works in the woods.
+  - **Wind lens:** pick a wind, or a forecast morning or evening, and the trees sat in that wind light up. Each shows its scent cone and the paths of the deer seen there (red if they busted or winded us), and the trees are ranked by sits, deer and busts. Buck photos per camera in that wind show once photos are loaded. Plain counts, not odds, until there's a season or two of sits.
+  - **Still to do:** thermals from the elevation data (morning air sinks, evening air rises); a compass heading for the blue dot; leaf-off photos older than the latest flight.
 
 ---
 

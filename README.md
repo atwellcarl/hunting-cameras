@@ -36,9 +36,10 @@ Supabase (free tier)        Postgres + private photo storage + auth + realtime
 | `buckbook/import_deck.py` | Turn tagged bucks into cards in the local staging deck; recomputes bursts |
 | `buckbook/supabase_sync.py` | `push` (with size check), `backup` |
 | `buckbook/crew_admin.py` | Create / reset / remove crew accounts |
+| `buckbook/map_data.py` | Camera positions from photo GPS, and Wisconsin parcel lines around each property, for the map |
 | `buckbook/db.py` | Local staging database (SQLite) |
 | `supabase/*.sql` | Database schema and migrations, applied in order in the Supabase SQL Editor |
-| `web/` | The Buck Book app (`index.html`) and its public Supabase config (`config.js`) |
+| `web/` | The Buck Book app (`index.html`), the map (`map.js`, `map.css`, loaded when the Map tab opens), the offline worker (`sw.js`), and the public Supabase config (`config.js`) |
 | `.github/workflows/` | Publish `web/` to GitHub Pages; ping Supabase every 3 days so the free project doesn't pause |
 | `buckbook/server.py`, `buckbook/static/`, `apps/`, `build_buck_deck.py`, `buckbook/import_artifact.py` | Earlier versions (local FastAPI server, first prototype). Not used by the live app. |
 
@@ -63,7 +64,7 @@ Git-ignored on purpose: `.env` (secrets), `data/` (photos, records with GPS and 
    SUPABASE_SECRET_KEY=sb_secret_...
    ```
    The secret key bypasses all database rules. It stays in `.env` and is only used by the Mac scripts.
-4. **Supabase**: run `supabase/schema.sql`, then `002`–`012` in order in the SQL Editor. After `010`, set each property's weather town in the `properties` table (kept out of the repo). In Authentication settings, turn **off** "Allow new users to sign up" and "Allow anonymous sign-ins". Crew accounts are created with `crew_admin.py`.
+4. **Supabase**: run `supabase/schema.sql`, then `002`–`013` in order in the SQL Editor. After `010`, set each property's weather town in the `properties` table (kept out of the repo). In Authentication settings, turn **off** "Allow new users to sign up" and "Allow anonymous sign-ins". Crew accounts are created with `crew_admin.py`.
 5. **GitHub Pages**: Settings → Pages → Source: GitHub Actions. Pushing `web/` publishes the app.
 
 ## Everyday commands
@@ -120,6 +121,14 @@ Member types: `user` is the default (vote, comment, name bucks, propose merges).
 ```
 To add a read-only member, run `add "Their Name"` first, then `type "Their Name" viewer`.
 
+Map data: camera positions (from the GPS on each photo; a move of more than 150 m is a new position) and the Wisconsin statewide parcel lines around each property. `prepare` works it out into `data/map/` and prints no coordinates; `push` shows what it writes and asks first. Run both after a pull that moved a camera.
+```bash
+.venv/bin/python -m buckbook.map_data prepare
+```
+```bash
+.venv/bin/python -m buckbook.map_data push
+```
+
 ### Camera folders and properties
 
 Cameras get renamed and moved between properties, so neither the name nor Reveal's location label is trusted:
@@ -140,17 +149,20 @@ Cameras get renamed and moved between properties, so neither the name nor Reveal
 - **card_drop** (view): photos ready to drop: two passes, or one pass 14+ days old, and no keeper vote.
 - **sits**: one time in one tree: hunter, property, set / planned down / down times, the wind the hunter felt, GPS averaged on the phone. **sit_events**: what happened: a deer group, another animal, or a wind change, with when, from → headed, yards, and when and how it ended. **sit_event_members**: who was in a group (doe and fawn counts, each buck named or described, other animals by species). **sit_weather**: the weather service's hourly values at the property's town, kept beside the hunter's wind, never instead of it. Admins and users see sits; viewers don't.
 
+- **camera_spots**: where each camera has stood (from photo GPS, or placed by hand for cameras that send none). **parcels**: the state's parcel lines around each property, with owner and acres, and which are ours. **spots**: what the crew marks on the map. **properties** also holds the box each property's map covers. Everyone signed in sees the map, viewers too; everyone can add spots and change their own.
+
 Rules the database enforces: only crew can read or write anything; viewers can't change anything; merging two bucks needs both namers to agree, or an admin; votes, bucks and comments are stamped with the signed-in member; a vote can't name a buck from the other property; merges stay within one property.
 
 ## The app
 
 - **Home** is where it opens. Only the photo sections (Sort, Gallery, Disputes, Roster, Crew) load the photo list, the first time one is opened, so Sits works on a weak signal.
-- **Property switch** at the top: every screen works inside the chosen property.
+- **Property filter** on Sort, Gallery, Disputes, Roster and Map: those screens work inside the chosen property. Sits lists both.
 - **Sits**: Start a sit (set, planned down, wind; GPS taken automatically), then Add Event for deer, other animals or a wind change, and I'm down. Past sits can be logged from notes. Each buck's page lists the sits he was seen on.
 - **Sort**: swipe right (buck) or left (not). Then "Seen him before?": pick from the book, **Compare** (his photos full screen with yours as an inset; swipe through him, tap the inset to swap), name a new buck, or **Can't ID him**.
 - **Disputes**: called out the moment they happen, with who disagrees, a switch button, and a comment thread. The deck skips settled photos and puts disputed ones first.
 - **Gallery**: photos nobody has named, one camera at a time, grouped by burst; Select (or long-press) to tag or pass several at once.
 - **Roster**: photo grid of bucks, and a **Name them** queue for buck photos nobody has named (can't-ID ones included). Buck profiles support edit, merge, delete, move a photo, and make cover.
+- **Map**: Leaf-Off (Wisconsin DNR, 3-inch, bare trees), Summer, Topo or Terrain (lidar shading), with contours. Cameras, spots, the trees we've sat, and parcel lines; tap anything for details and how far it is from you. **+** adds a spot or places a camera that sends no GPS. **Download Map** (in the layers button) saves the property on the phone for no signal. The **wind lens** shows, for a wind or a forecast, the trees sat in it, where the scent went, how the deer moved, and which cameras got bucks.
 - **Crew**: leaderboard with each member's agreement rate.
 
 ## Limits and gotchas
@@ -159,6 +171,7 @@ Rules the database enforces: only crew can read or write anything; viewers can't
 - **Photo resolution**: Reveal's standard previews only (1280×720 on the Pro 3.0s, 640×480 on older cameras). Full-resolution originals live on the SD cards.
 - **Reveal quirks**: deep pages sometimes fail (`DuplicatesFound`), some records arrive without a date, and a few downloads come back truncated. The scripts skip past all three.
 - **Reveal weather** is a regional hourly report keyed by ZIP code, 1–2 hours behind the photo, and identical for both properties. Its day/night label is unreliable near dawn.
+- **Map pictures** come straight from USGS and the Wisconsin DNR, not through Supabase, and are kept on the phone. The DNR leaf-off server takes 5–30 s a request, so the map asks it for large pieces, shows the USGS summer photos underneath while they load, and a property's download takes 10–20 minutes.
 - **Ollama** occasionally stalls. `tag_deer.py` retries three times, then skips that deer.
 
 ## Ideas not built yet
