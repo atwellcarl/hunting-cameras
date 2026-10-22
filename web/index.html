@@ -46,8 +46,10 @@ html, body, .app, .views { overflow-x: hidden; max-width: 100%; }
 .view.scroll, .sheet-body { overflow-x: hidden; }
 /* Safari zooms the page when you tap a text box set smaller than 16px; keep every one at 16px or more. */
 input, select, textarea { font-size: max(16px, 1em); }
-/* No double-tap-to-zoom delay on buttons (pinch zoom still works). */
-button, .btn, select { touch-action: manipulation; }
+/* No double-tap zoom anywhere (pinch zoom and scrolling still work). On buttons alone it isn't enough: a quick
+   second tap on a counter's number, the gap beside it, or a disabled − lands on the page and zooms it. The
+   swipe deck, photo viewer and map set their own touch handling, which these more specific rules keep. */
+*, button, .btn, select { touch-action: manipulation; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
   font: 16px/1.45 var(--body);
