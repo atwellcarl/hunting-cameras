@@ -122,6 +122,22 @@
     if (b?.weather_lat != null) return [[b.weather_lon - .02, b.weather_lat - .015], [b.weather_lon + .02, b.weather_lat + .015]];
     return null;
   }
+  // Survey lines run a degree or two off true north on screen. The bearing that turns our parcels square
+  // with the phone: the length-weighted average direction of their edges, folded into one quarter turn.
+  function squareBearing(p = prop()) {
+    let x = 0, y = 0;
+    (state.parcels || []).filter(q => q.property === p && q.ours).forEach(q => {
+      const polys = q.geom.type === "MultiPolygon" ? q.geom.coordinates : [q.geom.coordinates];
+      polys.forEach(poly => poly[0].forEach((a, i, ring) => {
+        const b = ring[i + 1]; if (!b) return;
+        const len = metres(a, b), ang = bearing(a, b) * Math.PI / 180 * 4;     // ×4: N, E, S and W edges agree
+        x += Math.cos(ang) * len; y += Math.sin(ang) * len;
+      }));
+    });
+    if (!x && !y) return 0;
+    let deg = Math.atan2(y, x) * 180 / Math.PI / 4;                             // within ±45°
+    return Math.abs(deg) < 0.2 ? 0 : +deg.toFixed(2);
+  }
   // Each camera where it stands now; where it stood before is kept as its history.
   function cameras(p = prop()) {
     const by = {};
@@ -180,6 +196,7 @@
       <button type="button" class="m-tool" data-act="locate" aria-label="Where I am"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
       <button type="button" class="m-tool m-add" data-act="add" aria-label="Add to the map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
     </div>
+    <button type="button" class="m-tool m-north" data-act="north" aria-label="North up, or square to our parcels"><svg viewBox="0 0 24 24"><path d="M12 3l5 15-5-3.5L7 18z" fill="#FF6B1A"/><text x="12" y="23.5" text-anchor="middle" font-size="6" font-weight="700" fill="currentColor" font-family="sans-serif">N</text></svg></button>
     <div class="m-cross" hidden><i></i></div>
     <div class="m-card" hidden><button type="button" class="m-x" aria-label="Close">×</button><div class="m-body"></div></div>`;
   view.append(ui);
@@ -210,11 +227,15 @@
   const start = boxOf(prop());
   const map = new maplibregl.Map({
     container: "map", style, minZoom: 12, maxZoom: 20, attributionControl: false,
-    dragRotate: false, pitchWithRotate: false, touchPitch: false, renderWorldCopies: false,
+    pitchWithRotate: false, touchPitch: false, renderWorldCopies: false,      // two fingers turn the map
     // With nothing to fit yet, the middle of Wisconsin (the repo is public: no property coordinates here).
-    ...(start ? { bounds: start, fitBoundsOptions: { padding: 20 } } : { center: [-89.8, 44.6], zoom: 12 }),
+    ...(start ? { bounds: start, fitBoundsOptions: { padding: 20, bearing: squareBearing() } } : { center: [-89.8, 44.6], zoom: 12 }),
   });
-  map.touchZoomRotate.disableRotation();
+  const north = ui.querySelector(".m-north");
+  const pointNorth = () => { north.firstElementChild.style.transform = `rotate(${-map.getBearing()}deg)`; };
+  map.on("rotate", pointNorth); map.on("moveend", pointNorth); pointNorth();
+  // Square to our parcels, or north up if it's already square.
+  north.addEventListener("click", () => { const sq = squareBearing(), b = map.getBearing(); map.easeTo({ bearing: Math.abs(b - sq) < 0.5 && sq ? 0 : sq }); });
   map.addControl(new maplibregl.ScaleControl({ unit: "imperial", maxWidth: 90 }), "bottom-left");
   map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: "Photos: WI DNR (WROC), USGS · Elevation: USGS 3DEP · Parcels: WI Statewide Parcels" }), "bottom-right");
   let ready = false, shownProp = prop();
@@ -726,7 +747,7 @@
     map,                                      // for poking at in the browser console
     show() {
       requestAnimationFrame(() => map.resize());
-      if (prop() !== shownProp) { shownProp = prop(); closeCard(); const bx = boxOf(prop()); if (bx) map.fitBounds(bx, { padding: 20, duration: 0 }); }
+      if (prop() !== shownProp) { shownProp = prop(); closeCard(); const bx = boxOf(prop()); if (bx) map.fitBounds(bx, { padding: 20, duration: 0, bearing: squareBearing() }); }
       draw();
       if (window.mapFocus) { const f = window.mapFocus; window.mapFocus = null; map.jumpTo({ center: [f.lon, f.lat], zoom: Math.max(map.getZoom(), 17) }); }
       // GPS only while the map is open, so it doesn't drain the phone; quietly, without moving the map.
