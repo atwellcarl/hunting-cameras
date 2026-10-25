@@ -59,7 +59,8 @@
 .m-bases button[aria-pressed="true"] { border-color: var(--blaze); }
 .m-bar { height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; margin-top: 10px; }
 .m-bar i { display: block; height: 100%; width: 0; background: var(--blaze); transition: width .3s; }
-.m-wind .compass { margin-top: 10px; }
+.m-wind .wclock { margin-top: 10px; }
+.m-wind .wdial { width: min(100%, 200px); }
 .m-fc .chips { gap: 6px; }
 
 /* pins */
@@ -94,3 +95,5 @@
 .m-mini .m-btns { margin-top: 10px; }
 .m-miniline { color: var(--ink); padding-right: 36px; }
 .m-miniline b { color: var(--blaze); }
+/* Picking where a sit was: only the map, the crosshair, the locate and north buttons, and the card. */
+.m-picking .m-top, .m-picking .m-tool:not([data-act="locate"]):not(.m-north) { display: none; }

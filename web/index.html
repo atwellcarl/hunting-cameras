@@ -383,7 +383,11 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 .sitgrid > label:has(#sitDate) { grid-column: 1 / -1; }   /* the day gets its own row */
 .sitgrid .newname { padding: 12px 10px; font-size: 16px; }
 #sitSheet.live .notlive { display: none !important; }
-#sitSheet.nogps .gpswrap { display: none; }
+#sitSheet:not(.live) .liveonly { display: none; }
+.sitstands { gap: 6px; margin-top: 8px; }
+.sitstands:empty { display: none; }
+.sitstands button { min-height: 38px; min-width: 0; padding: 6px 12px; font-size: 13px; }
+.sitpick { width: 100%; margin-top: 10px; }
 #sitSheet.downonly .sheet-body > :not(h2):not(.downfield), #sitSheet.downonly .notdown { display: none !important; }
 /* I'm down: the time is the only thing on the page, so it sits in the middle, open, with no Clear. */
 #sitSheet.downonly .sheet-body { display: flex; flex-direction: column; justify-content: center; align-items: center; }
@@ -402,6 +406,23 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 .compass button.wide { grid-column: span 4; }
 .compass.small button { min-height: 36px; font-size: 11px; }
 .compass button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+/* wind clock (windClock) */
+.wclock { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.wdial { width: min(100%, 240px); aspect-ratio: 1; touch-action: none; cursor: pointer; user-select: none; -webkit-user-select: none; outline: none; }
+.wdial:focus-visible .ring { stroke: var(--blaze); }
+.wdial .ring { fill: var(--panel); stroke: var(--line); stroke-width: 3; }
+.wdial .tick { stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
+.wdial text { text-anchor: middle; fill: var(--muted); font: 600 11px var(--mono); pointer-events: none; }
+.wdial text.major { fill: var(--ink); font: 800 20px var(--display); }
+.wdial .arrow line { stroke: var(--blaze); stroke-width: 7; stroke-linecap: round; }
+.wdial .arrow circle { fill: var(--bg); stroke: var(--blaze); stroke-width: 4; }
+.wdial .arrow polygon { fill: var(--blaze); stroke: var(--blaze); stroke-width: 3; stroke-linejoin: round; }
+.wread { margin: 0; font-size: 15px; color: var(--muted); text-align: center; }
+.wread b { color: var(--ink); }
+.wread .wclear { margin-left: 8px; font-size: 13px; padding: 0; }
+.wvar { appearance: none; min-height: 40px; padding: 6px 16px; border: 2px solid var(--line); background: var(--panel); border-radius: 999px;
+  font: 600 13px var(--mono); color: var(--ink); cursor: pointer; }
+.wvar[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .sitadd { margin-top: 8px; }
 .sitadd .btn { width: 100%; }
 /* Time wheels: hour, minute and AM/PM each scroll on their own and snap; the middle row is the value. */
@@ -784,11 +805,13 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
     <div class="notlive downfield"><span class="label">Down <small class="notdown">(leave empty while you're still in the tree)</small></span><input id="sitDown" type="hidden" data-wheel="optional"></div>
     <div>
       <p class="label">Wind you feel</p>
-      <div class="compass" id="sitWind"></div>
+      <div id="sitWind"></div>
     </div>
     <div>
-      <p class="label gpswrap">Where you are</p>
-      <div class="gpsrow gpswrap"><small id="sitGpsInfo"></small></div>
+      <p class="label">Where <span class="notlive">you sat</span><span class="liveonly">you are</span></p>
+      <div class="gpsrow"><small id="sitGpsInfo"></small></div>
+      <div class="chips sitstands" id="sitStands"></div>
+      <button type="button" class="btn ghost sitpick" id="sitPick">Mark on Map</button>
       <input id="sitSpot" class="newname sitsmall notlive" type="text" maxlength="60" placeholder="Spot name (optional), e.g. Pole plot" autocomplete="off">
     </div>
     <div class="notlive">
@@ -818,7 +841,7 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
       <p class="label">Headed</p><div class="compass small" id="evTo"></div>
       <label><span class="label">Yards (optional)</span><input id="evYards" class="newname sitsmall" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="e.g. 75"></label>
     </div>
-    <div id="evWindWrap"><p class="label">Wind now</p><div class="compass" id="evWind"></div></div>
+    <div id="evWindWrap"><p class="label">Wind now</p><div id="evWind"></div></div>
     <div class="sitgrid evtimes">
       <div><span class="label">Time <small>(optional)</small></span><input id="evTime" type="hidden" data-wheel="optional"></div>
       <div class="evend"><span class="label">Ended <small>(optional)</small></span><input id="evEnd" type="hidden" data-wheel="optional"></div>
@@ -3000,6 +3023,57 @@ function compass(el, dirs, current, onPick, extra = []) {
   });
 }
 
+// Wind clock: tap or drag to the side of the dial the wind comes FROM. The arrow crosses the dial from there
+// and points where the wind is blowing, so nobody has to guess which of the two we mean. Directions are
+// still saved as "from" (S = a south wind), the way the weather service and the rest of the app use them.
+function windClock(el, current, onPick, { variable = true, clearable = true } = {}) {
+  const pt = (deg, r) => [r * Math.sin(deg * Math.PI / 180), -r * Math.cos(deg * Math.PI / 180)].map(v => +v.toFixed(2));
+  el.classList.add("wclock");
+  el.innerHTML = `<svg class="wdial" viewBox="-110 -110 220 220" tabindex="0" role="slider" aria-label="Wind direction: tap where it comes from">
+      <circle r="104" class="ring"/>
+      ${WIND16.map((d, i) => { const [x1, y1] = pt(i * 22.5, 104), [x2, y2] = pt(i * 22.5, i % 4 ? 96 : 90); return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="tick"/>`; }).join("")}
+      ${WIND16.map((d, i) => { const [x, y] = pt(i * 22.5, i % 2 ? 0 : i % 4 ? 75 : 74); return i % 2 ? "" : `<text x="${x}" y="${y}" class="${i % 4 ? "minor" : "major"}" dy=".35em">${d}</text>`; }).join("")}
+      <g class="arrow"></g>
+    </svg>
+    <p class="wread"></p>
+    ${variable ? `<button type="button" class="wvar">Swirling / Variable</button>` : ""}`;
+  const svg = el.querySelector("svg"), arrow = el.querySelector(".arrow"), read = el.querySelector(".wread"), vbtn = el.querySelector(".wvar");
+  const opposite = d => WIND16[(WIND16.indexOf(d) + 8) % 16];
+  function show(d) {
+    const on = d && d !== "variable";
+    svg.setAttribute("aria-valuetext", on ? `from ${d}` : d === "variable" ? "variable" : "not set");
+    if (vbtn) vbtn.setAttribute("aria-pressed", String(d === "variable"));
+    if (!on) { arrow.innerHTML = ""; read.innerHTML = d === "variable" ? "Swirling / variable" : "Tap where the wind comes <b>from</b>"; return; }
+    // Kept inside the ring of letters (radius 74) so N, E, S and W stay readable under it.
+    const deg = WIND16.indexOf(d) * 22.5, [tx, ty] = pt(deg, 52), [hx, hy] = pt(deg + 180, 34);
+    const [l1x, l1y] = pt(deg + 180 - 22, 28), [l2x, l2y] = pt(deg + 180 + 22, 28), [px, py] = pt(deg + 180, 56);
+    arrow.innerHTML = `<line x1="${tx}" y1="${ty}" x2="${hx}" y2="${hy}"/><circle cx="${tx}" cy="${ty}" r="7"/>
+      <polygon points="${px},${py} ${l1x},${l1y} ${l2x},${l2y}"/>`;
+    read.innerHTML = `From <b>${d}</b>, blowing toward ${opposite(d)}` + (clearable ? ` <button type="button" class="linkish wclear">Clear</button>` : "");
+    read.querySelector(".wclear")?.addEventListener("click", () => onPick(null));
+  }
+  // Which of the 16 directions a touch is on, from its angle around the centre.
+  const dirAt = e => {
+    const r = svg.getBoundingClientRect(), x = e.clientX - r.left - r.width / 2, y = e.clientY - r.top - r.height / 2;
+    if (Math.hypot(x, y) < r.width * .12) return null;                 // the very centre: no direction
+    return WIND16[Math.round(((Math.atan2(x, -y) * 180 / Math.PI + 360) % 360) / 22.5) % 16];
+  };
+  let dragging = null;
+  svg.addEventListener("pointerdown", e => { const d = dirAt(e); if (!d) return; dragging = d; svg.setPointerCapture(e.pointerId); show(d); });
+  svg.addEventListener("pointermove", e => { if (dragging == null) return; const d = dirAt(e); if (d && d !== dragging) { dragging = d; show(d); } });
+  svg.addEventListener("pointerup", () => { if (dragging == null) return; const d = dragging; dragging = null; onPick(d); });
+  svg.addEventListener("pointercancel", () => { dragging = null; show(current); });
+  svg.addEventListener("keydown", e => {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const i = current && current !== "variable" ? WIND16.indexOf(current) : 0;
+    onPick(WIND16[(i + step + 16) % 16]);
+  });
+  vbtn?.addEventListener("click", () => onPick(current === "variable" ? null : "variable"));
+  show(current);
+}
+
 // ----- the Sits tab -----
 function renderSits() {
   const wrap = $("sits");
@@ -3146,7 +3220,6 @@ function openSitForm(id = null, opts = {}) {
   const live = !s && !opts.past;                 // starting a sit now: set, planned down, wind; GPS is taken automatically
   $("sitSheet").classList.toggle("live", live);
   $("sitSheet").classList.toggle("downonly", !!opts.down);
-  $("sitSheet").classList.toggle("nogps", !live && !s?.lat);
   sitForm = { id: id || crypto.randomUUID(), isNew: !s, live, wind: s?.wind_dir || null,
     property: s?.property || state.property, propPicked: !!s,        // GPS may choose it until you tap one
     gps: s?.lat ? { lat: s.lat, lon: s.lon, acc: s.gps_accuracy_m, at: s.gps_at || null } : null,
@@ -3177,8 +3250,9 @@ function syncSitForm() {
     b.addEventListener("click", () => { sitForm.property = name; sitForm.propPicked = true; syncSitForm(); });
     pr.append(b);
   });
-  compass($("sitWind"), WIND16.map(d => [d]), sitForm.wind, v => { sitForm.wind = v; syncSitForm(); }, [["variable", "Swirling / Variable", "wide"]]);
+  windClock($("sitWind"), sitForm.wind, v => { sitForm.wind = v; syncSitForm(); });
   if (!gpsWatch) showGpsInfo();
+  renderSitStands();
   renderSitFormEvents();
 }
 function renderSitFormEvents() {
@@ -3198,6 +3272,59 @@ function renderSitFormEvents() {
 }
 $("sitCancel").addEventListener("click", () => { stopGps(); sitForm = null; $("sitSheet").hidden = true; });
 
+// Where a sit was: an existing stand or saddle spot, a tree sat before, or a pin dropped on the map.
+// Trees are sits within 35 m of each other, the same rule the map uses.
+function knownStands(prop) {
+  const out = Object.values(state.spots || {}).filter(s => s.property === prop && ["stand", "saddle"].includes(s.kind))
+    .map(s => ({ label: s.label || (s.kind === "saddle" ? "Saddle tree" : "Stand"), lat: s.lat, lon: s.lon }));
+  const near = (a, b) => Math.hypot((a.lat - b.lat) * 111320, (a.lon - b.lon) * 111320 * Math.cos(a.lat * Math.PI / 180)) < 35;
+  Object.values(state.sits || {}).filter(s => s.property === prop && s.lat != null && s.id !== sitForm?.id)
+    .sort((a, b) => b.set_at.localeCompare(a.set_at)).forEach(s => {
+      if (out.some(o => near(o, s))) return;
+      out.push({ label: s.spot || `Tree sat ${fmtDay(s.set_at)}`, lat: s.lat, lon: s.lon });
+    });
+  return out;
+}
+function renderSitStands() {
+  const box = $("sitStands"); box.replaceChildren();
+  const g = sitForm.gps;
+  knownStands(sitForm.property).slice(0, 8).forEach(t => {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = t.label;
+    b.setAttribute("aria-pressed", String(!!g && g.lat === t.lat && g.lon === t.lon));
+    b.addEventListener("click", () => useSitPlace({ ...t, picked: true }));
+    box.append(b);
+  });
+}
+function useSitPlace(p) {
+  stopGps();
+  // A spot name that only came from the stand picked before goes with it.
+  const spot = $("sitSpot").value.trim(), old = sitForm.gps?.label;
+  if (old && spot === old) $("sitSpot").value = "";
+  sitForm.gps = { lat: p.lat, lon: p.lon, acc: null, at: null, picked: true, label: p.label || null };
+  // Only a real name becomes the spot name, not one made up for display ("Tree by #3", "Tree sat Oct 17").
+  const madeUp = /^(Tree( by .*| sat .*)?|Stand|Saddle tree)$/;
+  if (p.label && !madeUp.test(p.label) && !$("sitSpot").value.trim()) $("sitSpot").value = p.label;
+  syncSitForm();
+}
+// Mark on Map: the form steps aside, the map opens on the sit's property with a crosshair, and the place
+// picked comes back to the form. Tapping a stand or a tree on the map picks it.
+$("sitPick").addEventListener("click", async () => {
+  if (!sitForm) return;
+  const prevTab = document.body.dataset.tab, prevProp = state.property, form = sitForm;
+  $("sitSheet").hidden = true;
+  if (form.property !== state.property) setProperty(form.property);
+  showTab("map");
+  let place = null;
+  try {
+    await loadMapFiles();
+    place = await window.BBMap.pick({ at: form.gps ? { lat: form.gps.lat, lon: form.gps.lon } : null });
+  } catch { toast(navigator.onLine ? "The map didn't load." : "The map needs signal the first time it opens."); }
+  if (prevProp !== state.property) setProperty(prevProp);
+  showTab(prevTab);
+  sitForm = form; $("sitSheet").hidden = false;
+  if (place) useSitPlace(place);
+});
+
 // GPS for the tree: average readings for up to 45 s, weighting the more accurate ones, and note when the fix
 // was taken. Starts by itself when you start a sit; works with no signal.
 let gpsWatch = null, gpsReads = [], gpsTimer = null;
@@ -3208,9 +3335,10 @@ function stopGps() {
 function showGpsInfo(text) {
   const el = $("sitGpsInfo"), g = sitForm?.gps;
   if (text) return el.textContent = text;
-  if (!g) return el.textContent = "Not marked";
+  if (!g) return el.textContent = sitForm?.live ? "Not marked" : "Not marked yet: pick a stand or mark it on the map";
   el.innerHTML = "";
-  const b = document.createElement("b"); b.textContent = `GPS fixed${g.at ? " " + fmtWhen(g.at, false) : ""}`;
+  const b = document.createElement("b");
+  b.textContent = g.label ? `At ${g.label}` : g.picked ? "Marked on the map" : `GPS fixed${g.at ? " " + fmtWhen(g.at, false) : ""}`;
   el.append(b, document.createElement("br"), mgrsOf(g.lat, g.lon));
 }
 function finishGps() {
@@ -3384,7 +3512,7 @@ function syncEventForm() {
   });
   compass($("evFrom"), DIR8.map(d => [d]), f.from, v => { f.from = v; syncEventForm(); });
   compass($("evTo"), DIR8.map(d => [d]), f.to, v => { f.to = v; syncEventForm(); });
-  compass($("evWind"), WIND16.map(d => [d]), f.wind, v => { f.wind = v; syncEventForm(); }, [["variable", "Swirling / Variable", "wide"]]);
+  windClock($("evWind"), f.wind, v => { f.wind = v; syncEventForm(); }, { clearable: false });
 }
 $("evCancel").addEventListener("click", () => { eventForm = null; $("eventSheet").hidden = true; });
 // Yards: typed digits only (no spinner or scroll-to-change); the phone shows its number pad.

@@ -267,7 +267,11 @@
     const el = document.createElement("button");
     el.type = "button"; el.className = "m-pin " + cls;
     el.innerHTML = `<span class="m-dot">${inner}</span>${label ? `<span class="m-label">${esc(label)}</span>` : ""}`;
-    el.addEventListener("click", e => { e.stopPropagation(); onTap(); });
+    el.addEventListener("click", e => {
+      e.stopPropagation();
+      if (!picking) return onTap();
+      if (!cls.includes("m-cam")) pickTarget(lngLat, label);           // picking a sit's place: stands and trees count
+    });
     const m = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat(lngLat).addTo(map);
     markers.push(m);
     return el;
@@ -306,7 +310,7 @@
     card.hidden = true; picked = null; cross.hidden = true; adding = null;
     if (ready) map.setFilter("parcel-pick", ["==", ["get", "id"], ""]);
   }
-  ui.querySelector(".m-x").addEventListener("click", closeCard);
+  ui.querySelector(".m-x").addEventListener("click", () => picking ? endPick(null) : closeCard());
   const fromYou = lngLat => me ? `<p class="m-away">${away(metres(me, lngLat))} ${WIND16[Math.round(bearing(me, lngLat) / 22.5) % 16]} of you</p>` : "";
   const btnRow = (...btns) => `<div class="m-btns">${btns.filter(Boolean).join("")}</div>`;
   const b = (act, label, cls = "") => `<button type="button" class="btn ${cls}" data-act="${act}">${esc(label)}</button>`;
@@ -434,11 +438,40 @@
 
   // Taps on the map itself: a parcel, or nothing (close the card).
   map.on("click", e => {
-    if (adding) return;
+    if (adding || picking) return;
     const hit = prefs.show.parcels && map.queryRenderedFeatures(e.point, { layers: ["parcel-fill"] })[0];
     if (hit) pick({ type: "parcel", id: hit.properties.id });
     else closeCard();
   });
+
+  // ---------- picking where a sit was ----------
+  let picking = null;              // { resolve, target } while the sit form is asking for a place
+  function pickCard() {
+    const t = picking.target;
+    const el = openCard(`
+      <p class="label">Where Was the Sit?</p>
+      <p class="m-sub">${t ? `<b>${esc(t.label)}</b>` : "Move the map until the cross is on the tree, or tap a stand or a tree you've sat."}</p>
+      ${btnRow(b("cancel", "Cancel"), me && !t ? b("gps", "Use My GPS") : "", b("use", t ? "Use This One" : "Use This Spot"))}`, "m-adding");
+    on(el, {
+      cancel: () => endPick(null),
+      gps: () => map.easeTo({ center: me, zoom: Math.max(map.getZoom(), 17) }),
+      use: () => { const c = map.getCenter(); endPick(picking.target || { lat: +c.lat.toFixed(6), lon: +c.lng.toFixed(6) }); },
+    });
+  }
+  function pickTarget(lngLat, label) {
+    picking.target = { lat: lngLat[1], lon: lngLat[0], label };
+    map.easeTo({ center: lngLat });
+    pickCard();
+  }
+  // Dragging the map after tapping a stand means "somewhere else": back to the crosshair.
+  map.on("dragstart", () => { if (picking?.target) { picking.target = null; pickCard(); } });
+  function endPick(result) {
+    const p = picking;
+    picking = null;
+    view.classList.remove("m-picking");
+    closeCard();
+    p?.resolve(result);
+  }
 
   // ---------- adding a spot, placing a camera ----------
   let adding = null;
@@ -683,9 +716,9 @@
       <p class="label">Wind Lens</p>
       <p class="m-sub">Pick a wind to see what happened in it before: trees we sat, where our scent went, and how the deer moved.</p>
       <div class="m-fc" id="mFc"></div>
-      <div class="compass small" id="mWind"></div>
+      <div id="mWind"></div>
       <div id="mRank"></div>`, "m-wind");
-    compass(el.querySelector("#mWind"), WIND16.map(d => [d]), lens?.dir, v => { lens = v ? { dir: v } : null; draw(); v ? windMini() : windCard(); });
+    windClock(el.querySelector("#mWind"), lens?.dir, v => { lens = v ? { dir: v } : null; draw(); v ? windMini() : windCard(); }, { variable: false });
     forecast(prop()).then(rows => {
       const box = el.querySelector("#mFc");
       if (!box || !rows?.length) return;
@@ -747,13 +780,24 @@
     map,                                      // for poking at in the browser console
     show() {
       requestAnimationFrame(() => map.resize());
-      if (prop() !== shownProp) { shownProp = prop(); closeCard(); const bx = boxOf(prop()); if (bx) map.fitBounds(bx, { padding: 20, duration: 0, bearing: squareBearing() }); }
+      if (prop() !== shownProp) { shownProp = prop(); if (!picking) closeCard(); const bx = boxOf(prop()); if (bx) map.fitBounds(bx, { padding: 20, duration: 0, bearing: squareBearing() }); }
       draw();
       if (window.mapFocus) { const f = window.mapFocus; window.mapFocus = null; map.jumpTo({ center: [f.lon, f.lat], zoom: Math.max(map.getZoom(), 17) }); }
       // GPS only while the map is open, so it doesn't drain the phone; quietly, without moving the map.
       if (navigator.permissions?.query) navigator.permissions.query({ name: "geolocation" }).then(r => { if (r.state === "granted") locate(false); }).catch(() => {});
     },
-    hide() { stopLocate(); },
+    hide() { stopLocate(); if (picking) endPick(null); },
+    // Where was a sit? Resolves to { lat, lon, label? }, or null if cancelled (index.html's Mark on Map).
+    pick(opts = {}) {
+      return new Promise(resolve => {
+        picking?.resolve(null);
+        closeCard();
+        picking = { resolve, target: null };
+        view.classList.add("m-picking"); cross.hidden = false;
+        if (opts.at) map.jumpTo({ center: [opts.at.lon, opts.at.lat], zoom: Math.max(map.getZoom(), 17) });
+        pickCard();
+      });
+    },
     refresh() {
       if (prop() !== shownProp) return this.show();
       if (adding) return;                     // don't redraw under someone placing a spot
