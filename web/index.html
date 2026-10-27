@@ -384,9 +384,6 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 .sitgrid .newname { padding: 12px 10px; font-size: 16px; }
 #sitSheet.live .notlive { display: none !important; }
 #sitSheet:not(.live) .liveonly { display: none; }
-.sitstands { gap: 6px; margin-top: 8px; }
-.sitstands:empty { display: none; }
-.sitstands button { min-height: 38px; min-width: 0; padding: 6px 12px; font-size: 13px; }
 .sitpick { width: 100%; margin-top: 10px; }
 #sitSheet.downonly .sheet-body > :not(h2):not(.downfield), #sitSheet.downonly .notdown { display: none !important; }
 /* I'm down: the time is the only thing on the page, so it sits in the middle, open, with no Clear. */
@@ -417,9 +414,11 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 .wdial .arrow line { stroke: var(--blaze); stroke-width: 7; stroke-linecap: round; }
 .wdial .arrow circle { fill: var(--bg); stroke: var(--blaze); stroke-width: 4; }
 .wdial .arrow polygon { fill: var(--blaze); stroke: var(--blaze); stroke-width: 3; stroke-linejoin: round; }
-.wread { margin: 0; font-size: 15px; color: var(--muted); text-align: center; }
-.wread b { color: var(--ink); }
-.wread .wclear { margin-left: 8px; font-size: 13px; padding: 0; }
+.wread { margin: 0; font-size: 15px; color: var(--muted); text-align: center; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.wread .wfrom { font: 800 26px/1 var(--display); text-transform: uppercase; color: var(--ink); letter-spacing: .02em; }
+.wread .wfrom b { color: var(--blaze); font-weight: 800; }
+.wread .wto { font: 13px var(--mono); }
+.wread .wclear { font-size: 13px; padding: 2px 0; }
 .wvar { appearance: none; min-height: 40px; padding: 6px 16px; border: 2px solid var(--line); background: var(--panel); border-radius: 999px;
   font: 600 13px var(--mono); color: var(--ink); cursor: pointer; }
 .wvar[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
@@ -810,7 +809,6 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
     <div>
       <p class="label">Where <span class="notlive">you sat</span><span class="liveonly">you are</span></p>
       <div class="gpsrow"><small id="sitGpsInfo"></small></div>
-      <div class="chips sitstands" id="sitStands"></div>
       <button type="button" class="btn ghost sitpick" id="sitPick">Mark on Map</button>
       <input id="sitSpot" class="newname sitsmall notlive" type="text" maxlength="60" placeholder="Spot name (optional), e.g. Pole plot" autocomplete="off">
     </div>
@@ -3049,7 +3047,7 @@ function windClock(el, current, onPick, { variable = true, clearable = true } = 
     const [l1x, l1y] = pt(deg + 180 - 22, 28), [l2x, l2y] = pt(deg + 180 + 22, 28), [px, py] = pt(deg + 180, 56);
     arrow.innerHTML = `<line x1="${tx}" y1="${ty}" x2="${hx}" y2="${hy}"/><circle cx="${tx}" cy="${ty}" r="7"/>
       <polygon points="${px},${py} ${l1x},${l1y} ${l2x},${l2y}"/>`;
-    read.innerHTML = `From <b>${d}</b>, blowing toward ${opposite(d)}` + (clearable ? ` <button type="button" class="linkish wclear">Clear</button>` : "");
+    read.innerHTML = `<span class="wfrom">Wind from <b>${d}</b></span><span class="wto">blowing toward ${opposite(d)}</span>` + (clearable ? `<button type="button" class="linkish wclear">Clear</button>` : "");
     read.querySelector(".wclear")?.addEventListener("click", () => onPick(null));
   }
   // Which of the 16 directions a touch is on, from its angle around the centre.
@@ -3252,7 +3250,6 @@ function syncSitForm() {
   });
   windClock($("sitWind"), sitForm.wind, v => { sitForm.wind = v; syncSitForm(); });
   if (!gpsWatch) showGpsInfo();
-  renderSitStands();
   renderSitFormEvents();
 }
 function renderSitFormEvents() {
@@ -3272,29 +3269,7 @@ function renderSitFormEvents() {
 }
 $("sitCancel").addEventListener("click", () => { stopGps(); sitForm = null; $("sitSheet").hidden = true; });
 
-// Where a sit was: an existing stand or saddle spot, a tree sat before, or a pin dropped on the map.
-// Trees are sits within 35 m of each other, the same rule the map uses.
-function knownStands(prop) {
-  const out = Object.values(state.spots || {}).filter(s => s.property === prop && ["stand", "saddle"].includes(s.kind))
-    .map(s => ({ label: s.label || (s.kind === "saddle" ? "Saddle tree" : "Stand"), lat: s.lat, lon: s.lon }));
-  const near = (a, b) => Math.hypot((a.lat - b.lat) * 111320, (a.lon - b.lon) * 111320 * Math.cos(a.lat * Math.PI / 180)) < 35;
-  Object.values(state.sits || {}).filter(s => s.property === prop && s.lat != null && s.id !== sitForm?.id)
-    .sort((a, b) => b.set_at.localeCompare(a.set_at)).forEach(s => {
-      if (out.some(o => near(o, s))) return;
-      out.push({ label: s.spot || `Tree sat ${fmtDay(s.set_at)}`, lat: s.lat, lon: s.lon });
-    });
-  return out;
-}
-function renderSitStands() {
-  const box = $("sitStands"); box.replaceChildren();
-  const g = sitForm.gps;
-  knownStands(sitForm.property).slice(0, 8).forEach(t => {
-    const b = document.createElement("button"); b.type = "button"; b.textContent = t.label;
-    b.setAttribute("aria-pressed", String(!!g && g.lat === t.lat && g.lon === t.lon));
-    b.addEventListener("click", () => useSitPlace({ ...t, picked: true }));
-    box.append(b);
-  });
-}
+// Where a sit was: picked on the map, by crosshair or by tapping a stand or a tree sat before.
 function useSitPlace(p) {
   stopGps();
   // A spot name that only came from the stand picked before goes with it.
@@ -3311,7 +3286,9 @@ function useSitPlace(p) {
 $("sitPick").addEventListener("click", async () => {
   if (!sitForm) return;
   const prevTab = document.body.dataset.tab, prevProp = state.property, form = sitForm;
-  $("sitSheet").hidden = true;
+  // Everything full-screen over the map steps aside: the form, and the sit's page and event when editing from there.
+  const covering = ["sitSheet", "sitView", "eventView"].filter(id => !$(id).hidden);
+  covering.forEach(id => $(id).hidden = true);
   if (form.property !== state.property) setProperty(form.property);
   showTab("map");
   let place = null;
@@ -3321,7 +3298,8 @@ $("sitPick").addEventListener("click", async () => {
   } catch { toast(navigator.onLine ? "The map didn't load." : "The map needs signal the first time it opens."); }
   if (prevProp !== state.property) setProperty(prevProp);
   showTab(prevTab);
-  sitForm = form; $("sitSheet").hidden = false;
+  sitForm = form;
+  covering.forEach(id => $(id).hidden = false);
   if (place) useSitPlace(place);
 });
 
@@ -3335,7 +3313,7 @@ function stopGps() {
 function showGpsInfo(text) {
   const el = $("sitGpsInfo"), g = sitForm?.gps;
   if (text) return el.textContent = text;
-  if (!g) return el.textContent = sitForm?.live ? "Not marked" : "Not marked yet: pick a stand or mark it on the map";
+  if (!g) return el.textContent = sitForm?.live ? "Not marked" : "Not marked yet";
   el.innerHTML = "";
   const b = document.createElement("b");
   b.textContent = g.label ? `At ${g.label}` : g.picked ? "Marked on the map" : `GPS fixed${g.at ? " " + fmtWhen(g.at, false) : ""}`;
