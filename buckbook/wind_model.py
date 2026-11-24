@@ -10,9 +10,11 @@ Commands:
                                adds WindNinja's diurnal model (thermal slope flows) for a clear late-fall
                                morning (7:30) or evening (16:30); without it, no thermals.
   preview PROPERTY CASE        Draw a case's arrows over terrain shading with our parcel lines, as a PNG.
-  html PROPERTY CASE           An interactive map of a case (data/wind/runs/CASE/CASE.html): the app's map
-                               layers, parcel lines, the property's sits, and the modeled wind; tap for
-                               speed and direction. It holds exact locations, so it stays on this Mac.
+  html PROPERTY CASE [leaf-off]  An interactive map of a case (data/wind/runs/CASE/CASE.html): the app's map
+                               layers, parcel lines, the property's sits, and the modeled wind, above the
+                               trees or where you stand (canopy sheltering from USFS tree cover; leaf-off
+                               shelters less). Tap for speed and direction. It holds exact locations, so it
+                               stays on this Mac.
 
 Usage: .venv/bin/python -m buckbook.wind_model run "North Ridge" S 10 PM
 Never prints coordinates.
@@ -181,13 +183,56 @@ def preview(prop, name):
     return png
 
 
-def html(prop, name):
+# ---------- wind where you stand ----------
+# WindNinja reports wind 20 ft above the vegetation: over the woods, that's above the treetops. To bring it
+# down to standing height, each 20 m cell is scaled by how much the trees there shelter it:
+#  - open ground (under 10% canopy): the wind's log profile from 20 ft down to 5 ft over short vegetation
+#    (roughness 0.03 m), about 0.74;
+#  - under trees: the sheltered wind adjustment factor used in US fire modeling (Andrews 2012, RMRS-GTR-266):
+#    WAF = 0.555 / (sqrt(f H) ln((20 + 0.36 H) / (0.13 H))), with H canopy height in ft and f the crown fill
+#    (canopy cover x crown ratio / 3). Driftless hardwoods: H 65 ft, crown ratio 0.5.
+# Canopy cover comes from the USFS / NLCD Tree Canopy Cover (30 m, latest year). It's a summer measure, so
+# leaf-off sheltering is weaker: LEAF_OFF scales the crown fill down.
+TCC = "https://imagery.geoplatform.gov/iipp/rest/services/Vegetation/USFS_EDW_NLCD_TCC_CONUS/ImageServer"
+CANOPY_FT, CROWN_RATIO, LEAF_OFF = 65, .5, .35
+OPEN_FACTOR = math.log(1.52 / .03) / math.log(6.1 / .03)          # 5 ft vs 20 ft over grass
+
+
+def canopy(prop, head):
+    """Percent tree canopy on the same 20 m grid as the wind runs."""
+    import numpy as np
+    tif, asc = WIND / f"{slug(prop)}_canopy.tif", WIND / f"{slug(prop)}_canopy.asc"
+    if not asc.exists():
+        x0, y0, cs, nc, nr = head["xllcorner"], head["yllcorner"], head["cellsize"], int(head["ncols"]), int(head["nrows"])
+        zone = int(((prepared()["properties"][prop]["map_west"] + prepared()["properties"][prop]["map_east"]) / 2 + 180) // 6) + 1
+        q = {"bbox": f"{x0},{y0},{x0 + nc * cs},{y0 + nr * cs}", "bboxSR": 26900 + zone, "imageSR": 26900 + zone, "size": f"{nc},{nr}",
+             "format": "tiff", "pixelType": "U8", "interpolation": "RSP_NearestNeighbor", "time": "1704067200000", "f": "image"}
+        tif.write_bytes(urllib.request.urlopen(TCC + "/exportImage?" + urllib.parse.urlencode(q), timeout=120).read())
+        docker("gdal_translate", "-q", "-of", "AAIGrid", f"/data/{tif.name}", f"/data/{asc.name}")
+    _, cc = read_asc(asc)
+    return np.where(cc <= 100, cc, 0)                                # 254/255 = no data: treat as open
+
+
+def stand_factor(cc, leaf_off=False):
+    """Wind at 5 ft where you stand, as a share of WindNinja's 20 ft wind, for each cell's canopy cover."""
+    import numpy as np
+    def sheltered(c):
+        f = c / 100 * CROWN_RATIO / 3 * (LEAF_OFF if leaf_off else 1)
+        return np.minimum(.555 / (np.sqrt(np.maximum(f, 1e-6) * CANOPY_FT) * math.log((20 + .36 * CANOPY_FT) / (.13 * CANOPY_FT))), OPEN_FACTOR)
+    # Open below 5% canopy, sheltered from 25%, and a blend between for field edges and scattered trees.
+    w = np.clip((cc - 5) / 20, 0, 1)
+    return (1 - w) * OPEN_FACTOR + w * sheltered(np.maximum(cc, 25))
+
+
+def html(prop, name, leaf_off=False):
     import numpy as np
     from buckbook.supabase_sync import call
     out = WIND / "runs" / name
     hv, speed = read_asc(next(out.glob("*_vel.asc"))); _, frm = read_asc(next(out.glob("*_ang.asc")))
     cs, x0, y0 = hv["cellsize"], hv["xllcorner"], hv["yllcorner"]
     nrows, ncols = speed.shape
+    cc = canopy(prop, hv)
+    ground = speed * stand_factor(cc, leaf_off)
     b = prepared()["properties"][prop]
     zone = int(((b["map_west"] + b["map_east"]) / 2 + 180) // 6) + 1
     # Every cell centre to lon/lat in one go, then the wind there as a short arrow (shaft and head).
@@ -212,8 +257,8 @@ def html(prop, name):
     sparse, coarse, fine, points = [], [], [], []      # arrows every 160, 80 and 40 m, for zoomed out to zoomed in
     for (r, c), (lon, lat) in zip(cells, lonlat):
         v, f = float(speed[r, c]), float(frm[r, c])
-        props = {"mph": round(v, 1), "from": DIRS[round(f / 22.5) % 16], "deg": round(f)}
-        points.append([round(lon, 6), round(lat, 6), props["mph"], props["deg"]])
+        props = {"mph": round(v, 1), "ground": round(float(ground[r, c]), 1), "from": DIRS[round(f / 22.5) % 16], "deg": round(f)}
+        points.append([round(lon, 6), round(lat, 6), props["mph"], props["deg"], props["ground"], int(cc[r, c])])
         if r % 2 == 0 and c % 2 == 0:
             fine.append({"type": "Feature", "properties": props, "geometry": {"type": "MultiLineString", "coordinates": arrow(lon, lat, f + 180, 32)}})
         if r % 8 == 0 and c % 8 == 0:
@@ -229,7 +274,8 @@ def html(prop, name):
     data = {"title": title, "box": [[b["map_west"], b["map_south"]], [b["map_east"], b["map_north"]]],
             "sparse": {"type": "FeatureCollection", "features": sparse}, "coarse": {"type": "FeatureCollection", "features": coarse}, "fine": {"type": "FeatureCollection", "features": fine},
             "parcels": {"type": "FeatureCollection", "features": parcels}, "sits": {"type": "FeatureCollection", "features": sit_feats},
-            "points": points, "maxmph": round(float(speed.max()), 1)}
+            "points": points, "maxmph": round(float(speed.max()), 1), "maxground": round(float(ground.max()), 1),
+            "season": "leaves off" if leaf_off else "leaves on"}
     page = (ROOT / "tools" / "windninja" / "wind_map.html").read_text().replace("/*DATA*/null", json.dumps(data, separators=(",", ":")))
     path = out / f"{name}.html"
     path.write_text(page)
@@ -245,7 +291,7 @@ if __name__ == "__main__":
         preview(a[1], run(a[1], a[2], int(a[3]), a[4].upper() if len(a) == 5 else None))
     elif a[:1] == ["preview"] and len(a) == 3:
         preview(a[1], a[2])
-    elif a[:1] == ["html"] and len(a) == 3:
-        html(a[1], a[2])
+    elif a[:1] == ["html"] and len(a) in (3, 4):
+        html(a[1], a[2], leaf_off=a[3:] == ["leaf-off"])
     else:
         print(__doc__)

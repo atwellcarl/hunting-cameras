@@ -34,7 +34,9 @@
 <div id="map"></div>
 <div class="panel">
   <h1 id="title"></h1>
-  <p class="sub">WindNinja, standard solver, 20 ft above the trees. Arrows point downwind. Tap anywhere for the wind there; tap an orange dot for a sit.</p>
+  <p class="sub">WindNinja, standard solver. Arrows point downwind. Tap anywhere for the wind there; tap an orange dot for a sit.</p>
+  <div class="row" id="heights"><button data-h="ground" aria-pressed="true">Where You Stand</button><button data-h="mph" aria-pressed="false">Above the Trees</button></div>
+  <p class="sub" id="hnote" style="margin:6px 0 0"></p>
   <div class="row" id="bases"></div>
   <div class="row"><button id="arrows" aria-pressed="true">Arrows</button><button id="parcels" aria-pressed="true">Parcels</button><button id="sitsBtn" aria-pressed="true">Sits</button></div>
   <div class="legend">Wind speed (mph)<div class="bar"></div><div class="ends"><span>0</span><span id="maxmph"></span></div></div>
@@ -52,7 +54,12 @@ const BASES = {
   summer: { name: "Summer", src: { type: "raster", tiles: ["https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}"], tileSize: 256, maxzoom: 16 } },
   terrain: { name: "Terrain", src: { type: "raster", tiles: exportTiles(DEP, "format=jpgpng&renderingRule=" + encodeURIComponent(JSON.stringify({ rasterFunction: "Hillshade Multidirectional" }))), tileSize: 512, maxzoom: 17 } },
 };
-const color = ["interpolate", ["linear"], ["get", "mph"], 0, "#3b0f70", D.maxmph * .25, "#8c2981", D.maxmph * .5, "#de4968", D.maxmph * .75, "#fe9f6d", D.maxmph, "#fcfdbf"];
+// One color scale for both heights (0 to the fastest above the trees), so "where you stand" reads as calmer.
+const colorBy = key => ["interpolate", ["linear"], ["get", key], 0, "#3b0f70", D.maxmph * .25, "#8c2981", D.maxmph * .5, "#de4968", D.maxmph * .75, "#fe9f6d", D.maxmph, "#fcfdbf"];
+let height = "ground";
+const color = colorBy(height);
+const NOTES = { ground: `About 5 ft up: open ground, or sheltered by the trees there (USFS canopy cover, ${D.season}).`,
+                mph: "20 ft above the vegetation: above the treetops in the woods." };
 const style = { version: 8, sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": "#1b2118" } }] };
 for (const [id, b] of Object.entries(BASES)) {
   style.sources[id] = b.src;
@@ -102,6 +109,15 @@ const toggle = (btnId, layers) => {
     layers.forEach(l => map.setLayoutProperty(l, "visibility", on ? "visible" : "none"));
   };
 };
+// Where you stand vs above the trees: recolor the arrows, update the note and the readout.
+document.getElementById("hnote").textContent = NOTES[height];
+document.querySelectorAll("#heights button").forEach(btn => btn.onclick = () => {
+  height = btn.dataset.h;
+  document.querySelectorAll("#heights button").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
+  for (const l of ["sparse", "coarse", "fine"]) map.setPaintProperty(l, "line-color", colorBy(height));
+  document.getElementById("hnote").textContent = NOTES[height];
+  if (last) show(last);
+});
 toggle("arrows", ["sparse-casing", "sparse", "coarse-casing", "coarse", "fine-casing", "fine"]);
 toggle("parcels", ["parcel-line", "ours-line"]);
 toggle("sitsBtn", ["sits"]);
@@ -109,7 +125,14 @@ toggle("sitsBtn", ["sits"]);
 // Tap: the wind at the nearest grid cell (20 m), or a sit's details.
 const DIRS = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
 const readout = document.getElementById("readout");
-let marker = null;
+let marker = null, last = null;
+// p: [lon, lat, mph above the trees, from-degrees, mph where you stand, canopy %]
+function show(p) {
+  const from = DIRS[Math.round(p[3] / 22.5) % 16], to = DIRS[(Math.round(p[3] / 22.5) + 8) % 16];
+  const main = height === "ground" ? `<b>${p[4]} mph</b> where you stand (${p[2]} above the trees)` : `<b>${p[2]} mph</b> above the trees (${p[4]} where you stand)`;
+  readout.innerHTML = `From <b>${from}</b> toward ${to} · ${main} · ${p[5]}% canopy`;
+  readout.hidden = false;
+}
 map.on("click", e => {
   const sit = map.queryRenderedFeatures(e.point, { layers: ["sits"] })[0];
   if (sit) {
@@ -121,9 +144,7 @@ map.on("click", e => {
   let best = null, bd = Infinity;
   for (const p of D.points) { const d = (p[0] - lng) ** 2 * k * k + (p[1] - lat) ** 2; if (d < bd) { bd = d; best = p; } }
   if (!best) return;
-  const from = DIRS[Math.round(best[3] / 22.5) % 16], to = DIRS[(Math.round(best[3] / 22.5) + 8) % 16];
-  readout.innerHTML = `Here: from <b>${from}</b> (${best[3]}°) toward ${to} · <b>${best[2]} mph</b>`;
-  readout.hidden = false;
+  last = best; show(best);
   if (!marker) marker = new maplibregl.Marker({ color: "#FF6B1A", scale: .6 });
   marker.setLngLat([lng, lat]).addTo(map);
 });
