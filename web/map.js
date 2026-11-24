@@ -713,9 +713,21 @@
     pick: prefs.mwPick || null, shown: null, cells: null, readout: "" };
   const windSlug = p => p.toLowerCase().replace(/\s+/g, "");
   const windKey = (p, f) => `https://tiles.buckbook.invalid/wind/${windSlug(p)}/${f}`;
+  // Runs never change once made, so they come from the phone's copy; the index lists which runs exist and
+  // grows as we model more, so with signal it's fetched fresh once per session.
+  const freshIndex = new Set();
   async function windFile(p, f, raw = false) {
-    const c = await tiles(), hit = await c.match(windKey(p, f));
+    const c = await tiles(), fresh = f === "index.json" && navigator.onLine && !freshIndex.has(p);
+    const hit = fresh ? null : await c.match(windKey(p, f));
     let text = hit ? await hit.text() : null;
+    if (fresh) {
+      try {
+        const { data, error } = await sb.storage.from("photos").download(`wind/${windSlug(p)}/${f}`);
+        if (error) throw error;
+        text = await data.text(); freshIndex.add(p);
+        c.put(windKey(p, f), new Response(text, { headers: { "content-type": "application/json" } })).catch(() => {});
+      } catch { const old = await c.match(windKey(p, f)); text = old ? await old.text() : null; }
+    }
     if (text == null) {
       const { data, error } = await sb.storage.from("photos").download(`wind/${windSlug(p)}/${f}`);
       if (error) throw error;
