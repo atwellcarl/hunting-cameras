@@ -97,3 +97,11 @@
 .m-miniline b { color: var(--blaze); }
 /* Picking where a sit was: only the map, the crosshair, the locate and north buttons, and the card. */
 .m-picking .m-top, .m-picking .m-tool:not([data-act="locate"]):not(.m-north) { display: none; }
+/* Modeled wind: the pill says which run is showing and the wind where you tapped; tap it for the options. */
+.m-wpill { position: absolute; left: 50%; transform: translateX(-50%); bottom: 34px; max-width: calc(100% - 24px); appearance: none;
+  border: 1px solid var(--line); background: rgba(14, 17, 13, .9); color: var(--ink); border-radius: 14px; padding: 7px 12px;
+  font: 12px/1.4 var(--body); text-align: center; cursor: pointer; box-shadow: 0 2px 10px rgba(0, 0, 0, .45); }
+.m-wpill b { color: var(--blaze); font-weight: 600; }
+.m-legend { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; margin-top: 12px; font: 11px var(--mono); color: var(--muted); }
+.m-legend i { grid-column: 1 / -1; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #3b0f70, #8c2981, #de4968, #fe9f6d, #fcfdbf); }
+.m-legend span:last-child { text-align: right; }

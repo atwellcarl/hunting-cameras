@@ -16,6 +16,12 @@ Commands:
                                shelters less). Tap for speed and direction. It holds exact locations, so it
                                stays on this Mac.
 
+  app PROPERTY                 Pack every no-thermals run of a property for the app's Modeled Wind layer, into
+                               data/wind/app/<property>/: grid.json (cell positions every 40 m and canopy
+                               cover) and one <DIR>_<MPH>.json per run (direction and speed of each cell).
+  upload                       Send data/wind/app/ to the private photos bucket (wind/...). Shows the size
+                               and asks first (--yes skips the question).
+
 Usage: .venv/bin/python -m buckbook.wind_model run "North Ridge" S 10 PM
 Never prints coordinates.
 """
@@ -283,6 +289,70 @@ def html(prop, name, leaf_off=False):
     return path
 
 
+# ---------- for the app ----------
+APP = WIND / "app"
+APP_STEP = 2                      # every 2nd 20 m cell: 40 m apart
+
+
+def cells_lonlat(prop, head, step):
+    """Lon/lat of every step-th cell centre, row by row from the north, via gdaltransform in the container."""
+    cs, x0, y0, nc, nr = head["cellsize"], head["xllcorner"], head["yllcorner"], int(head["ncols"]), int(head["nrows"])
+    b = prepared()["properties"][prop]
+    zone = int(((b["map_west"] + b["map_east"]) / 2 + 180) // 6) + 1
+    rows, cols = list(range(0, nr, step)), list(range(0, nc, step))
+    text = "\n".join(f"{x0 + (c + .5) * cs} {y0 + (nr - r - .5) * cs}" for r in rows for c in cols)
+    res = subprocess.run(["docker", "run", "--rm", "-i", IMAGE, "gdaltransform", "-s_srs", f"EPSG:{26900 + zone}", "-t_srs", "EPSG:4326"],
+                         input=text, text=True, capture_output=True, check=True)
+    return rows, cols, [tuple(map(float, l.split()[:2])) for l in res.stdout.strip().splitlines()]
+
+
+def app(prop):
+    import base64
+    import numpy as np
+    runs = sorted(r for r in (WIND / "runs").iterdir() if r.name.startswith(slug(prop) + "_") and r.name.endswith("_none"))
+    if not runs:
+        raise SystemExit(f"No runs for {prop} yet.")
+    head, _ = read_asc(next(runs[0].glob("*_vel.asc")))
+    rows, cols, ll = cells_lonlat(prop, head, APP_STEP)
+    cc = canopy(prop, head)[::APP_STEP, ::APP_STEP]
+    lon0, lat0 = ll[0]
+    def pack(a, dtype):
+        return base64.b64encode(np.asarray(a, dtype=dtype).tobytes()).decode()
+    out = APP / slug(prop)
+    out.mkdir(parents=True, exist_ok=True)
+    # Positions as millionths of a degree from the first cell (little-endian int32), canopy as whole percent.
+    grid = {"property": prop, "rows": len(rows), "cols": len(cols), "cell_m": head["cellsize"] * APP_STEP, "origin": [round(lon0, 6), round(lat0, 6)],
+            "dlon": pack([round((x - lon0) * 1e6) for x, _ in ll], "<i4"), "dlat": pack([round((y - lat0) * 1e6) for _, y in ll], "<i4"),
+            "canopy": pack(np.clip(cc, 0, 100).ravel(), "u1"),
+            "model": "WindNinja 4.0.0 standard solver, 20 ft above vegetation; canopy: USFS/NLCD tree canopy cover"}
+    (out / "grid.json").write_text(json.dumps(grid, separators=(",", ":")))
+    index = []
+    for r in runs:
+        d, mph = r.name.split("_")[1], int(r.name.split("_")[2].replace("mph", ""))
+        _, v = read_asc(next(r.glob("*_vel.asc"))); _, a = read_asc(next(r.glob("*_ang.asc")))
+        v, a = v[::APP_STEP, ::APP_STEP].ravel(), a[::APP_STEP, ::APP_STEP].ravel()
+        # Speed in fifths of a mph (to 51 mph), direction the wind comes from in 256ths of a turn.
+        run_json = {"dir": d, "mph": mph, "speed": pack(np.clip(np.round(v * 5), 0, 255), "u1"), "from": pack(np.round(a / 360 * 256) % 256, "u1")}
+        (out / f"{d}_{mph}.json").write_text(json.dumps(run_json, separators=(",", ":")))
+        index.append({"dir": d, "mph": mph, "file": f"{d}_{mph}.json"})
+    (out / "index.json").write_text(json.dumps({"property": prop, "runs": index}, separators=(",", ":")))
+    size = sum(f.stat().st_size for f in out.iterdir())
+    names = ", ".join(f"{i['dir']} {i['mph']}" for i in index)
+    print(f"{prop}: {len(rows)} x {len(cols)} cells every {grid['cell_m']:.0f} m, {len(index)} runs ({names}), {size / 1024:.0f} KB")
+
+
+def upload(assume_yes=False):
+    from buckbook.supabase_sync import upload as put
+    files = sorted(f for f in APP.rglob("*.json"))
+    size = sum(f.stat().st_size for f in files)
+    print(f"{len(files)} files, {size / 1e6:.2f} MB, to the private photos bucket under wind/ (crew only).")
+    if not assume_yes and input("Send them? [y/N] ").strip().lower() != "y":
+        return print("Nothing sent.")
+    for f in files:
+        put("wind/" + str(f.relative_to(APP)), f.read_bytes(), "application/json")
+    print("Sent.")
+
+
 if __name__ == "__main__":
     a = sys.argv[1:]
     if a[:1] == ["dem"] and len(a) == 2:
@@ -291,6 +361,10 @@ if __name__ == "__main__":
         preview(a[1], run(a[1], a[2], int(a[3]), a[4].upper() if len(a) == 5 else None))
     elif a[:1] == ["preview"] and len(a) == 3:
         preview(a[1], a[2])
+    elif a[:1] == ["app"] and len(a) == 2:
+        app(a[1])
+    elif a[:1] == ["upload"]:
+        upload("--yes" in a)
     elif a[:1] == ["html"] and len(a) in (3, 4):
         html(a[1], a[2], leaf_off=a[3:] == ["leaf-off"])
     else:

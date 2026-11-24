@@ -134,6 +134,17 @@ Map data: camera positions (from the GPS on each photo; a move of more than 150 
 .venv/bin/python -m buckbook.map_data push
 ```
 
+Modeled wind (WindNinja, see `buckbook/wind_model.py`): run cases, pack them for the app, and upload them to the private photos bucket under `wind/` (shows the size and asks first). The app's Modeled Wind layer shows the run nearest the wind now, the wind lens, or a wind you pick, where you stand or above the trees.
+```bash
+.venv/bin/python -m buckbook.wind_model run "Stoddard" S 12
+```
+```bash
+.venv/bin/python -m buckbook.wind_model app "Stoddard"
+```
+```bash
+.venv/bin/python -m buckbook.wind_model upload
+```
+
 ### Camera folders and properties
 
 Cameras get renamed and moved between properties, so neither the name nor Reveal's location label is trusted:

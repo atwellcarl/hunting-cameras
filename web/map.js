@@ -198,6 +198,7 @@
     </div>
     <button type="button" class="m-tool m-north" data-act="north" aria-label="North up, or square to our parcels"><svg viewBox="0 0 24 24"><path d="M12 3l5 15-5-3.5L7 18z" fill="#FF6B1A"/><text x="12" y="23.5" text-anchor="middle" font-size="6" font-weight="700" fill="currentColor" font-family="sans-serif">N</text></svg></button>
     <div class="m-cross" hidden><i></i></div>
+    <button type="button" class="m-wpill" hidden></button>
     <div class="m-card" hidden><button type="button" class="m-x" aria-label="Close">×</button><div class="m-body"></div></div>`;
   view.append(ui);
   const card = ui.querySelector(".m-card"), body = ui.querySelector(".m-body"), cross = ui.querySelector(".m-cross");
@@ -210,7 +211,11 @@
   }
   style.layers.unshift({ id: "bg", type: "background", paint: { "background-color": "#1b2118" } });
   const fc = features => ({ type: "FeatureCollection", features });
-  for (const id of ["parcels", "cones", "paths"]) style.sources[id] = { type: "geojson", data: fc([]) };
+  for (const id of ["parcels", "cones", "paths", "mwind"]) style.sources[id] = { type: "geojson", data: fc([]) };
+  // Modeled wind arrows: every 160 m zoomed out, 80 m, then 40 m close in. Color is speed; the scale runs to
+  // the run's fastest wind above the trees, so "where you stand" reads as calmer on the same scale.
+  const mwColor = ["interpolate", ["linear"], ["get", "v"], 0, "#3b0f70", 5, "#8c2981", 10, "#de4968", 15, "#fe9f6d", 22, "#fcfdbf"];
+  const mwLayers = [["mw-sparse", 2, 0, 14.5], ["mw-coarse", 1, 14.5, 15.5], ["mw-fine", 0, 15.5, 24]];
   style.layers.push(
     { id: "parcel-fill", type: "fill", source: "parcels", paint: { "fill-color": "#FF6B1A", "fill-opacity": ["case", ["get", "ours"], .07, 0] } },
     { id: "parcel-line", type: "line", source: "parcels", filter: ["!", ["get", "ours"]], paint: { "line-color": "#ffffff", "line-opacity": .55, "line-width": 1 } },
@@ -222,6 +227,11 @@
       paint: { "line-color": ["case", ["get", "bad"], "#E88A70", "#7BD06C"], "line-width": 2.5, "line-dasharray": [3, 1.5] } },
     { id: "path-heads", type: "circle", source: "paths", filter: ["==", ["geometry-type"], "Point"],
       paint: { "circle-radius": 4, "circle-color": ["case", ["get", "bad"], "#E88A70", "#7BD06C"], "circle-stroke-color": "#0E110D", "circle-stroke-width": 1 } },
+    ...mwLayers.flatMap(([id, lvl, min, max]) => [
+      { id: id + "-case", type: "line", source: "mwind", filter: ["==", ["get", "lvl"], lvl], minzoom: min, maxzoom: max,
+        paint: { "line-color": "#000", "line-opacity": .5, "line-width": 4 }, layout: { "line-cap": "round" } },
+      { id, type: "line", source: "mwind", filter: ["==", ["get", "lvl"], lvl], minzoom: min, maxzoom: max,
+        paint: { "line-color": mwColor, "line-width": 2 }, layout: { "line-cap": "round" } }]),
   );
 
   const start = boxOf(prop());
@@ -298,7 +308,10 @@
     if (me) { meMarker?.remove(); meMarker = new maplibregl.Marker({ element: meEl(), anchor: "center" }).setLngLat(me).addTo(map); }
     const tag = ui.querySelector(".m-windtag"); tag.hidden = !lens; tag.textContent = lens?.dir || "";
     if (picked) pick(picked, true);
+    const key = `${prop()}|${lens?.dir || ""}`;
+    if (mw.on && key !== mwKey) { if (!mwKey.startsWith(prop() + "|")) mw.readout = ""; mwKey = key; mwShow(); }
   }
+  let mwKey = "";
   function meEl() { const el = document.createElement("div"); el.className = "m-me"; return el; }
 
   // ---------- the bottom card ----------
@@ -439,6 +452,7 @@
   // Taps on the map itself: a parcel, or nothing (close the card).
   map.on("click", e => {
     if (adding || picking) return;
+    if (mw.on) mwReadout(e.lngLat);
     const hit = prefs.show.parcels && map.queryRenderedFeatures(e.point, { layers: ["parcel-fill"] })[0];
     if (hit) pick({ type: "parcel", id: hit.properties.id });
     else closeCard();
@@ -572,6 +586,7 @@
       <p class="label">Show</p>
       <div class="chips m-show">
         <button type="button" data-show="contours" aria-pressed="${prefs.contours}">Contours</button>
+        <button type="button" data-show="mwind" aria-pressed="${mw.on}">Modeled Wind</button>
         ${[["parcels", "Parcels"], ["cameras", "Cameras"], ["spots", "Spots"], ["trees", "Sits"]].map(([k, l]) => `<button type="button" data-show="${k}" aria-pressed="${!!prefs.show[k]}">${l}</button>`).join("")}
       </div>
       <p class="label">Offline</p>
@@ -583,6 +598,7 @@
     el.querySelectorAll("[data-base]").forEach(x => x.addEventListener("click", () => { prefs.base = x.dataset.base; savePrefs(); applyLayers(); layersCard(); }));
     el.querySelectorAll("[data-show]").forEach(x => x.addEventListener("click", () => {
       const k = x.dataset.show;
+      if (k === "mwind") { mwToggle(); return layersCard(); }
       if (k === "contours") prefs.contours = !prefs.contours; else prefs.show[k] = !prefs.show[k];
       savePrefs(); applyLayers(); draw(); layersCard();
     }));
@@ -633,6 +649,11 @@
       }
     }
     await Promise.all(Array.from({ length: 6 }, worker));
+    // The modeled wind for this property, so it works with no signal too.
+    try {
+      const idx = await windFile(p, "index.json");
+      for (const f of ["grid.json", ...idx.runs.map(r => r.file)]) { const t = await windFile(p, f, true); dl.bytes += t.length; }
+    } catch {}
     // One more try for the ones that didn't come back; the state's server drops a few under load.
     dl.failed = 0;
     for (const t of misses) { try { const n = (await getTile(...t)).byteLength; dl.bytes += n; } catch { dl.failed++; } }
@@ -650,6 +671,131 @@
     const saved = store.get(DL) || {}; delete saved[p]; store.set(DL, saved);
     toast(`${p} map removed from this phone`); layersCard();
   }
+
+  // ---------- modeled wind (WindNinja runs, buckbook/wind_model.py) ----------
+  // Each property has a grid (cell positions every 40 m, canopy cover) and runs for a wind direction and speed,
+  // in the private photos bucket under wind/<property>/. Shown: the run nearest the wind you pick, else the
+  // wind lens direction, else the wind now at the property's weather town. WindNinja's wind is 20 ft above
+  // the vegetation; "where you stand" brings it to 5 ft with the same canopy sheltering as wind_model.py.
+  const mw = { on: !!prefs.mwind, height: prefs.mwHeight || "ground", leafOff: prefs.mwLeafOff ?? [10, 11, 0, 1, 2, 3].includes(new Date().getMonth()),
+    pick: null, now: {}, shown: null, cells: null, readout: "" };
+  const windSlug = p => p.toLowerCase().replace(/\s+/g, "");
+  const windKey = (p, f) => `https://tiles.buckbook.invalid/wind/${windSlug(p)}/${f}`;
+  async function windFile(p, f, raw = false) {
+    const c = await tiles(), hit = await c.match(windKey(p, f));
+    let text = hit ? await hit.text() : null;
+    if (text == null) {
+      const { data, error } = await sb.storage.from("photos").download(`wind/${windSlug(p)}/${f}`);
+      if (error) throw error;
+      text = await data.text();
+      c.put(windKey(p, f), new Response(text, { headers: { "content-type": "application/json" } })).catch(() => {});
+    }
+    return raw ? text : JSON.parse(text);
+  }
+  const bytes = (b64, T) => { const s = atob(b64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new T(u.buffer); };
+  const OPEN = Math.log(1.52 / .03) / Math.log(6.1 / .03);
+  function standFactor(cc, leafOff) {
+    const sheltered = c => Math.min(.555 / (Math.sqrt(Math.max(c / 100 * .5 / 3 * (leafOff ? .35 : 1), 1e-6) * 65) * Math.log((20 + .36 * 65) / (.13 * 65))), OPEN);
+    const w = Math.min(1, Math.max(0, (cc - 5) / 20));
+    return (1 - w) * OPEN + w * sheltered(Math.max(cc, 25));
+  }
+  // The wind now at the property's weather town (cached half an hour).
+  async function windNow(p) {
+    const town = state.properties?.[p], hit = mw.now[p];
+    if (hit && Date.now() - hit.at < 1800e3) return hit;
+    if (!town?.weather_lat || !navigator.onLine) return hit || null;
+    try {
+      const q = new URLSearchParams({ latitude: town.weather_lat, longitude: town.weather_lon, current: "wind_speed_10m,wind_direction_10m", wind_speed_unit: "mph", timezone: "auto" });
+      const r = (await (await fetch("https://api.open-meteo.com/v1/forecast?" + q)).json()).current;
+      return mw.now[p] = { at: Date.now(), dir: WIND16[Math.round(r.wind_direction_10m / 22.5) % 16], mph: Math.round(r.wind_speed_10m) };
+    } catch { return hit || null; }
+  }
+  async function mwShow() {
+    const p = prop(), pill = ui.querySelector(".m-wpill");
+    if (!mw.on) { pill.hidden = true; if (ready) map.getSource("mwind").setData(fc([])); return; }
+    pill.hidden = false;
+    let idx;
+    try { idx = await windFile(p, "index.json"); }
+    catch { mw.shown = null; map.getSource("mwind")?.setData(fc([])); pill.textContent = `No modeled wind for ${p} on this phone yet`; return; }
+    const now = await windNow(p);
+    const want = mw.pick || (lens ? { dir: lens.dir, mph: now?.mph ?? 10 } : now) || { dir: idx.runs[0].dir, mph: 10 };
+    const same = idx.runs.filter(r => r.dir === want.dir);
+    if (!same.length) {
+      mw.shown = null; map.getSource("mwind")?.setData(fc([]));
+      pill.textContent = `No model for a ${want.dir} wind yet (have ${[...new Set(idx.runs.map(r => r.dir))].join(", ")})`;
+      return;
+    }
+    const run = same.reduce((a, b) => Math.abs(b.mph - want.mph) < Math.abs(a.mph - want.mph) ? b : a);
+    const [grid, r] = await Promise.all([windFile(p, "grid.json"), windFile(p, run.file)]);
+    const dlon = bytes(grid.dlon, Int32Array), dlat = bytes(grid.dlat, Int32Array), cc = bytes(grid.canopy, Uint8Array);
+    const sp = bytes(r.speed, Uint8Array), fr = bytes(r.from, Uint8Array);
+    const cells = [];
+    for (let i = 0; i < dlon.length; i++) {
+      const above = sp[i] / 5, from = fr[i] / 256 * 360;
+      cells.push({ lon: grid.origin[0] + dlon[i] / 1e6, lat: grid.origin[1] + dlat[i] / 1e6, row: Math.floor(i / grid.cols), col: i % grid.cols,
+        above, ground: above * standFactor(cc[i], mw.leafOff), from, canopy: cc[i] });
+    }
+    mw.cells = cells; mw.shown = { ...run, want, source: mw.pick ? "picked" : lens ? "lens" : now ? "now" : "default" };
+    const feats = [];
+    const arrow = (c, len, lvl) => {
+      const t = (c.from + 180) * Math.PI / 180, k = 1 / (111320 * Math.cos(c.lat * Math.PI / 180));
+      const ex = Math.sin(t), ey = Math.cos(t);
+      const tail = [c.lon - ex * len / 2 * k, c.lat - ey * len / 2 / 111320], tip = [c.lon + ex * len / 2 * k, c.lat + ey * len / 2 / 111320];
+      const barb = side => { const a = t + Math.PI + side * .49; return [tip, [tip[0] + Math.sin(a) * len * .32 * k, tip[1] + Math.cos(a) * len * .32 / 111320]]; };
+      feats.push({ type: "Feature", properties: { lvl, v: +(mw.height === "ground" ? c.ground : c.above).toFixed(1) },
+        geometry: { type: "MultiLineString", coordinates: [[tail, tip], barb(-1), barb(1)] } });
+    };
+    cells.forEach(c => {
+      arrow(c, 32, 0);
+      if (c.row % 2 === 0 && c.col % 2 === 0) arrow(c, 64, 1);
+      if (c.row % 4 === 0 && c.col % 4 === 0) arrow(c, 120, 2);
+    });
+    map.getSource("mwind")?.setData(fc(feats));
+    mwPill();
+  }
+  function mwPill() {
+    const pill = ui.querySelector(".m-wpill"), s = mw.shown;
+    if (!s) return;
+    const why = s.source === "now" ? ` (now ${s.want.dir} ${s.want.mph})` : s.source === "lens" ? " (wind lens)" : "";
+    pill.innerHTML = `<b>Modeled ${esc(s.dir)} ${s.mph} mph</b>${why} · ${mw.height === "ground" ? "where you stand" : "above the trees"}` + (mw.readout ? `<br>${mw.readout}` : "");
+  }
+  function mwReadout(ll) {
+    if (!mw.cells) return;
+    let best = null, bd = Infinity;
+    const k = Math.cos(ll.lat * Math.PI / 180);
+    for (const c of mw.cells) { const d = (c.lon - ll.lng) ** 2 * k * k + (c.lat - ll.lat) ** 2; if (d < bd) { bd = d; best = c; } }
+    if (!best || Math.sqrt(bd) * 111320 > 60) { mw.readout = ""; return mwPill(); }
+    const from = WIND16[Math.round(best.from / 22.5) % 16];
+    mw.readout = `Here: from ${from} · <b>${best.ground.toFixed(1)} mph</b> where you stand, ${best.above.toFixed(1)} above the trees · ${best.canopy}% canopy`;
+    mwPill();
+  }
+  function mwToggle() { mw.on = !mw.on; prefs.mwind = mw.on; savePrefs(); mw.readout = ""; mwShow(); }
+  function mwCard() {
+    const s = mw.shown;
+    windFile(prop(), "index.json").then(idx => {
+      const dirs = [...new Set(idx.runs.map(r => r.dir))], speeds = [...new Set(idx.runs.filter(r => r.dir === (s?.dir || dirs[0])).map(r => r.mph))].sort((a, b) => a - b);
+      const el = openCard(`
+        <p class="label">Modeled Wind</p>
+        <p class="m-sub">${s ? `Showing the ${esc(s.dir)} ${s.mph} mph run` + (s.source === "now" ? `, the closest to the wind now (${s.want.dir} ${s.want.mph} mph).` : s.source === "lens" ? ", for the wind lens." : ".") : "No run for this wind yet."} WindNinja over the lidar terrain, with sheltering under the trees from USFS canopy cover.</p>
+        <p class="label">Wind</p>
+        <div class="chips m-kinds"><button type="button" data-now aria-pressed="${!mw.pick}">Now</button>${dirs.map(d => `<button type="button" data-dir="${d}" aria-pressed="${mw.pick?.dir === d}">${d}</button>`).join("")}</div>
+        <div class="chips m-kinds" style="margin-top:6px">${speeds.map(v => `<button type="button" data-mph="${v}" aria-pressed="${!!mw.pick && s?.mph === v}">${v} mph</button>`).join("")}</div>
+        <p class="label">Height</p>
+        <div class="chips m-kinds"><button type="button" data-h="ground" aria-pressed="${mw.height === "ground"}">Where You Stand</button><button type="button" data-h="above" aria-pressed="${mw.height === "above"}">Above the Trees</button></div>
+        <p class="label">Leaves</p>
+        <div class="chips m-kinds"><button type="button" data-leaf="on" aria-pressed="${!mw.leafOff}">On</button><button type="button" data-leaf="off" aria-pressed="${mw.leafOff}">Off</button></div>
+        <div class="m-legend"><i></i><span>0</span><span>22+ mph</span></div>
+        ${btnRow(b("off", "Turn Off"))}`, "m-mwind");
+      const redo = () => { mwShow().then(mwCard); };
+      el.querySelector("[data-now]").addEventListener("click", () => { mw.pick = null; redo(); });
+      el.querySelectorAll("[data-dir]").forEach(x => x.addEventListener("click", () => { mw.pick = { dir: x.dataset.dir, mph: mw.shown?.mph ?? 12 }; redo(); }));
+      el.querySelectorAll("[data-mph]").forEach(x => x.addEventListener("click", () => { mw.pick = { dir: mw.shown?.dir || dirs[0], mph: +x.dataset.mph }; redo(); }));
+      el.querySelectorAll("[data-h]").forEach(x => x.addEventListener("click", () => { mw.height = x.dataset.h; prefs.mwHeight = mw.height; savePrefs(); redo(); }));
+      el.querySelectorAll("[data-leaf]").forEach(x => x.addEventListener("click", () => { mw.leafOff = x.dataset.leaf === "off"; prefs.mwLeafOff = mw.leafOff; savePrefs(); redo(); }));
+      on(el, { off: () => { mwToggle(); closeCard(); } });
+    }).catch(() => openCard(`<p class="label">Modeled Wind</p><p class="m-sub">No modeled wind for ${esc(prop())} on this phone yet. It needs signal the first time.</p>`));
+  }
+  ui.querySelector(".m-wpill").addEventListener("click", mwCard);
 
   // ---------- wind lens and planning ----------
   function drawLens(ts) {
