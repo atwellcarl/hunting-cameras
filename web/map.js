@@ -199,6 +199,7 @@
     <button type="button" class="m-tool m-north" data-act="north" aria-label="North up, or square to our parcels"><svg viewBox="0 0 24 24"><path d="M12 3l5 15-5-3.5L7 18z" fill="#FF6B1A"/><text x="12" y="23.5" text-anchor="middle" font-size="6" font-weight="700" fill="currentColor" font-family="sans-serif">N</text></svg></button>
     <div class="m-cross" hidden><i></i></div>
     <button type="button" class="m-wpill" hidden></button>
+    <div class="m-pinfo" hidden></div>
     <div class="m-card" hidden><button type="button" class="m-x" aria-label="Close">×</button><div class="m-body"></div></div>`;
   view.append(ui);
   const card = ui.querySelector(".m-card"), body = ui.querySelector(".m-body"), cross = ui.querySelector(".m-cross");
@@ -309,7 +310,7 @@
     const tag = ui.querySelector(".m-windtag"); tag.hidden = !lens; tag.textContent = lens?.dir || "";
     if (picked) pick(picked, true);
     const key = `${prop()}|${lens?.dir || ""}`;
-    if (mw.on && key !== mwKey) { if (!mwKey.startsWith(prop() + "|")) mw.readout = ""; mwKey = key; mwShow(); }
+    if (mw.on && key !== mwKey) { if (!mwKey.startsWith(prop() + "|")) { mw.readout = ""; mwPinAt(null); } mwKey = key; mwShow(); }
   }
   let mwKey = "";
   function meEl() { const el = document.createElement("div"); el.className = "m-me"; return el; }
@@ -321,7 +322,6 @@
   }
   function closeCard() {
     card.hidden = true; picked = null; cross.hidden = true; adding = null;
-    if (ready) map.setFilter("parcel-pick", ["==", ["get", "id"], ""]);
   }
   ui.querySelector(".m-x").addEventListener("click", () => picking ? endPick(null) : closeCard());
   const fromYou = lngLat => me ? `<p class="m-away">${away(metres(me, lngLat))} ${WIND16[Math.round(bearing(me, lngLat) / 22.5) % 16]} of you</p>` : "";
@@ -334,7 +334,7 @@
     if (what.type === "camera") return cameraCard(what.id);
     if (what.type === "spot") return spotCard(what.id);
     if (what.type === "tree") return treeCard(what.id, quiet);
-    if (what.type === "parcel") return parcelCard(what.id);
+    if (what.type === "parcel") return parcelInfo(what.id);
   }
 
   function cameraCard(name) {
@@ -433,29 +433,40 @@
     } catch { return null; }
   }
 
-  function parcelCard(id) {
-    const x = (state.parcels || []).find(p => p.id === id);
-    if (!x) return closeCard();
+  // A tapped parcel is outlined, with a small info chip at the bottom; tap the chip for owner and acres.
+  let parcelOn = null;
+  function parcelInfo(id, open = false) {
+    const x = (state.parcels || []).find(p => p.id === id), chip = ui.querySelector(".m-pinfo");
+    if (!x) return parcelOff();
+    parcelOn = id;
     map.setFilter("parcel-pick", ["==", ["get", "id"], id]);
-    const el = openCard(`
-      <p class="label">${x.ours ? "Our Ground" : "Neighbor"}</p><h3>${esc(x.owner || "Owner not listed")}</h3>
-      ${x.owner2 ? `<p class="m-sub">${esc(x.owner2)}</p>` : ""}
-      <p class="m-sub">${x.acres ? `${x.acres} acres · ` : ""}Wisconsin parcel map</p>
-      ${state.isAdmin ? btnRow(b("ours", x.ours ? "Not Ours" : "Mark as Ours", x.ours ? "danger" : "")) : ""}`);
-    on(el, { ours: async () => {
+    chip.hidden = false;
+    chip.classList.toggle("open", open);
+    chip.innerHTML = `<button type="button" class="m-pi-head"><span class="m-i">i</span>${x.ours ? "Our ground" : "Neighbor"}${x.acres ? ` · ${Math.round(x.acres)} ac` : ""}</button>` + (open ? `
+      <div class="m-pi-body"><b>${esc(x.owner || "Owner not listed")}</b>${x.owner2 ? `<br>${esc(x.owner2)}` : ""}<br>${x.acres ? `${x.acres} acres · ` : ""}Wisconsin parcel map
+      ${state.isAdmin ? `<br><button type="button" class="linkish" data-act="ours">${x.ours ? "Not ours" : "Mark as ours"}</button>` : ""}</div>` : "");
+    chip.querySelector(".m-pi-head").addEventListener("click", () => parcelInfo(id, !open));
+    on(chip, { ours: async () => {
       const { error } = await sb.from("parcels").update({ ours: !x.ours }).eq("id", x.id);
       if (error) return toast(netError(error) ? "That needs signal." : friendly(error));
-      x.ours = !x.ours; draw(); parcelCard(id);
+      x.ours = !x.ours; draw(); parcelInfo(id, true);
     } });
+  }
+  function parcelOff() {
+    parcelOn = null;
+    ui.querySelector(".m-pinfo").hidden = true;
+    if (ready) map.setFilter("parcel-pick", ["==", ["get", "id"], ""]);
   }
 
   // Taps on the map itself: a parcel, or nothing (close the card).
+  // Taps on the map itself: with Modeled Wind on, the wind at that spot; otherwise a parcel (or nothing).
   map.on("click", e => {
     if (adding || picking) return;
-    if (mw.on) mwReadout(e.lngLat);
+    closeCard();
+    if (mw.on) { parcelOff(); return mwReadout(e.lngLat); }
     const hit = prefs.show.parcels && map.queryRenderedFeatures(e.point, { layers: ["parcel-fill"] })[0];
-    if (hit) pick({ type: "parcel", id: hit.properties.id });
-    else closeCard();
+    if (hit && hit.properties.id !== parcelOn) parcelInfo(hit.properties.id);
+    else parcelOff();
   });
 
   // ---------- picking where a sit was ----------
@@ -759,17 +770,25 @@
     const why = s.source === "now" ? ` (now ${s.want.dir} ${s.want.mph})` : s.source === "lens" ? " (wind lens)" : "";
     pill.innerHTML = `<b>Modeled ${esc(s.dir)} ${s.mph} mph</b>${why} · ${mw.height === "ground" ? "where you stand" : "above the trees"}` + (mw.readout ? `<br>${mw.readout}` : "");
   }
+  // A small marker where you tapped, so it's clear which spot the reading is for.
+  let mwPin = null;
+  function mwPinAt(ll) {
+    if (!ll) { mwPin?.remove(); mwPin = null; return; }
+    if (!mwPin) { const el = document.createElement("div"); el.className = "m-wpin"; mwPin = new maplibregl.Marker({ element: el, anchor: "center" }); }
+    mwPin.setLngLat(ll).addTo(map);
+  }
   function mwReadout(ll) {
     if (!mw.cells) return;
     let best = null, bd = Infinity;
     const k = Math.cos(ll.lat * Math.PI / 180);
     for (const c of mw.cells) { const d = (c.lon - ll.lng) ** 2 * k * k + (c.lat - ll.lat) ** 2; if (d < bd) { bd = d; best = c; } }
-    if (!best || Math.sqrt(bd) * 111320 > 60) { mw.readout = ""; return mwPill(); }
+    if (!best || Math.sqrt(bd) * 111320 > 60) { mw.readout = ""; mwPinAt(null); return mwPill(); }
+    mwPinAt([ll.lng, ll.lat]);
     const from = WIND16[Math.round(best.from / 22.5) % 16];
-    mw.readout = `Here: from ${from} · <b>${best.ground.toFixed(1)} mph</b> where you stand, ${best.above.toFixed(1)} above the trees · ${best.canopy}% canopy`;
+    mw.readout = `At the pin: <b>${best.ground.toFixed(1)} mph</b> where you stand · ${best.above.toFixed(1)} above the trees · from ${from} · ${best.canopy}% canopy`;
     mwPill();
   }
-  function mwToggle() { mw.on = !mw.on; prefs.mwind = mw.on; savePrefs(); mw.readout = ""; mwShow(); }
+  function mwToggle() { parcelOff(); mw.on = !mw.on; prefs.mwind = mw.on; savePrefs(); mw.readout = ""; mwPinAt(null); mwShow(); }
   // Pick a wind by hand: any direction on the wind clock and any speed; the nearest run is shown.
   function mwCard(fromPill = false) {
     windFile(prop(), "index.json").then(idx => {
@@ -939,7 +958,7 @@
     map,                                      // for poking at in the browser console
     show() {
       requestAnimationFrame(() => map.resize());
-      if (prop() !== shownProp) { shownProp = prop(); if (!picking) closeCard(); const bx = boxOf(prop()); if (bx) map.fitBounds(bx, { padding: 20, duration: 0, bearing: squareBearing() }); }
+      if (prop() !== shownProp) { shownProp = prop(); parcelOff(); if (!picking) closeCard(); const bx = boxOf(prop()); if (bx) map.fitBounds(bx, { padding: 20, duration: 0, bearing: squareBearing() }); }
       draw();
       if (window.mapFocus) { const f = window.mapFocus; window.mapFocus = null; map.jumpTo({ center: [f.lon, f.lat], zoom: Math.max(map.getZoom(), 17) }); }
       // GPS only while the map is open, so it doesn't drain the phone; quietly, without moving the map.
