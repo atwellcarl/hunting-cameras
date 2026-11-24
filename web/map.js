@@ -722,7 +722,7 @@
     const same = idx.runs.filter(r => r.dir === want.dir);
     if (!same.length) {
       mw.shown = null; map.getSource("mwind")?.setData(fc([]));
-      pill.textContent = `No model for a ${want.dir} wind yet (have ${[...new Set(idx.runs.map(r => r.dir))].join(", ")})`;
+      pill.innerHTML = `No run for a ${esc(want.dir)} wind yet (have ${esc([...new Set(idx.runs.map(r => r.dir))].join(", "))})<br><b>Tap to pick a wind</b>`;
       return;
     }
     const run = same.reduce((a, b) => Math.abs(b.mph - want.mph) < Math.abs(a.mph - want.mph) ? b : a);
@@ -770,32 +770,45 @@
     mwPill();
   }
   function mwToggle() { mw.on = !mw.on; prefs.mwind = mw.on; savePrefs(); mw.readout = ""; mwShow(); }
-  function mwCard() {
-    const s = mw.shown;
+  // Pick a wind by hand: any direction on the wind clock and any speed; the nearest run is shown.
+  function mwCard(fromPill = false) {
     windFile(prop(), "index.json").then(idx => {
-      const dirs = [...new Set(idx.runs.map(r => r.dir))], speeds = [...new Set(idx.runs.filter(r => r.dir === (s?.dir || dirs[0])).map(r => r.mph))].sort((a, b) => a - b);
+      const s = mw.shown, now = mw.now[prop()], want = mw.pick || s?.want || (now && { dir: now.dir, mph: now.mph }) || { dir: idx.runs[0].dir, mph: 12 };
+      const dirs = [...new Set(idx.runs.map(r => r.dir))];
+      // Nothing on the map yet (no run for the wind now): show the suggested wind right away.
+      if (fromPill && !s && !mw.pick) { const d = dirs.includes(want.dir) ? want.dir : dirs[0]; mw.pick = { dir: d, mph: want.mph }; return mwShow().then(() => mwCard()); }
+      const speeds = d => idx.runs.filter(r => r.dir === d).map(r => r.mph).sort((a, b) => a - b);
+      const nearest = (d, v) => speeds(d).reduce((a, b) => Math.abs(b - v) < Math.abs(a - v) ? b : a, speeds(d)[0]);
+      const status = () => {
+        const d = (mw.pick || want).dir, v = (mw.pick || want).mph;
+        return speeds(d).length ? `${esc(d)} at ${v} mph → showing the ${esc(d)} ${nearest(d, v)} mph run` : `No run for a ${esc(d)} wind yet. Runs so far: ${esc(dirs.join(", "))}.`;
+      };
       const el = openCard(`
         <p class="label">Modeled Wind</p>
-        <p class="m-sub">${s ? `Showing the ${esc(s.dir)} ${s.mph} mph run` + (s.source === "now" ? `, the closest to the wind now (${s.want.dir} ${s.want.mph} mph).` : s.source === "lens" ? ", for the wind lens." : ".") : "No run for this wind yet."} WindNinja over the lidar terrain, with sheltering under the trees from USFS canopy cover.</p>
-        <p class="label">Wind</p>
-        <div class="chips m-kinds"><button type="button" data-now aria-pressed="${!mw.pick}">Now</button>${dirs.map(d => `<button type="button" data-dir="${d}" aria-pressed="${mw.pick?.dir === d}">${d}</button>`).join("")}</div>
-        <div class="chips m-kinds" style="margin-top:6px">${speeds.map(v => `<button type="button" data-mph="${v}" aria-pressed="${!!mw.pick && s?.mph === v}">${v} mph</button>`).join("")}</div>
+        <p class="m-sub">${mw.pick ? "Your wind:" : now ? `The wind now is ${esc(now.dir)} ${now.mph} mph:` : "Pick a wind:"} <b id="mwStatus">${status()}</b></p>
+        <div id="mwDial"></div>
+        <label class="m-speed"><span>Speed <b id="mwMph">${want.mph}</b> mph</span><input type="range" id="mwRange" min="0" max="25" step="1" value="${want.mph}"></label>
+        ${btnRow(b("now", "Use the Wind Now"))}
         <p class="label">Height</p>
         <div class="chips m-kinds"><button type="button" data-h="ground" aria-pressed="${mw.height === "ground"}">Where You Stand</button><button type="button" data-h="above" aria-pressed="${mw.height === "above"}">Above the Trees</button></div>
         <p class="label">Leaves</p>
         <div class="chips m-kinds"><button type="button" data-leaf="on" aria-pressed="${!mw.leafOff}">On</button><button type="button" data-leaf="off" aria-pressed="${mw.leafOff}">Off</button></div>
         <div class="m-legend"><i></i><span>0</span><span>22+ mph</span></div>
         ${btnRow(b("off", "Turn Off"))}`, "m-mwind");
-      const redo = () => { mwShow().then(mwCard); };
-      el.querySelector("[data-now]").addEventListener("click", () => { mw.pick = null; redo(); });
-      el.querySelectorAll("[data-dir]").forEach(x => x.addEventListener("click", () => { mw.pick = { dir: x.dataset.dir, mph: mw.shown?.mph ?? 12 }; redo(); }));
-      el.querySelectorAll("[data-mph]").forEach(x => x.addEventListener("click", () => { mw.pick = { dir: mw.shown?.dir || dirs[0], mph: +x.dataset.mph }; redo(); }));
+      const redo = () => { mwShow().then(() => mwCard()); };
+      windClock(el.querySelector("#mwDial"), (mw.pick || want).dir, d => {
+        if (!d) return;
+        mw.pick = { dir: d, mph: +el.querySelector("#mwRange").value }; redo();
+      }, { variable: false, clearable: false });
+      const range = el.querySelector("#mwRange");
+      range.addEventListener("input", () => { el.querySelector("#mwMph").textContent = range.value; mw.pick = { dir: (mw.pick || want).dir, mph: +range.value }; el.querySelector("#mwStatus").innerHTML = status(); });
+      range.addEventListener("change", () => { mw.pick = { dir: (mw.pick || want).dir, mph: +range.value }; redo(); });
       el.querySelectorAll("[data-h]").forEach(x => x.addEventListener("click", () => { mw.height = x.dataset.h; prefs.mwHeight = mw.height; savePrefs(); redo(); }));
       el.querySelectorAll("[data-leaf]").forEach(x => x.addEventListener("click", () => { mw.leafOff = x.dataset.leaf === "off"; prefs.mwLeafOff = mw.leafOff; savePrefs(); redo(); }));
-      on(el, { off: () => { mwToggle(); closeCard(); } });
+      on(el, { now: () => { mw.pick = null; redo(); }, off: () => { mwToggle(); closeCard(); } });
     }).catch(() => openCard(`<p class="label">Modeled Wind</p><p class="m-sub">No modeled wind for ${esc(prop())} on this phone yet. It needs signal the first time.</p>`));
   }
-  ui.querySelector(".m-wpill").addEventListener("click", mwCard);
+  ui.querySelector(".m-wpill").addEventListener("click", () => mwCard(true));
 
   // ---------- wind lens and planning ----------
   function drawLens(ts) {

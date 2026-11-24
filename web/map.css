@@ -105,3 +105,8 @@
 .m-legend { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; margin-top: 12px; font: 11px var(--mono); color: var(--muted); }
 .m-legend i { grid-column: 1 / -1; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #3b0f70, #8c2981, #de4968, #fe9f6d, #fcfdbf); }
 .m-legend span:last-child { text-align: right; }
+.m-mwind .wclock { margin-top: 8px; }
+.m-mwind .wdial { width: min(100%, 210px); }
+.m-speed { display: grid; gap: 6px; margin-top: 12px; font-size: 14px; color: var(--muted); }
+.m-speed b { color: var(--ink); }
+.m-speed input { width: 100%; accent-color: var(--blaze); }
