@@ -16,10 +16,11 @@
 /* One dark look on purpose: trail-cam photos (mostly night IR) read best on a dark surround. */
 [hidden] { display: none !important; }
 /* Viewers can look at everything but change nothing (the database enforces it too). */
-/* Viewers are guests on a hunt: the map, plus the Gallery and Roster to look at, and nothing else. */
-body.viewer :is(#tab-sort, #view-sort, #tab-sits, #view-sits, .htile.sits, .htile.sort, #tab-disputes, #view-disputes, #tab-crew, #view-crew,
+/* Viewers are guests on a hunt: the map, plus the Gallery and Roster to look at, and nothing else.
+   (The body class is role-viewer, not viewer: .viewer is the full-screen photo viewer, and the two collided.) */
+body.role-viewer :is(#tab-sort, #view-sort, #tab-sits, #view-sits, .htile.sits, .htile.sort, #tab-disputes, #view-disputes, #tab-crew, #view-crew,
   .htile.h-disputes, .htile.h-crew, #alert, #sndBtn, #vTag, .gtools button, .cleanup, #profileEdit, #vCover, #vMove, #vResort, .mrow .btnrow, .switch, #composer, .queuebar .btn, .drow .go) { display: none !important; }
-body.viewer .drow:not(.mine) { pointer-events: none; }   /* "Weigh In" leads to Sort */
+body.role-viewer .drow:not(.mine) { pointer-events: none; }   /* "Weigh In" leads to Sort */
 :root {
   color-scheme: dark;
   --bg: #0E110D;
@@ -507,7 +508,8 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 .crew-row b { display: block; font-weight: 600; }
 .crew-row small { font: 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .rules { font-size: 13px; color: var(--muted); margin: 16px 0 0; }
-.signout { text-align: center; margin: 12px 0 0; }
+.signout { text-align: center; margin: 22px 0 0; font-size: 13px; color: var(--muted); }
+.signout span:not(:empty)::after { content: " · "; }
 
 /* ---------- sign in ---------- */
 .gate { position: fixed; inset: 0; z-index: 50; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: calc(var(--top) + 24px) 20px calc(var(--bottom) + 24px); overflow-y: auto; }
@@ -616,6 +618,8 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 
     <section id="view-home" class="view scroll">
       <div id="home"></div>
+      <!-- On Home, not Crew, so guests (who don't get the Crew tab) can sign out too. -->
+      <p class="signout"><span id="whoami"></span><button class="linkish" id="signOut" type="button">Sign Out</button></p>
     </section>
 
     <section id="view-roster" class="view scroll" hidden>
@@ -641,7 +645,6 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
     <section id="view-crew" class="view scroll" hidden>
       <div class="crew" id="crew"></div>
       <p class="rules">Agreement is how often your calls match other members' on photos you both voted on. Votes are blind: you only see others' picks after you vote.</p>
-      <p class="signout"><button class="linkish" id="signOut" type="button">Sign Out</button></p>
     </section>
   </div>
 
@@ -1214,7 +1217,7 @@ async function sync() {
     if (state.myUid && !c.some(r => r.user_id === state.myUid)) return forgetThisPhone();   // removed from the crew
     const myType = c.find(r => r.user_id === state.myUid)?.user_type || "user";
     const isAdmin = myType === "admin";
-    document.body.classList.toggle("viewer", myType === "viewer");
+    document.body.classList.toggle("role-viewer", myType === "viewer");
     const crewById = Object.fromEntries(c.map(r => [r.user_id, r.name]));
     const proposals = Object.fromEntries(mp.map(r => [r.buck_a + "|" + r.buck_b, r]));
     const sitEvents = {}, sitWeather = {};
@@ -1500,7 +1503,7 @@ let galleryCam = null;
 // ticking only flip attributes; the photos are never rebuilt or reloaded.
 let gallerySel = null, galleryOrder = [];
 function startGallerySelect(firstId) {
-  if (document.body.classList.contains("viewer")) return;
+  if (document.body.classList.contains("role-viewer")) return;
   gallerySel = new Set(firstId ? [firstId] : []);
   syncGallerySel();
 }
@@ -2651,7 +2654,7 @@ function mergeRow(p) {
   const shared = p.cards.length ? `Named both on ${p.cards.length} of the same photos. ` : "";
   const needs = canFinish ? authors.map(who).join(" and ") : "an admin";
   if (!p.prop) {
-    const ask = document.body.classList.contains("viewer") ? "" : "Same buck? Pick the name to keep. ";
+    const ask = document.body.classList.contains("role-viewer") ? "" : "Same buck? Pick the name to keep. ";
     el.querySelector("small").textContent = `${shared}${ask}${needs[0].toUpperCase() + needs.slice(1)} ${authors.length > 1 && canFinish ? "both have" : "has"} to agree.`;
     [p.a, p.b].forEach(id => button(`Keep ${name(id)}`, "ghost", () => state.isAdmin ? adminMerge(id) : agreeTo(id)));
   } else {
@@ -3723,7 +3726,7 @@ function saveOfflineCopy() {
     const keep = ["bucks", "users", "crewById", "isAdmin", "proposals", "sits", "sitEvents", "sitWeather", "properties", "me", "myUid",
       "cameraSpots", "spots", "parcels"];
     localStorage.setItem(OFFLINE_COPY, JSON.stringify({ at: Date.now(), name: state.crewById?.[state.myUid] || null,
-      viewer: document.body.classList.contains("viewer"), state: Object.fromEntries(keep.map(k => [k, state[k]])) }));
+      viewer: document.body.classList.contains("role-viewer"), state: Object.fromEntries(keep.map(k => [k, state[k]])) }));
   } catch {}
 }
 const offlineCopy = () => { try { return JSON.parse(localStorage.getItem(OFFLINE_COPY)); } catch { return null; } };
@@ -3732,7 +3735,7 @@ let offlineBoot = false;
 function startOffline(copy) {
   offlineBoot = true;
   Object.assign(state, copy.state, { mode: "offline" });
-  document.body.classList.toggle("viewer", !!copy.viewer);
+  document.body.classList.toggle("role-viewer", !!copy.viewer);
   document.body.classList.add("nophotos");
   applyOutbox();
   renderAll();
@@ -3763,6 +3766,7 @@ function renderHome() {
     ["crew", "Crew", "Who's sorting, and how often they agree", "h-crew"],
   ];
   wrap.className = "home";
+  $("whoami").textContent = state.crewById?.[state.myUid] ? `Signed in as ${state.crewById[state.myUid]}` : "";
   wrap.replaceChildren(...tiles.map(([tab, name, note, cls]) => {
     const b = document.createElement("button");
     b.type = "button"; b.className = "htile " + cls;
@@ -4057,7 +4061,7 @@ async function start(myName) {
   document.body.classList.toggle("nophotos", !state.photosLoaded);
   await sync();
   flushOutbox();
-  if (document.body.classList.contains("viewer") && document.body.dataset.tab === "home") showTab("map");   // guests come for the map
+  if (document.body.classList.contains("role-viewer") && document.body.dataset.tab === "home") showTab("map");   // guests come for the map
   if (!$("view-home").hidden) renderHome();
   if (!channel) {
     const live = table => payload => onLive(table, payload);

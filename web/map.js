@@ -80,7 +80,7 @@
   const away = m => m < 1609 ? `${yd(m)} yd` : `${(m / 1609).toFixed(1)} mi`;
   const DEG = d => WIND16.indexOf(d) * 22.5;
   const near16 = (a, b) => { const i = WIND16.indexOf(a), j = WIND16.indexOf(b); return i >= 0 && j >= 0 && Math.min((i - j + 16) % 16, (j - i + 16) % 16) <= 1; };
-  const canEdit = () => !document.body.classList.contains("viewer");
+  const canEdit = () => !document.body.classList.contains("role-viewer");
   const store = {
     get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },

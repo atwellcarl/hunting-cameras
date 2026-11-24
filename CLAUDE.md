@@ -31,6 +31,7 @@ Check page syntax by extracting the last `<script>` block and running `node --ch
 
 - Class-name collisions in the single-file page: the header once used `.top`, which squeezed the swipe card's photo to 89 px. Check new class names aren't already taken.
 - The zoom viewer (`z-index` 40) sits above sheets (20). Close it before opening a sheet from it.
+- Guests (viewer member type) mark the page with `body.role-viewer`, not `body.viewer`: `.viewer` is the photo zoom overlay, and sharing the name turned the whole page into it for guests.
 - Supabase `sb_secret_` keys go in the `apikey` header only, not `Authorization: Bearer`.
 - Vote authorship is stamped by trigger; only a member's own edits re-stamp (merges keep the original voter).
 - Placeholder login emails use `@buckbook.invalid` (Supabase accepts it; it can never receive mail). Keep the Python and JS name-to-email mappings identical.
