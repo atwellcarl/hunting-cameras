@@ -1,0 +1,132 @@
+<!doctype html>
+<!-- Template for buckbook/wind_model.py html: one WindNinja case on the map. The data (exact locations) is
+     filled in by the script and the finished page stays in data/wind/, never in the repo. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Modeled Wind</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+  :root { --bg: #0E110D; --panel: #171C15; --ink: #E6EADF; --muted: #8E9985; --line: #2A3226; --blaze: #FF6B1A; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 15px/1.4 -apple-system, "Helvetica Neue", Arial, sans-serif; }
+  #map { position: absolute; inset: 0; }
+  .panel { position: absolute; left: 12px; top: 12px; z-index: 2; background: rgba(14, 17, 13, .92); border: 1px solid var(--line);
+    border-radius: 14px; padding: 12px 14px; max-width: min(340px, calc(100vw - 48px)); box-shadow: 0 2px 12px rgba(0,0,0,.5); }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  button { appearance: none; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 999px;
+    padding: 6px 11px; font: 600 12px inherit; cursor: pointer; }
+  button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .legend { margin-top: 10px; font-size: 11px; color: var(--muted); }
+  .legend .bar { height: 8px; border-radius: 4px; margin: 4px 0 2px; background: linear-gradient(90deg, #3b0f70, #8c2981, #de4968, #fe9f6d, #fcfdbf); }
+  .legend .ends { display: flex; justify-content: space-between; }
+  .readout { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 2; background: rgba(14,17,13,.92);
+    border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; font-size: 14px; white-space: nowrap; }
+  .readout b { color: var(--blaze); }
+  .maplibregl-popup-content { background: var(--panel); color: var(--ink); border-radius: 10px; font-size: 13px; }
+  .maplibregl-popup-tip { border-top-color: var(--panel) !important; border-bottom-color: var(--panel) !important; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="panel">
+  <h1 id="title"></h1>
+  <p class="sub">WindNinja, standard solver, 20 ft above the trees. Arrows point downwind. Tap anywhere for the wind there; tap an orange dot for a sit.</p>
+  <div class="row" id="bases"></div>
+  <div class="row"><button id="arrows" aria-pressed="true">Arrows</button><button id="parcels" aria-pressed="true">Parcels</button><button id="sitsBtn" aria-pressed="true">Sits</button></div>
+  <div class="legend">Wind speed (mph)<div class="bar"></div><div class="ends"><span>0</span><span id="maxmph"></span></div></div>
+</div>
+<div class="readout" id="readout" hidden></div>
+<script>
+const D = /*DATA*/null;
+document.getElementById("title").textContent = D.title;
+document.getElementById("maxmph").textContent = D.maxmph;
+const exportTiles = (service, extra) => [`${service}/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=512,512&f=image&${extra}`];
+const DNR = "https://dnrmaps.wi.gov/arcgis_image/rest/services/DW_Imagery/EN_Image_Basemap_Latest_Leaf_Off/ImageServer";
+const DEP = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer";
+const BASES = {
+  leafoff: { name: "Leaf-Off", src: { type: "raster", tiles: exportTiles(DNR, "format=jpg"), tileSize: 512, minzoom: 13, maxzoom: 19 } },
+  summer: { name: "Summer", src: { type: "raster", tiles: ["https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}"], tileSize: 256, maxzoom: 16 } },
+  terrain: { name: "Terrain", src: { type: "raster", tiles: exportTiles(DEP, "format=jpgpng&renderingRule=" + encodeURIComponent(JSON.stringify({ rasterFunction: "Hillshade Multidirectional" }))), tileSize: 512, maxzoom: 17 } },
+};
+const color = ["interpolate", ["linear"], ["get", "mph"], 0, "#3b0f70", D.maxmph * .25, "#8c2981", D.maxmph * .5, "#de4968", D.maxmph * .75, "#fe9f6d", D.maxmph, "#fcfdbf"];
+const style = { version: 8, sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": "#1b2118" } }] };
+for (const [id, b] of Object.entries(BASES)) {
+  style.sources[id] = b.src;
+  style.layers.push({ id, type: "raster", source: id, layout: { visibility: id === "leafoff" || id === "summer" ? "visible" : "none" } });
+}
+// Summer sits under Leaf-Off and fills in while the slow leaf-off pieces load.
+style.layers.splice(1, 2, style.layers[2], style.layers[1]);
+style.sources.parcels = { type: "geojson", data: D.parcels };
+style.sources.sparse = { type: "geojson", data: D.sparse };
+style.sources.coarse = { type: "geojson", data: D.coarse };
+style.sources.fine = { type: "geojson", data: D.fine };
+style.sources.sits = { type: "geojson", data: D.sits };
+style.layers.push(
+  { id: "parcel-line", type: "line", source: "parcels", filter: ["!", ["get", "ours"]], paint: { "line-color": "#fff", "line-opacity": .5, "line-width": 1 } },
+  { id: "ours-line", type: "line", source: "parcels", filter: ["get", "ours"], paint: { "line-color": "#FF6B1A", "line-width": 3 } },
+  { id: "sparse-casing", type: "line", source: "sparse", maxzoom: 14.5, paint: { "line-color": "#000", "line-opacity": .55, "line-width": 4 }, layout: { "line-cap": "round" } },
+  { id: "sparse", type: "line", source: "sparse", maxzoom: 14.5, paint: { "line-color": color, "line-width": 2 }, layout: { "line-cap": "round" } },
+  { id: "coarse-casing", type: "line", source: "coarse", minzoom: 14.5, maxzoom: 15.5, paint: { "line-color": "#000", "line-opacity": .55, "line-width": 4 }, layout: { "line-cap": "round" } },
+  { id: "coarse", type: "line", source: "coarse", minzoom: 14.5, maxzoom: 15.5, paint: { "line-color": color, "line-width": 2 }, layout: { "line-cap": "round" } },
+  { id: "fine-casing", type: "line", source: "fine", minzoom: 15.5, paint: { "line-color": "#000", "line-opacity": .55, "line-width": 4 }, layout: { "line-cap": "round" } },
+  { id: "fine", type: "line", source: "fine", minzoom: 15.5, paint: { "line-color": color, "line-width": 2 }, layout: { "line-cap": "round" } },
+  { id: "sits", type: "circle", source: "sits", paint: { "circle-radius": 8, "circle-color": "#FF6B1A", "circle-stroke-color": "#fff", "circle-stroke-width": 2 } },
+);
+const map = new maplibregl.Map({ container: "map", style, bounds: D.box, fitBoundsOptions: { padding: 30 }, maxZoom: 20, attributionControl: false });
+map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
+map.addControl(new maplibregl.NavigationControl({ showZoom: false }), "top-right");   // compass: drag to rotate, tap for north
+map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: "Wind: WindNinja (USFS) · Photos: WI DNR, USGS · Elevation: USGS 3DEP · Parcels: WI" }));
+
+// Base layer buttons
+const basesEl = document.getElementById("bases");
+let base = "leafoff";
+for (const [id, b] of Object.entries(BASES)) {
+  const btn = document.createElement("button"); btn.textContent = b.name; btn.setAttribute("aria-pressed", String(id === base));
+  btn.onclick = () => {
+    base = id;
+    for (const k of Object.keys(BASES)) map.setLayoutProperty(k, "visibility", k === id || (id === "leafoff" && k === "summer") ? "visible" : "none");
+    [...basesEl.children].forEach(c => c.setAttribute("aria-pressed", String(c === btn)));
+    map.setPaintProperty("parcel-line", "line-color", id === "terrain" ? "#222" : "#fff");
+  };
+  basesEl.append(btn);
+}
+const toggle = (btnId, layers) => {
+  const btn = document.getElementById(btnId);
+  btn.onclick = () => {
+    const on = btn.getAttribute("aria-pressed") !== "true";
+    btn.setAttribute("aria-pressed", String(on));
+    layers.forEach(l => map.setLayoutProperty(l, "visibility", on ? "visible" : "none"));
+  };
+};
+toggle("arrows", ["sparse-casing", "sparse", "coarse-casing", "coarse", "fine-casing", "fine"]);
+toggle("parcels", ["parcel-line", "ours-line"]);
+toggle("sitsBtn", ["sits"]);
+
+// Tap: the wind at the nearest grid cell (20 m), or a sit's details.
+const DIRS = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+const readout = document.getElementById("readout");
+let marker = null;
+map.on("click", e => {
+  const sit = map.queryRenderedFeatures(e.point, { layers: ["sits"] })[0];
+  if (sit) {
+    new maplibregl.Popup().setLngLat(sit.geometry.coordinates).setHTML(
+      `<b>${sit.properties.label}</b><br>${sit.properties.who}<br>Wind you felt: <b>${sit.properties.wind}</b>`).addTo(map);
+    return;
+  }
+  const { lng, lat } = e.lngLat, k = Math.cos(lat * Math.PI / 180);
+  let best = null, bd = Infinity;
+  for (const p of D.points) { const d = (p[0] - lng) ** 2 * k * k + (p[1] - lat) ** 2; if (d < bd) { bd = d; best = p; } }
+  if (!best) return;
+  const from = DIRS[Math.round(best[3] / 22.5) % 16], to = DIRS[(Math.round(best[3] / 22.5) + 8) % 16];
+  readout.innerHTML = `Here: from <b>${from}</b> (${best[3]}°) toward ${to} · <b>${best[2]} mph</b>`;
+  readout.hidden = false;
+  if (!marker) marker = new maplibregl.Marker({ color: "#FF6B1A", scale: .6 });
+  marker.setLngLat([lng, lat]).addTo(map);
+});
+</script>
+</body>
+</html>
