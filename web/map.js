@@ -288,7 +288,7 @@
     return el;
   }
   let me = null, meMarker = null, watch = null;
-  let lens = null;               // { dir } while the wind lens is on
+  let lens = null;               // { dir } while the wind tool is on: sits in that wind light up
   let picked = null;             // what the card is showing, so a redraw keeps it
   function draw() {
     if (!ready) return;
@@ -309,10 +309,7 @@
     if (me) { meMarker?.remove(); meMarker = new maplibregl.Marker({ element: meEl(), anchor: "center" }).setLngLat(me).addTo(map); }
     const tag = ui.querySelector(".m-windtag"); tag.hidden = !lens; tag.textContent = lens?.dir || "";
     if (picked) pick(picked, true);
-    const key = `${prop()}|${lens?.dir || ""}`;
-    if (mw.on && key !== mwKey) { if (!mwKey.startsWith(prop() + "|")) { mw.readout = ""; mwPinAt(null); } mwKey = key; mwShow(); }
   }
-  let mwKey = "";
   function meEl() { const el = document.createElement("div"); el.className = "m-me"; return el; }
 
   // ---------- the bottom card ----------
@@ -393,7 +390,8 @@
       const hit = lens && sitMatches(s, lens.dir);
       return `<li><button type="button" class="m-sit${hit ? " m-hit" : ""}" data-sit="${esc(s.id)}"><b>${fmtDay(s.set_at)} ${new Date(s.set_at).getHours() < 12 ? "AM" : "PM"}</b>
         <span>${esc(s.hunter_name || "")} · wind ${esc(sitWinds(s).join(" → ") || "—")}</span>
-        <small>${tl.deer ? `${tl.deer} deer${tl.bucks ? `, ${tl.bucks} buck${tl.bucks === 1 ? "" : "s"}` : ""}` : "Nothing seen"}${tl.bad ? ` · ${tl.bad} busted/winded` : ""}</small></button></li>`;
+        <small>${tl.deer ? `${tl.deer} deer${tl.bucks ? `, ${tl.bucks} buck${tl.bucks === 1 ? "" : "s"}` : ""}` : "Nothing seen"}${tl.bad ? ` · ${tl.bad} busted/winded` : ""}</small>
+        <small class="m-check" data-check="${esc(s.id)}"></small></button></li>`;
     }).join("");
     const el = openCard(`
       <p class="label">Tree</p><h3>${esc(t.name)}</h3>
@@ -404,6 +402,14 @@
       <p class="m-sub" id="mSlope"></p>
       <ul class="m-list m-sits">${rows}</ul>`);
     el.querySelectorAll("[data-sit]").forEach(x => x.addEventListener("click", () => openSitView(x.dataset.sit)));
+    // Each sit against the model for that day's wind.
+    list.forEach(sit => modelAtSit(sit).then(c => {
+      const box = body.querySelector(`[data-check="${CSS.escape(sit.id)}"]`);
+      if (!box || !c) return;
+      box.textContent = !c.modeled ? `Day's wind ${c.day.dir} ${c.day.mph}: not modeled yet`
+        : `Model (${c.run}): ${c.model} here, ${c.ground} mph · felt ${c.felt} ${c.match ? "✓" : "✗"}`;
+      box.classList.toggle("bad", !c.match && c.modeled);
+    }));
     slopeAt(t.lon, t.lat).then(sl => {
       const box = body.querySelector("#mSlope");
       if (!box || !sl || picked?.id !== id) return;
@@ -597,7 +603,6 @@
       <p class="label">Show</p>
       <div class="chips m-show">
         <button type="button" data-show="contours" aria-pressed="${prefs.contours}">Contours</button>
-        <button type="button" data-show="mwind" aria-pressed="${mw.on}">Modeled Wind</button>
         ${[["parcels", "Parcels"], ["cameras", "Cameras"], ["spots", "Spots"], ["trees", "Sits"]].map(([k, l]) => `<button type="button" data-show="${k}" aria-pressed="${!!prefs.show[k]}">${l}</button>`).join("")}
       </div>
       <p class="label">Offline</p>
@@ -609,7 +614,6 @@
     el.querySelectorAll("[data-base]").forEach(x => x.addEventListener("click", () => { prefs.base = x.dataset.base; savePrefs(); applyLayers(); layersCard(); }));
     el.querySelectorAll("[data-show]").forEach(x => x.addEventListener("click", () => {
       const k = x.dataset.show;
-      if (k === "mwind") { mwToggle(); return layersCard(); }
       if (k === "contours") prefs.contours = !prefs.contours; else prefs.show[k] = !prefs.show[k];
       savePrefs(); applyLayers(); draw(); layersCard();
     }));
@@ -723,13 +727,15 @@
   }
   async function mwShow() {
     const p = prop(), pill = ui.querySelector(".m-wpill");
-    if (!mw.on) { pill.hidden = true; if (ready) map.getSource("mwind").setData(fc([])); return; }
+    if (!mw.on) { pill.hidden = true; if (ready) map.getSource("mwind").setData(fc([])); if (lens) { lens = null; draw(); } return; }
     pill.hidden = false;
     let idx;
     try { idx = await windFile(p, "index.json"); }
     catch { mw.shown = null; map.getSource("mwind")?.setData(fc([])); pill.textContent = `No modeled wind for ${p} on this phone yet`; return; }
     const now = await windNow(p);
-    const want = mw.pick || (lens ? { dir: lens.dir, mph: now?.mph ?? 10 } : now) || { dir: idx.runs[0].dir, mph: 10 };
+    const want = mw.pick || now || { dir: idx.runs[0].dir, mph: 10 };
+    // The trees sat in this wind light up with it, as the wind lens did.
+    if (lens?.dir !== want.dir) { lens = { dir: want.dir }; draw(); }
     const same = idx.runs.filter(r => r.dir === want.dir);
     if (!same.length) {
       mw.shown = null; map.getSource("mwind")?.setData(fc([]));
@@ -746,7 +752,7 @@
       cells.push({ lon: grid.origin[0] + dlon[i] / 1e6, lat: grid.origin[1] + dlat[i] / 1e6, row: Math.floor(i / grid.cols), col: i % grid.cols,
         above, ground: above * standFactor(cc[i], mw.leafOff), from, canopy: cc[i] });
     }
-    mw.cells = cells; mw.shown = { ...run, want, source: mw.pick ? "picked" : lens ? "lens" : now ? "now" : "default" };
+    mw.cells = cells; mw.shown = { ...run, want, source: mw.pick ? "picked" : now ? "now" : "default" };
     const feats = [];
     const arrow = (c, len, lvl) => {
       const t = (c.from + 180) * Math.PI / 180, k = 1 / (111320 * Math.cos(c.lat * Math.PI / 180));
@@ -767,7 +773,7 @@
   function mwPill() {
     const pill = ui.querySelector(".m-wpill"), s = mw.shown;
     if (!s) return;
-    const why = s.source === "now" ? ` (now ${s.want.dir} ${s.want.mph})` : s.source === "lens" ? " (wind lens)" : "";
+    const why = s.source === "now" ? ` (now ${s.want.dir} ${s.want.mph})` : "";
     pill.innerHTML = `<b>Modeled ${esc(s.dir)} ${s.mph} mph</b>${why} · ${mw.height === "ground" ? "where you stand" : "above the trees"}` + (mw.readout ? `<br>${mw.readout}` : "");
   }
   // A small marker where you tapped, so it's clear which spot the reading is for.
@@ -789,43 +795,122 @@
     mwPill();
   }
   function mwToggle() { parcelOff(); mw.on = !mw.on; prefs.mwind = mw.on; savePrefs(); mw.readout = ""; mwPinAt(null); mwShow(); }
-  // Pick a wind by hand: any direction on the wind clock and any speed; the nearest run is shown.
-  function mwCard(fromPill = false) {
-    windFile(prop(), "index.json").then(idx => {
-      const s = mw.shown, now = mw.now[prop()], want = mw.pick || s?.want || (now && { dir: now.dir, mph: now.mph }) || { dir: idx.runs[0].dir, mph: 12 };
-      const dirs = [...new Set(idx.runs.map(r => r.dir))];
-      // Nothing on the map yet (no run for the wind now): show the suggested wind right away.
-      if (fromPill && !s && !mw.pick) { const d = dirs.includes(want.dir) ? want.dir : dirs[0]; mw.pick = { dir: d, mph: want.mph }; return mwShow().then(() => mwCard()); }
-      const speeds = d => idx.runs.filter(r => r.dir === d).map(r => r.mph).sort((a, b) => a - b);
-      const nearest = (d, v) => speeds(d).reduce((a, b) => Math.abs(b - v) < Math.abs(a - v) ? b : a, speeds(d)[0]);
-      const status = () => {
-        const d = (mw.pick || want).dir, v = (mw.pick || want).mph;
-        return speeds(d).length ? `${esc(d)} at ${v} mph → showing the ${esc(d)} ${nearest(d, v)} mph run` : `No run for a ${esc(d)} wind yet. Runs so far: ${esc(dirs.join(", "))}.`;
-      };
-      const el = openCard(`
-        <p class="label">Modeled Wind</p>
-        <p class="m-sub">${mw.pick ? "Your wind:" : now ? `The wind now is ${esc(now.dir)} ${now.mph} mph:` : "Pick a wind:"} <b id="mwStatus">${status()}</b></p>
-        <div id="mwDial"></div>
-        <label class="m-speed"><span>Speed <b id="mwMph">${want.mph}</b> mph</span><input type="range" id="mwRange" min="0" max="25" step="1" value="${want.mph}"></label>
-        ${btnRow(b("now", "Use the Wind Now"))}
-        <p class="label">Height</p>
-        <div class="chips m-kinds"><button type="button" data-h="ground" aria-pressed="${mw.height === "ground"}">Where You Stand</button><button type="button" data-h="above" aria-pressed="${mw.height === "above"}">Above the Trees</button></div>
-        <p class="label">Leaves</p>
-        <div class="chips m-kinds"><button type="button" data-leaf="on" aria-pressed="${!mw.leafOff}">On</button><button type="button" data-leaf="off" aria-pressed="${mw.leafOff}">Off</button></div>
-        <div class="m-legend"><i></i><span>0</span><span>22+ mph</span></div>
-        ${btnRow(b("off", "Turn Off"))}`, "m-mwind");
-      const redo = () => { mwShow().then(() => mwCard()); };
-      windClock(el.querySelector("#mwDial"), (mw.pick || want).dir, d => {
-        if (!d) return;
-        mw.pick = { dir: d, mph: +el.querySelector("#mwRange").value }; redo();
-      }, { variable: false, clearable: false });
-      const range = el.querySelector("#mwRange");
-      range.addEventListener("input", () => { el.querySelector("#mwMph").textContent = range.value; mw.pick = { dir: (mw.pick || want).dir, mph: +range.value }; el.querySelector("#mwStatus").innerHTML = status(); });
-      range.addEventListener("change", () => { mw.pick = { dir: (mw.pick || want).dir, mph: +range.value }; redo(); });
-      el.querySelectorAll("[data-h]").forEach(x => x.addEventListener("click", () => { mw.height = x.dataset.h; prefs.mwHeight = mw.height; savePrefs(); redo(); }));
-      el.querySelectorAll("[data-leaf]").forEach(x => x.addEventListener("click", () => { mw.leafOff = x.dataset.leaf === "off"; prefs.mwLeafOff = mw.leafOff; savePrefs(); redo(); }));
-      on(el, { now: () => { mw.pick = null; redo(); }, off: () => { mwToggle(); closeCard(); } });
-    }).catch(() => openCard(`<p class="label">Modeled Wind</p><p class="m-sub">No modeled wind for ${esc(prop())} on this phone yet. It needs signal the first time.</p>`));
+  // The wind tool: a wind (now, a forecast morning or evening, or picked on the clock and slider), the modeled
+  // arrows for it, and what our sits say about it: trees sat in that wind, and how often the model matched
+  // the wind we felt.
+  async function mwCard(fromPill = false) {
+    let idx = null;
+    try { idx = await windFile(prop(), "index.json"); } catch {}
+    const s = mw.shown, now = mw.now[prop()];
+    const dirs = idx ? [...new Set(idx.runs.map(r => r.dir))] : [];
+    const want = mw.pick || s?.want || (now && { dir: now.dir, mph: now.mph }) || { dir: dirs[0] || "S", mph: 12 };
+    // Opened from the pill with nothing on the map (no run for the wind now): show the nearest wind we have.
+    if (fromPill && idx && !s && !mw.pick) { mw.pick = { dir: dirs.includes(want.dir) ? want.dir : dirs[0], mph: want.mph }; await mwShow(); return mwCard(); }
+    const speeds = d => idx ? idx.runs.filter(r => r.dir === d).map(r => r.mph).sort((a, b) => a - b) : [];
+    const nearest = (d, v) => speeds(d).reduce((a, b) => Math.abs(b - v) < Math.abs(a - v) ? b : a, speeds(d)[0]);
+    const status = () => {
+      const w = mw.pick || want;
+      if (!idx) return `${esc(w.dir)} at ${w.mph} mph (no modeled wind on this phone yet; it needs signal the first time)`;
+      return speeds(w.dir).length ? `${esc(w.dir)} at ${w.mph} mph → showing the ${esc(w.dir)} ${nearest(w.dir, w.mph)} mph run` : `No run for a ${esc(w.dir)} wind yet. Runs so far: ${esc(dirs.join(", "))}.`;
+    };
+    const el = openCard(`
+      <p class="label">Wind</p>
+      <p class="m-sub">${mw.pick ? "Your wind:" : now ? `The wind now is ${esc(now.dir)} ${now.mph} mph:` : "Pick a wind:"} <b id="mwStatus">${status()}</b></p>
+      <div class="m-fc" id="mFc"></div>
+      <div id="mwDial"></div>
+      <label class="m-speed"><span>Speed <b id="mwMph">${want.mph}</b> mph</span><input type="range" id="mwRange" min="0" max="25" step="1" value="${want.mph}"></label>
+      ${btnRow(b("now", "Use the Wind Now"))}
+      <div id="mRank"></div>
+      <p class="label">Arrows</p>
+      <div class="chips m-kinds"><button type="button" data-h="ground" aria-pressed="${mw.height === "ground"}">Where You Stand</button><button type="button" data-h="above" aria-pressed="${mw.height === "above"}">Above the Trees</button></div>
+      <div class="chips m-kinds" style="margin-top:6px"><button type="button" data-leaf="on" aria-pressed="${!mw.leafOff}">Leaves On</button><button type="button" data-leaf="off" aria-pressed="${mw.leafOff}">Leaves Off</button></div>
+      <div class="m-legend"><i></i><span>0</span><span>22+ mph</span></div>
+      <p class="m-sub" style="margin-top:10px">Modeled with WindNinja over the lidar terrain, with sheltering under the trees from USFS canopy cover. Tap the map for the wind at a spot.</p>
+      ${btnRow(b("off", "Turn Off"))}`, "m-mwind");
+    const redo = () => { mwShow().then(() => mwCard()); };
+    const setWind = w => { mw.pick = w; redo(); };
+    windClock(el.querySelector("#mwDial"), (mw.pick || want).dir, d => { if (d) setWind({ dir: d, mph: +el.querySelector("#mwRange").value }); }, { variable: false, clearable: false });
+    const range = el.querySelector("#mwRange");
+    range.addEventListener("input", () => { el.querySelector("#mwMph").textContent = range.value; mw.pick = { dir: (mw.pick || want).dir, mph: +range.value }; el.querySelector("#mwStatus").innerHTML = status(); });
+    range.addEventListener("change", () => setWind({ dir: (mw.pick || want).dir, mph: +range.value }));
+    el.querySelectorAll("[data-h]").forEach(x => x.addEventListener("click", () => { mw.height = x.dataset.h; prefs.mwHeight = mw.height; savePrefs(); redo(); }));
+    el.querySelectorAll("[data-leaf]").forEach(x => x.addEventListener("click", () => { mw.leafOff = x.dataset.leaf === "off"; prefs.mwLeafOff = mw.leafOff; savePrefs(); redo(); }));
+    on(el, { now: () => setWind(null), off: () => { mwToggle(); closeCard(); } });
+    // Forecast mornings and evenings: tap one to see that wind.
+    forecast(prop()).then(rows => {
+      const box = el.querySelector("#mFc");
+      if (!box || !rows?.length) return;
+      box.innerHTML = `<p class="label">Forecast at ${esc(state.properties[prop()].weather_label || "the property")}</p><div class="chips m-kinds">${rows.map((r, i) =>
+        `<button type="button" data-fc="${i}">${esc(r.label)} <b>${r.dir}</b> ${r.mph}</button>`).join("")}</div>`;
+      box.querySelectorAll("[data-fc]").forEach(x => x.addEventListener("click", () => { const r = rows[+x.dataset.fc]; setWind({ dir: r.dir, mph: r.mph }); }));
+    });
+    // What our sits say: the trees sat in this wind, and how often the model matched the wind we felt.
+    const dir = (mw.pick || want).dir, ts = trees();
+    const ranked = ts.map(t => ({ t, hits: t.sits.filter(x => sitMatches(x, dir)) })).filter(r => r.hits.length)
+      .map(r => ({ ...r, k: tally(r.hits) })).sort((a, b) => b.hits.length - a.hits.length || b.k.deer - a.k.deer || a.k.bad - b.k.bad);
+    const cams = state.photosLoaded ? cameras().map(c => {
+      const list = ALL_CARDS.filter(x => x.cam === c.camera && x.wind);
+      return { name: c.camera, n: list.filter(x => near16(String(x.wind).split(/\s+/)[0].toUpperCase(), dir)).length, of: list.length };
+    }).filter(c => c.of).sort((a, b) => b.n - a.n) : null;
+    el.querySelector("#mRank").innerHTML = `
+      <p class="label">Our sits in a ${esc(dir)}-ish wind</p>
+      ${ranked.length ? `<ul class="m-list m-sits">${ranked.map(({ t, hits, k }) => `<li><button type="button" class="m-sit" data-tree="${t.id}"><b>${esc(t.name)}</b>
+        <span>${hits.length} sit${hits.length === 1 ? "" : "s"} · ${k.deer} deer · ${k.bucks} buck${k.bucks === 1 ? "" : "s"}</span>
+        <small>${k.bad ? `${k.bad} busted/winded` : "Never busted"}</small></button></li>`).join("")}</ul>` : `<p class="m-sub">No sits logged in a ${esc(dir)}-ish wind yet.</p>`}
+      <p class="m-sub" id="mCheck"></p>
+      ${cams ? `<p class="label">Buck photos in this wind</p><p class="m-sub">${cams.slice(0, 6).map(c => `${esc(c.name)} ${c.n}/${c.of}`).join(" · ") || "None yet"}</p>`
+        : `<p class="m-sub"><button type="button" class="linkish" id="mLoadPhotos">Load photos</button> to see which cameras get bucks in this wind.</p>`}`;
+    el.querySelectorAll("[data-tree]").forEach(x => x.addEventListener("click", () => {
+      const t = ts.find(y => y.id === x.dataset.tree);
+      map.easeTo({ center: [t.lon, t.lat], zoom: Math.max(map.getZoom(), 16) });
+      pick({ type: "tree", id: t.id });
+    }));
+    el.querySelector("#mLoadPhotos")?.addEventListener("click", () => ensurePhotos().then(() => mwCard()));
+    modelCheck(prop()).then(c => {
+      const box = el.querySelector("#mCheck");
+      if (!box || !c.compared) return box && (box.textContent = c.skipped ? `Model check: none of our sits yet had a day's wind we've modeled (${c.skipped} sit${c.skipped === 1 ? "" : "s"} waiting on other directions).` : "");
+      box.innerHTML = `<b>Model check:</b> on ${c.compared} sit${c.compared === 1 ? "" : "s"}, the model's wind at the tree matched the wind we felt ${c.matched} time${c.matched === 1 ? "" : "s"}` +
+        (c.skipped ? ` (${c.skipped} more need other directions modeled).` : ".");
+    });
+  }
+
+  // Did the model get it right? For a sit with the wind we felt and the weather service's wind that hour, take
+  // the run nearest that day's wind and read its direction at the tree. A match is within one compass point.
+  const checked = {};
+  async function modelAtSit(sit) {
+    if (sit.id in checked) return checked[sit.id];
+    const felt = sit.wind_dir && sit.wind_dir !== "variable" ? sit.wind_dir : null;
+    const hours = (state.sitWeather?.[sit.id] || []).filter(h => h.wind_from_deg != null);
+    if (!felt || sit.lat == null || !hours.length) return checked[sit.id] = null;
+    const t = new Date(sit.set_at).getTime() + 3600e3;          // an hour in: settled in, wind as felt
+    const h = hours.reduce((a, b) => Math.abs(new Date(b.hour) - t) < Math.abs(new Date(a.hour) - t) ? b : a);
+    const day = { dir: WIND16[Math.round(h.wind_from_deg / 22.5) % 16], mph: Math.round(h.wind_mph) };
+    let idx;
+    try { idx = await windFile(sit.property, "index.json"); } catch { return checked[sit.id] = null; }
+    const same = idx.runs.filter(r => r.dir === day.dir);
+    if (!same.length) return checked[sit.id] = { day, modeled: false };
+    const run = same.reduce((a, b) => Math.abs(b.mph - day.mph) < Math.abs(a.mph - day.mph) ? b : a);
+    const [grid, r] = await Promise.all([windFile(sit.property, "grid.json"), windFile(sit.property, run.file)]);
+    const dlon = bytes(grid.dlon, Int32Array), dlat = bytes(grid.dlat, Int32Array), fr = bytes(r.from, Uint8Array), sp = bytes(r.speed, Uint8Array), cc = bytes(grid.canopy, Uint8Array);
+    const k = Math.cos(sit.lat * Math.PI / 180);
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < dlon.length; i++) {
+      const d = (grid.origin[0] + dlon[i] / 1e6 - sit.lon) ** 2 * k * k + (grid.origin[1] + dlat[i] / 1e6 - sit.lat) ** 2;
+      if (d < bd) { bd = d; best = i; }
+    }
+    const model = WIND16[Math.round(fr[best] / 256 * 16) % 16];
+    return checked[sit.id] = { day, modeled: true, run: `${run.dir} ${run.mph}`, model, felt, match: near16(model, felt),
+      ground: +(sp[best] / 5 * standFactor(cc[best], [10, 11, 0, 1, 2, 3].includes(new Date(sit.set_at).getMonth()))).toFixed(1) };
+  }
+  async function modelCheck(p) {
+    const out = { compared: 0, matched: 0, skipped: 0 };
+    for (const sit of Object.values(state.sits || {}).filter(x => x.property === p)) {
+      const c = await modelAtSit(sit);
+      if (!c) continue;
+      if (!c.modeled) { out.skipped++; continue; }
+      out.compared++; if (c.match) out.matched++;
+    }
+    return out;
   }
   ui.querySelector(".m-wpill").addEventListener("click", () => mwCard(true));
 
@@ -881,54 +966,6 @@
       return rows;
     } catch { return null; }
   }
-  // Picking a wind folds the card to one line, so the trees, scent cones and deer paths show on the map.
-  function windMini() {
-    const ts = trees(), lit = ts.filter(t => t.sits.some(s => sitMatches(s, lens.dir))).length;
-    const el = openCard(`<p class="m-sub m-miniline"><b>${esc(lens.dir)}-ish wind</b> · ${lit ? `${lit} tree${lit === 1 ? "" : "s"} sat in it` : "no sits in it yet"}</p>
-      ${btnRow(b("more", "Details"), b("off", "Turn Off"))}`, "m-wind m-mini");
-    on(el, { more: () => windCard(), off: () => { lens = null; draw(); closeCard(); } });
-  }
-  function windCard() {
-    const ts = trees();
-    const el = openCard(`
-      <p class="label">Wind Lens</p>
-      <p class="m-sub">Pick a wind to see what happened in it before: trees we sat, where our scent went, and how the deer moved.</p>
-      <div class="m-fc" id="mFc"></div>
-      <div id="mWind"></div>
-      <div id="mRank"></div>`, "m-wind");
-    windClock(el.querySelector("#mWind"), lens?.dir, v => { lens = v ? { dir: v } : null; draw(); v ? windMini() : windCard(); }, { variable: false });
-    forecast(prop()).then(rows => {
-      const box = el.querySelector("#mFc");
-      if (!box || !rows?.length) return;
-      box.innerHTML = `<p class="label">Forecast at ${esc(state.properties[prop()].weather_label || "the property")}</p><div class="chips">${rows.map(r =>
-        `<button type="button" data-dir="${r.dir}" aria-pressed="${lens?.dir === r.dir}">${esc(r.label)} <b>${r.dir}</b> ${r.mph} mph</button>`).join("")}</div>`;
-      box.querySelectorAll("[data-dir]").forEach(x => x.addEventListener("click", () => { lens = { dir: x.dataset.dir }; draw(); windMini(); }));
-    });
-    if (!lens) return;
-    // Rank the trees for this wind: most sits in it first, then deer seen, and say how many knew we were there.
-    const ranked = ts.map(t => ({ t, hits: t.sits.filter(s => sitMatches(s, lens.dir)) })).filter(r => r.hits.length)
-      .map(r => ({ ...r, k: tally(r.hits) })).sort((a, b) => b.hits.length - a.hits.length || b.k.deer - a.k.deer || a.k.bad - b.k.bad);
-    const cams = state.photosLoaded ? cameras().map(c => {
-      const list = ALL_CARDS.filter(x => x.cam === c.camera && x.wind);
-      return { name: c.camera, n: list.filter(x => near16(String(x.wind).split(/\s+/)[0].toUpperCase(), lens.dir)).length, of: list.length };
-    }).filter(c => c.of).sort((a, b) => b.n - a.n) : null;
-    el.querySelector("#mRank").innerHTML = `
-      <p class="label">Trees in a ${esc(lens.dir)}-ish wind</p>
-      ${ranked.length ? `<ul class="m-list m-sits">${ranked.map(({ t, hits, k }) => `<li><button type="button" class="m-sit" data-tree="${t.id}"><b>${esc(t.name)}</b>
-        <span>${hits.length} sit${hits.length === 1 ? "" : "s"} · ${k.deer} deer · ${k.bucks} buck${k.bucks === 1 ? "" : "s"}</span>
-        <small>${k.bad ? `${k.bad} busted/winded` : "Never busted"}</small></button></li>`).join("")}</ul>
-        <p class="m-sub">Counts, not odds: a tree needs a lot of sits before these mean much.</p>`
-        : `<p class="m-sub">No sits logged in a ${esc(lens.dir)}-ish wind yet.</p>`}
-      ${cams ? `<p class="label">Buck photos in this wind</p><p class="m-sub">${cams.slice(0, 6).map(c => `${esc(c.name)} ${c.n}/${c.of}`).join(" · ") || "None yet"}</p>`
-        : `<p class="m-sub"><button type="button" class="linkish" id="mLoadPhotos">Load photos</button> to see which cameras get bucks in this wind.</p>`}`;
-    el.querySelectorAll("[data-tree]").forEach(x => x.addEventListener("click", () => {
-      const t = ts.find(y => y.id === x.dataset.tree);
-      map.easeTo({ center: [t.lon, t.lat], zoom: Math.max(map.getZoom(), 16) });
-      pick({ type: "tree", id: t.id });
-    }));
-    el.querySelector("#mLoadPhotos")?.addEventListener("click", () => ensurePhotos().then(() => windCard()));
-  }
-
   // ---------- where you are ----------
   function locate(center) {
     if (!navigator.geolocation) return toast("This phone won't share its location.");
@@ -948,7 +985,7 @@
 
   on(ui.querySelector(".m-tools"), {
     layers: () => card.hidden || !card.classList.contains("m-layers") ? layersCard() : closeCard(),
-    wind: () => !card.hidden && card.classList.contains("m-wind") ? closeCard() : lens ? windMini() : windCard(),
+    wind: () => { if (!mw.on) { mwToggle(); return mwCard(); } if (!card.hidden && card.classList.contains("m-mwind")) return closeCard(); mwCard(); },
     locate: () => locate(true),
     add: () => { const open = !card.hidden && card.classList.contains("m-menu"); closeCard(); if (!open) addMenu(); },
   });
@@ -958,7 +995,7 @@
     map,                                      // for poking at in the browser console
     show() {
       requestAnimationFrame(() => map.resize());
-      if (prop() !== shownProp) { shownProp = prop(); parcelOff(); if (!picking) closeCard(); const bx = boxOf(prop()); if (bx) map.fitBounds(bx, { padding: 20, duration: 0, bearing: squareBearing() }); }
+      if (prop() !== shownProp) { shownProp = prop(); parcelOff(); mw.readout = ""; mwPinAt(null); if (mw.on) mwShow(); if (!picking) closeCard(); const bx = boxOf(prop()); if (bx) map.fitBounds(bx, { padding: 20, duration: 0, bearing: squareBearing() }); }
       draw();
       if (window.mapFocus) { const f = window.mapFocus; window.mapFocus = null; map.jumpTo({ center: [f.lon, f.lat], zoom: Math.max(map.getZoom(), 17) }); }
       // GPS only while the map is open, so it doesn't drain the phone; quietly, without moving the map.

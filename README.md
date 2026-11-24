@@ -134,7 +134,7 @@ Map data: camera positions (from the GPS on each photo; a move of more than 150 
 .venv/bin/python -m buckbook.map_data push
 ```
 
-Modeled wind (WindNinja, see `buckbook/wind_model.py`): run cases, pack them for the app, and upload them to the private photos bucket under `wind/` (shows the size and asks first). The app's Modeled Wind layer shows the run nearest the wind now, the wind lens, or a wind you pick, where you stand or above the trees.
+Modeled wind (WindNinja, see `buckbook/wind_model.py`): run cases, pack them for the app, and upload them to the private photos bucket under `wind/` (shows the size and asks first). The map's wind button shows the run nearest the wind now, a forecast morning or evening, or a wind you pick, where you stand or above the trees.
 ```bash
 .venv/bin/python -m buckbook.wind_model run "Stoddard" S 12
 ```
@@ -178,7 +178,7 @@ Rules the database enforces: only crew can read or write anything; viewers can't
 - **Disputes**: called out the moment they happen, with who disagrees, a switch button, and a comment thread. The deck skips settled photos and puts disputed ones first.
 - **Gallery**: photos nobody has named, one camera at a time, grouped by burst; Select (or long-press) to tag or pass several at once.
 - **Roster**: photo grid of bucks, and a **Name them** queue for buck photos nobody has named (can't-ID ones included). Buck profiles support edit, merge, delete, move a photo, and make cover.
-- **Map**: Leaf-Off (Wisconsin DNR, 3-inch, bare trees), Summer, Topo or Terrain (lidar shading), with contours. Cameras, spots, the trees we've sat, and parcel lines; tap anything for details and how far it is from you. **+** adds a spot or places a camera that sends no GPS. **Download Map** (in the layers button) saves the property on the phone for no signal. The **wind lens** shows, for a wind or a forecast, the trees sat in it, where the scent went, how the deer moved, and which cameras got bucks.
+- **Map**: Leaf-Off (Wisconsin DNR, 3-inch, bare trees), Summer, Topo or Terrain (lidar shading), with contours. Cameras, spots, the trees we've sat, and parcel lines; tap anything for details and how far it is from you. **+** adds a spot or places a camera that sends no GPS. **Download Map** (in the layers button) saves the property on the phone for no signal. The **wind** button shows, for the wind now, a forecast, or a wind you pick: the modeled wind over the terrain (WindNinja, where you stand or above the trees), the trees sat in that wind with their scent cones and deer paths, which cameras got bucks in it, and a model check: how often the model's wind at a tree matched the wind felt on sits there.
 - **Crew**: who's sorting, how many votes each, and how often each agrees with the others.
 
 ## Limits and gotchas

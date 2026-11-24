@@ -123,3 +123,5 @@
 .m-pi-body { padding: 0 12px 10px 38px; color: var(--muted); font-size: 12px; }
 .m-pi-body b { color: var(--ink); font-weight: 600; }
 .m-pi-body .linkish { padding: 4px 0 0; font-size: 12px; }
+.m-sit .m-check:not(:empty) { color: var(--ink); }
+.m-sit .m-check.bad { color: #E88A70; }
