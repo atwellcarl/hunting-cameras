@@ -168,7 +168,7 @@ Rules the database enforces: only crew can read or write anything; viewers can't
 - **Gallery**: photos nobody has named, one camera at a time, grouped by burst; Select (or long-press) to tag or pass several at once.
 - **Roster**: photo grid of bucks, and a **Name them** queue for buck photos nobody has named (can't-ID ones included). Buck profiles support edit, merge, delete, move a photo, and make cover.
 - **Map**: Leaf-Off (Wisconsin DNR, 3-inch, bare trees), Summer, Topo or Terrain (lidar shading), with contours. Cameras, spots, the trees we've sat, and parcel lines; tap anything for details and how far it is from you. **+** adds a spot or places a camera that sends no GPS. **Download Map** (in the layers button) saves the property on the phone for no signal. The **wind lens** shows, for a wind or a forecast, the trees sat in it, where the scent went, how the deer moved, and which cameras got bucks.
-- **Crew**: leaderboard with each member's agreement rate.
+- **Crew**: who's sorting, how many votes each, and how often each agrees with the others.
 
 ## Limits and gotchas
 

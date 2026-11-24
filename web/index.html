@@ -18,7 +18,7 @@
 /* Viewers can look at everything but change nothing (the database enforces it too). */
 /* Viewers are guests on a hunt: the map, plus the Gallery and Roster to look at, and nothing else. */
 body.viewer :is(#tab-sort, #view-sort, #tab-sits, #view-sits, .htile.sits, .htile.sort, #tab-disputes, #view-disputes, #tab-crew, #view-crew,
-  .htile.h-disputes, .htile.h-crew, #alert, .scorepill, #sndBtn, #vTag, .gtools button, .cleanup, #profileEdit, #vCover, #vMove, #vResort, .mrow .btnrow, .switch, #composer, .queuebar .btn, .drow .go) { display: none !important; }
+  .htile.h-disputes, .htile.h-crew, #alert, #sndBtn, #vTag, .gtools button, .cleanup, #profileEdit, #vCover, #vMove, #vResort, .mrow .btnrow, .switch, #composer, .queuebar .btn, .drow .go) { display: none !important; }
 body.viewer .drow:not(.mine) { pointer-events: none; }   /* "Weigh In" leads to Sort */
 :root {
   color-scheme: dark;
@@ -85,9 +85,6 @@ body.nophotos .count, body.nophotos .bar, body.nophotos .proptoggle small { visi
 .sndbtn { appearance: none; border: 0; background: none; color: var(--muted); width: 36px; height: 36px; padding: 6px; cursor: pointer; margin-left: auto; margin-right: 6px; }
 .sndbtn svg { width: 100%; height: 100%; display: block; }
 .sndbtn[aria-pressed="true"] { color: var(--ink); }
-.scorepill { display: flex; align-items: baseline; gap: 6px; background: var(--panel); border-radius: 999px; padding: 4px 11px; }
-.scorepill b { font: 800 18px/1 var(--display); font-variant-numeric: tabular-nums; }
-.scorepill small { font: 10px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .proptoggle { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--panel); border-radius: 999px; padding: 3px; margin-top: 8px; }
 /* The property is a filter on the photo sections, not a global setting: each shows it at its top. */
 .propfilter { margin: 0 0 14px; }
@@ -504,13 +501,11 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 
 /* ---------- crew ---------- */
 .crew { background: var(--panel); border-radius: 14px; overflow: hidden; }
-.crew-row { display: grid; grid-template-columns: 26px 38px 1fr auto; gap: 10px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); }
+.crew-row { display: grid; grid-template-columns: 38px 1fr; gap: 10px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); }
 .crew-row:first-child { border-top: 0; }
-.crew-row .rank { font: 800 22px var(--display); color: var(--muted); text-align: center; }
 .avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font: 800 19px var(--display); color: #fff; }
 .crew-row b { display: block; font-weight: 600; }
 .crew-row small { font: 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-.crew-row .pts { font: 800 26px var(--display); font-variant-numeric: tabular-nums; }
 .rules { font-size: 13px; color: var(--muted); margin: 16px 0 0; }
 .signout { text-align: center; margin: 12px 0 0; }
 
@@ -572,7 +567,6 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
   display: flex; gap: 10px; align-items: center; max-width: calc(100% - 32px); font-weight: 600; font-size: 15px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
 }
-.toast .plus { color: var(--blaze); font: 800 20px var(--display); }
 .toast button.go { background: var(--blaze); color: var(--blaze-ink); }
 .toast button { appearance: none; border: 0; background: var(--bg); color: var(--ink); border-radius: 999px; padding: 8px 14px; font: 600 14px var(--body); cursor: pointer; }
 
@@ -592,9 +586,8 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
   <header class="topbar">
     <div class="topbar-row">
       <h1 class="wordmark"><button type="button" id="homeLink" aria-label="Home">Buck <span>Book</span></button></h1>
-      <span class="count"><b id="sortedCount">0</b> / <span id="totalCount">0</span> <span id="streak"></span></span>
+      <span class="count"><b id="sortedCount">0</b> / <span id="totalCount">0</span></span>
       <button class="sndbtn" id="sndBtn" type="button" aria-pressed="true" aria-label="Sound on"></button>
-      <span class="scorepill"><b id="myScore">0</b><small id="myRank">Scout</small></span>
     </div>
     <div class="bar"><i id="barFill"></i></div>
     <p class="status" id="status">Connecting to the crew's book…</p>
@@ -647,7 +640,7 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 
     <section id="view-crew" class="view scroll" hidden>
       <div class="crew" id="crew"></div>
-      <p class="rules">Agreement is how often your calls match other members' on photos you both voted on. Votes are blind: you only see others' picks after you vote. +10 for every vote, +25 for every new buck you put in the book. Ranks: Scout, Tracker at 150, Guide at 400, Old Buck Whisperer at 800.</p>
+      <p class="rules">Agreement is how often your calls match other members' on photos you both voted on. Votes are blind: you only see others' picks after you vote.</p>
       <p class="signout"><button class="linkish" id="signOut" type="button">Sign Out</button></p>
     </section>
   </div>
@@ -955,12 +948,11 @@ let CARD = {};        // lookup by id across both properties
 const PROPERTIES = ["Stoddard", "North Ridge"];
 const POINT_CHOICES = [null, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const CONFIDENCE = [[1, "Guess"], [2, "Leaning"], [3, "Probably"], [4, "Pretty sure"], [5, "Certain"]];
-const RANKS = [[800, "Old Buck Whisperer"], [400, "Guide"], [150, "Tracker"], [0, "Scout"]];
 const URL_TTL = 6 * 60 * 60; // signed photo links last 6 hours
 const PAGE = 1000;           // Supabase returns at most 1000 rows per request
 
 // votes: card id -> { voter uuid -> vote }. consensus: card id -> card_consensus row.
-const state = { votes: {}, consensus: {}, scores: {}, comments: {}, bucks: {}, users: {}, me: null, myUid: null, mode: "loading", streak: 0 };
+const state = { votes: {}, consensus: {}, scores: {}, comments: {}, bucks: {}, users: {}, me: null, myUid: null, mode: "loading" };
 let disputeId = null;       // card open in the dispute sheet
 let forcedTop = null;       // card moved to the top of the deck by "Weigh In"
 let knownMine = null;       // my disputes at the last sync, to spot new ones
@@ -1081,17 +1073,12 @@ function buckOf(id) {
 function sightings(buckId) {
   return CARDS.filter(c => buckOf(c.id) === buckId).sort((a, b) => a.when.localeCompare(b.when));
 }
-function rankFor(score) { return RANKS.find(([min]) => score >= min)[1]; }
-function scoreFor(uid) {
-  const labels = Object.values(state.votes).flatMap(Object.values).filter(v => v.by === uid).length;
-  const bucks = Object.values(state.bucks).filter(b => (b.by ?? null) === uid).length;
-  return { labels, bucks, score: labels * 10 + bucks * 25 };
-}
+function votesBy(uid) { return Object.values(state.votes).flatMap(Object.values).filter(v => v.by === uid).length; }
 function newId() { return "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function burstSize(c) { return CARDS.filter(o => o.burst === c.burst).length; }
 
 // ---------- Supabase ----------
-// Leaderboard and authorship are keyed by lowercase crew name.
+// The crew list and authorship are keyed by lowercase crew name.
 const nameKey = n => (n || "").trim().toLowerCase();
 
 function friendly(error) {
@@ -1328,14 +1315,10 @@ function renderAll() {
 
 function renderHeader() {
   renderPropToggle();
-  const { score } = scoreFor(state.me);
-  $("myScore").textContent = score;
-  $("myRank").textContent = rankFor(score);
   const sorted = CARDS.length - deck().length;
   $("sortedCount").textContent = sorted;
   $("totalCount").textContent = CARDS.length;
   $("barFill").style.width = (CARDS.length ? (sorted / CARDS.length) * 100 : 0) + "%";
-  $("streak").textContent = state.streak >= 3 ? `· ×${state.streak}` : "";
   const busy = state.mode === "loading";
   ["btnNot", "btnBuck"].forEach(id => $(id).disabled = busy || !deck().length);
   // No counts: the queue holds database writes, not the things you did, so a number would only confuse.
@@ -1670,7 +1653,7 @@ async function batchVote(cards, vote, msg, newBuckId = null) {
   syncGallerySel();
   Sound.play(vote.verdict === "not" ? "pass" : newBuckId ? "newBuck" : vote.buckId ? "knownBuck" : "keeper");
   lastAction = null;
-  toast(msg, cards.length * 10 + (newBuckId ? 25 : 0), false, { label: "Undo", run: async () => {
+  toast(msg, false, { label: "Undo", run: async () => {
     for (const [id, prev] of before) await writeDoc("votes/" + id, prev ? { ...prev } : null);
     const used = Object.values(state.votes).some(vs => Object.values(vs).some(v => v.buckId === newBuckId));
     if (newBuckId && !used) await writeDoc("bucks/" + newBuckId, null);
@@ -1962,22 +1945,21 @@ function renderCrew() {
     ...Object.values(state.bucks).map(b => b.by ?? null),
     state.me,
   ])].filter(Boolean);
-  const rows = ids.map(uid => ({ uid, ...scoreFor(uid) })).sort((a, b) => b.score - a.score);
+  // Who's sorting and how often they agree with the others: a check on the calls, not a scoreboard.
+  const rows = ids.map(uid => ({ uid, labels: votesBy(uid), name: state.users[uid] || "Someone" })).sort((a, b) => a.name.localeCompare(b.name));
   wrap.replaceChildren();
-  rows.forEach((r, i) => {
-    const name = state.users[r.uid] || "Someone";
+  rows.forEach(r => {
+    const name = r.name;
     const row = document.createElement("div");
     row.className = "crew-row";
-    row.innerHTML = `<span class="rank"></span><span class="avatar"></span><div><b></b><small></small></div><span class="pts"></span>`;
-    row.querySelector(".rank").textContent = i + 1;
+    row.innerHTML = `<span class="avatar"></span><div><b></b><small></small></div>`;
     const av = row.querySelector(".avatar");
     av.textContent = name.slice(0, 1).toUpperCase();
     av.style.background = `hsl(${[...r.uid].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 360, 7)} 38% 38%)`;
     row.querySelector("b").textContent = name + (r.uid === state.me ? " (you)" : "");
     const sc = state.scores[r.uid];
     const agree = sc && sc.shared ? `${Math.round(sc.agreement * 100)}% agree (${sc.shared} shared)` : "no shared photos yet";
-    row.querySelector("small").textContent = `${rankFor(r.score)} · ${r.labels} votes · ${agree}`;
-    row.querySelector(".pts").textContent = r.score;
+    row.querySelector("small").textContent = `${r.labels} vote${r.labels === 1 ? "" : "s"} · ${agree}`;
     wrap.append(row);
   });
 }
@@ -2058,27 +2040,21 @@ function decide(verdict) {
 async function commit(c, label, newBuck) {
   if (forcedTop === c.id) forcedTop = null;
   if (deck()[0]?.id === c.id) await flyOut(label.verdict);
-  state.streak += 1;
   const stamp = { by: state.me, at: new Date().toISOString() };
-  let gained = 10;
   if (newBuck) {
-    gained += 25;
     await writeDoc("bucks/" + newBuck.id, { name: newBuck.name, cover: c.id, ...stamp });
   }
   justVoted = c.id;
   await writeDoc("votes/" + c.id, { ...label, ...stamp });
   lastAction = { cardId: c.id, newBuckId: newBuck?.id ?? null };
   const conflict = othersVotes(c.id).some(o => !agrees(label, o));
-  // Sounds: a shot for naming him (the full shot for a new buck), antlers rattling for a dispute,
-  // and a chime every 25 photos sorted.
+  // Sounds: a shot for naming him (the full shot for a new buck), antlers rattling for a dispute.
   if (newBuck) Sound.play("newBuck");
   else if (label.buckId) Sound.play("knownBuck");
   if (conflict) Sound.play("rattle", { delay: label.buckId || newBuck ? 0.55 : 0 });
-  const myCount = Object.values(state.votes).filter(vs => vs[state.myUid]).length;
-  if (myCount && myCount % 25 === 0) Sound.play("milestone", { delay: 0.6 });
   if (conflict) { hideToast(); openDispute(c.id); }
-  else toast(voteFeedback(c.id, label, newBuck), gained, true);
-  return { conflict, gained, msg: voteFeedback(c.id, label, newBuck) };
+  else toast(voteFeedback(c.id, label, newBuck), true);
+  return { conflict, msg: voteFeedback(c.id, label, newBuck) };
 }
 
 // After a blind vote, say how it lines up with the rest of the crew.
@@ -2097,7 +2073,6 @@ async function undo() {
   if (!lastAction) return;
   const { cardId, newBuckId } = lastAction;
   lastAction = null;
-  state.streak = 0;
   await writeDoc("votes/" + cardId, null);
   const stillUsed = Object.values(state.votes).some(vs => Object.values(vs).some(v => v.buckId === newBuckId));
   if (newBuckId && !stillUsed) await writeDoc("bucks/" + newBuckId, null);
@@ -2188,7 +2163,6 @@ const Sound = (() => {
         at += burst < 2 ? 0.22 : 0;
       });
     },
-    milestone: t => [784, 988, 1175, 1568].forEach((f, i) => tone(t + i * 0.09, { f, dur: 0.35, gain: 0.12 })),
   };
   const play = (name, { delay = 0, step = 0 } = {}) => {
     if (!on) return;
@@ -2382,7 +2356,7 @@ async function lockIn() {
   // Offer the rest of the burst, unless we're walking the Name-them queue or a dispute just opened.
   const rest = burstRest(card);
   if (rest.length && !nameQueue && !done.conflict) {
-    toast(done.msg, done.gained, true, { label: `See ${rest.length} More`, run: () => openBurst(card, id, conf) });
+    toast(done.msg, true, { label: `See ${rest.length} More`, run: () => openBurst(card, id, conf) });
   }
   afterSheetVote();
 }
@@ -2444,10 +2418,9 @@ $("burstGo").addEventListener("click", async () => {
   for (const id of ids) {
     await writeDoc("votes/" + id, { verdict: "buck", buckId, points: null, confidence, by: state.me, at: new Date().toISOString() });
   }
-  state.streak += ids.length;
   lastAction = null;                          // Undo covers single votes only
   Sound.play("knownBuck");
-  toast(`Tagged ${ids.length} more as ${name}`, ids.length * 10);
+  toast(`Tagged ${ids.length} more as ${name}`);
 });
 // In the Name-them queue, move straight on to the next photo (unless a dispute just opened).
 function afterSheetVote() {
@@ -2853,10 +2826,9 @@ function noticeDisputes() {
 
 // ---------- toast ----------
 let toastTimer = null;
-function toast(msg, gained = 0, canUndo = false, action = null) {
+function toast(msg, canUndo = false, action = null) {
   const t = $("toast");
   t.replaceChildren();
-  if (gained) { const p = document.createElement("span"); p.className = "plus"; p.textContent = `+${gained}`; t.append(p); }
   const m = document.createElement("span"); m.textContent = msg; t.append(m);
   if (canUndo) {
     const b = document.createElement("button"); b.type = "button"; b.textContent = "Undo";
@@ -3788,7 +3760,7 @@ function renderHome() {
     ["gallery", "Gallery", "Photos waiting for a name", ""],
     ["disputes", "Disputes", "Settle the calls", "h-disputes"],
     ["roster", "Roster", "The named bucks", ""],
-    ["crew", "Crew", "Leaderboard", "h-crew"],
+    ["crew", "Crew", "Who's sorting, and how often they agree", "h-crew"],
   ];
   wrap.className = "home";
   wrap.replaceChildren(...tiles.map(([tab, name, note, cls]) => {
