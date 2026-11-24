@@ -182,8 +182,25 @@
     return { deer, bucks, bad, named: [...named].map(id => state.bucks?.[id]?.name).filter(Boolean) };
   }
   // A sit "had" a wind if it started in it or changed to it.
-  const sitWinds = s => [s.wind_dir, ...eventsOf(s.id).filter(e => e.kind === "wind").map(e => e.wind_dir)].filter(Boolean);
-  const sitMatches = (s, dir) => sitWinds(s).some(w => near16(w, dir));
+  // A sit has two winds: the one we felt at the tree (and any changes we logged), and the day's prevailing wind,
+  // the weather service's hourly wind at the property's town during the sit. Picking a wind finds sits by the
+  // prevailing wind, because that's what a forecast gives us; what we felt at the tree is what the terrain did
+  // with it. With no weather record, the wind we felt stands in.
+  const sitWinds = s => [s.wind_dir, ...eventsOf(s.id).filter(e => e.kind === "wind").map(e => e.wind_dir)].filter(w => w && w !== "variable");
+  function dayWinds(s) {
+    const from = new Date(s.set_at).getTime() - 30 * 60e3, to = new Date(s.down_at || s.set_at).getTime() + 30 * 60e3;
+    const hrs = (state.sitWeather?.[s.id] || []).filter(h => h.wind_from_deg != null);
+    const during = hrs.filter(h => { const t = new Date(h.hour).getTime(); return t >= from && t <= to; });
+    return (during.length ? during : hrs).map(h => ({ dir: WIND16[Math.round(h.wind_from_deg / 22.5) % 16], mph: Math.round(h.wind_mph) }));
+  }
+  const sitMatches = (s, dir) => { const day = dayWinds(s); return day.length ? day.some(w => near16(w.dir, dir)) : sitWinds(s).some(w => near16(w, dir)); };
+  // "day SSE 7 · felt WNW", or just what we felt when there's no weather record.
+  function windLine(s) {
+    const day = dayWinds(s), felt = sitWinds(s).join(" → ");
+    if (!day.length) return felt ? `felt ${felt}` : "wind —";
+    const dirs = [...new Set(day.map(w => w.dir))].join("/"), mph = Math.round(day.reduce((a, w) => a + w.mph, 0) / day.length);
+    return `day ${dirs} ${mph}` + (felt ? ` · felt ${felt}` : "");
+  }
 
   // ---------- the map ----------
   const view = $("view-map");
@@ -389,14 +406,14 @@
       const tl = tally([s]);
       const hit = lens && sitMatches(s, lens.dir);
       return `<li><button type="button" class="m-sit${hit ? " m-hit" : ""}" data-sit="${esc(s.id)}"><b>${fmtDay(s.set_at)} ${new Date(s.set_at).getHours() < 12 ? "AM" : "PM"}</b>
-        <span>${esc(s.hunter_name || "")} · wind ${esc(sitWinds(s).join(" → ") || "—")}</span>
+        <span>${esc(s.hunter_name || "")} · ${esc(windLine(s))}</span>
         <small>${tl.deer ? `${tl.deer} deer${tl.bucks ? `, ${tl.bucks} buck${tl.bucks === 1 ? "" : "s"}` : ""}` : "Nothing seen"}${tl.bad ? ` · ${tl.bad} busted/winded` : ""}</small>
         <small class="m-check" data-check="${esc(s.id)}"></small></button></li>`;
     }).join("");
     const el = openCard(`
       <p class="label">Tree</p><h3>${esc(t.name)}</h3>
       <p class="m-sub">${list.length} sit${list.length === 1 ? "" : "s"} · ${all.deer} deer · ${all.bucks} buck${all.bucks === 1 ? "" : "s"}${all.bad ? ` · ${all.bad} busted/winded` : ""}</p>
-      ${m ? `<p class="m-lens">In a ${esc(lens.dir)}-ish wind: ${match.length} sit${match.length === 1 ? "" : "s"} · ${m.deer} deer · ${m.bucks} buck${m.bucks === 1 ? "" : "s"}${m.bad ? ` · ${m.bad} busted/winded` : ""}</p>` : ""}
+      ${m ? `<p class="m-lens">On ${esc(lens.dir)}-ish days: ${match.length} sit${match.length === 1 ? "" : "s"} · ${m.deer} deer · ${m.bucks} buck${m.bucks === 1 ? "" : "s"}${m.bad ? ` · ${m.bad} busted/winded` : ""}</p>` : ""}
       ${all.named.length ? `<p class="m-sub">Seen here: ${esc(all.named.join(", "))}</p>` : ""}
       ${fromYou([t.lon, t.lat])}
       <p class="m-sub" id="mSlope"></p>
@@ -768,6 +785,7 @@
       if (c.row % 4 === 0 && c.col % 4 === 0) arrow(c, 120, 2);
     });
     map.getSource("mwind")?.setData(fc(feats));
+    drawLens(trees());                          // scent cones follow the modeled wind at each tree
     mwPill();
   }
   function mwPill() {
@@ -853,10 +871,10 @@
       return { name: c.camera, n: list.filter(x => near16(String(x.wind).split(/\s+/)[0].toUpperCase(), dir)).length, of: list.length };
     }).filter(c => c.of).sort((a, b) => b.n - a.n) : null;
     el.querySelector("#mRank").innerHTML = `
-      <p class="label">Our sits in a ${esc(dir)}-ish wind</p>
-      ${ranked.length ? `<ul class="m-list m-sits">${ranked.map(({ t, hits, k }) => `<li><button type="button" class="m-sit" data-tree="${t.id}"><b>${esc(t.name)}</b>
+      <p class="label">Our sits on ${esc(dir)}-ish days</p>
+      ${ranked.length ? `<p class="m-sub" style="margin:0 0 6px">By the day's prevailing wind, whatever we felt at the tree.</p><ul class="m-list m-sits">${ranked.map(({ t, hits, k }) => `<li><button type="button" class="m-sit" data-tree="${t.id}"><b>${esc(t.name)}</b>
         <span>${hits.length} sit${hits.length === 1 ? "" : "s"} · ${k.deer} deer · ${k.bucks} buck${k.bucks === 1 ? "" : "s"}</span>
-        <small>${k.bad ? `${k.bad} busted/winded` : "Never busted"}</small></button></li>`).join("")}</ul>` : `<p class="m-sub">No sits logged in a ${esc(dir)}-ish wind yet.</p>`}
+        <small>${k.bad ? `${k.bad} busted/winded` : "Never busted"}</small></button></li>`).join("")}</ul>` : `<p class="m-sub">No sits logged on a ${esc(dir)}-ish day yet.</p>`}
       <p class="m-sub" id="mCheck"></p>
       ${cams ? `<p class="label">Buck photos in this wind</p><p class="m-sub">${cams.slice(0, 6).map(c => `${esc(c.name)} ${c.n}/${c.of}`).join(" · ") || "None yet"}</p>`
         : `<p class="m-sub"><button type="button" class="linkish" id="mLoadPhotos">Load photos</button> to see which cameras get bucks in this wind.</p>`}`;
@@ -915,6 +933,14 @@
   ui.querySelector(".m-wpill").addEventListener("click", () => mwCard(true));
 
   // ---------- wind lens and planning ----------
+  // The modeled wind's direction at a tree (degrees it comes from), when a run is showing.
+  function treeWind(t) {
+    if (!mw.cells) return null;
+    const k = Math.cos(t.lat * Math.PI / 180);
+    let best = null, bd = Infinity;
+    for (const c of mw.cells) { const d = (c.lon - t.lon) ** 2 * k * k + (c.lat - t.lat) ** 2; if (d < bd) { bd = d; best = c; } }
+    return best && Math.sqrt(bd) * 111320 < 60 ? best.from : null;
+  }
   function drawLens(ts) {
     if (!lens) { map.getSource("cones").setData(fc([])); map.getSource("paths").setData(fc([])); return; }
     const deg = DEG(lens.dir);
@@ -922,7 +948,7 @@
     ts.forEach(t => {
       const hits = t.sits.filter(s => sitMatches(s, lens.dir));
       if (!hits.length) return;
-      const at = [t.lon, t.lat], down = (deg + 180) % 360;     // scent drifts away from where the wind comes from
+      const at = [t.lon, t.lat], down = (treeWind(t) ?? deg) + 180;   // scent drifts away from where the wind comes from
       cones.push({ type: "Feature", properties: {}, geometry: { type: "Polygon",
         coordinates: [[at, ...[-20, -10, 0, 10, 20].map(a => offset(at, down + a, a === 0 ? 150 : 140)), at]] } });
       hits.forEach(s => eventsOf(s.id).filter(e => e.kind === "deer" && (e.from_dir || e.to_dir)).forEach(e => {
