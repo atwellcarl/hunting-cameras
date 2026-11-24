@@ -35,7 +35,7 @@
 <div class="panel">
   <h1 id="title"></h1>
   <p class="sub">WindNinja, standard solver. Arrows point downwind. Tap anywhere for the wind there; tap an orange dot for a sit.</p>
-  <div class="row" id="heights"><button data-h="ground" aria-pressed="true">Where You Stand</button><button data-h="mph" aria-pressed="false">Above the Trees</button></div>
+  <div class="row" id="heights"><button data-h="ground" aria-pressed="true">Ground Level</button><button data-h="mph" aria-pressed="false">Above Canopy</button></div>
   <p class="sub" id="hnote" style="margin:6px 0 0"></p>
   <div class="row" id="bases"></div>
   <div class="row"><button id="arrows" aria-pressed="true">Arrows</button><button id="parcels" aria-pressed="true">Parcels</button><button id="sitsBtn" aria-pressed="true">Sits</button></div>
@@ -129,7 +129,7 @@ let marker = null, last = null;
 // p: [lon, lat, mph above the trees, from-degrees, mph where you stand, canopy %]
 function show(p) {
   const from = DIRS[Math.round(p[3] / 22.5) % 16], to = DIRS[(Math.round(p[3] / 22.5) + 8) % 16];
-  const main = height === "ground" ? `<b>${p[4]} mph</b> where you stand (${p[2]} above the trees)` : `<b>${p[2]} mph</b> above the trees (${p[4]} where you stand)`;
+  const main = height === "ground" ? `<b>${p[4]} mph</b> ground level (${p[2]} above canopy)` : `<b>${p[2]} mph</b> above canopy (${p[4]} ground level)`;
   readout.innerHTML = `From <b>${from}</b> toward ${to} · ${main} · ${p[5]}% canopy`;
   readout.hidden = false;
 }
