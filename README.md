@@ -121,6 +121,11 @@ Member types: `user` is the default (vote, comment, name bucks, propose merges).
 ```
 To add a read-only member, run `add "Their Name"` first, then `type "Their Name" viewer`.
 
+**Guests on a hunt** share one viewer login, "Guest". It opens on the map (cameras, stands and spots, parcel lines, offline download) and can look at the Gallery and Roster. It can't see sits, Sort, Disputes or Crew, and can add spots of its own. Each hunt gets a fresh login: `guest` deletes the old Guest account, which signs out every phone using it, and prints a new password. `guest off` just removes it. A phone whose login has been removed erases its saved map the next time it opens with signal.
+```bash
+.venv/bin/python -m buckbook.crew_admin guest
+```
+
 Map data: camera positions (from the GPS on each photo; a move of more than 150 m is a new position) and the Wisconsin statewide parcel lines around each property. `prepare` works it out into `data/map/` and prints no coordinates; `push` shows what it writes and asks first. Run both after a pull that moved a camera.
 ```bash
 .venv/bin/python -m buckbook.map_data prepare

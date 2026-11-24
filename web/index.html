@@ -16,7 +16,9 @@
 /* One dark look on purpose: trail-cam photos (mostly night IR) read best on a dark surround. */
 [hidden] { display: none !important; }
 /* Viewers can look at everything but change nothing (the database enforces it too). */
-body.viewer :is(#tab-sort, #view-sort, #tab-sits, #view-sits, .htile.sits, .htile.sort, #vTag, .gtools button, .cleanup, #profileEdit, #vCover, #vMove, #vResort, .mrow .btnrow, .switch, #composer, .queuebar .btn, .drow .go) { display: none !important; }
+/* Viewers are guests on a hunt: the map, plus the Gallery and Roster to look at, and nothing else. */
+body.viewer :is(#tab-sort, #view-sort, #tab-sits, #view-sits, .htile.sits, .htile.sort, #tab-disputes, #view-disputes, #tab-crew, #view-crew,
+  .htile.h-disputes, .htile.h-crew, #alert, .scorepill, #sndBtn, #vTag, .gtools button, .cleanup, #profileEdit, #vCover, #vMove, #vResort, .mrow .btnrow, .switch, #composer, .queuebar .btn, .drow .go) { display: none !important; }
 body.viewer .drow:not(.mine) { pointer-events: none; }   /* "Weigh In" leads to Sort */
 :root {
   color-scheme: dark;
@@ -1222,6 +1224,7 @@ async function sync() {
     const consensus = Object.fromEntries(cons.map(r => [r.card_id, r]));
     const scores = Object.fromEntries(sc.map(r => [nameKey(r.member), r]));
     // Member types (008_member_types.sql): admins merge straight away, users propose, viewers only look.
+    if (state.myUid && !c.some(r => r.user_id === state.myUid)) return forgetThisPhone();   // removed from the crew
     const myType = c.find(r => r.user_id === state.myUid)?.user_type || "user";
     const isAdmin = myType === "admin";
     document.body.classList.toggle("viewer", myType === "viewer");
@@ -3761,7 +3764,7 @@ function startOffline(copy) {
   document.body.classList.add("nophotos");
   applyOutbox();
   renderAll();
-  showTab("home");
+  showTab(copy.viewer ? "map" : "home");
 }
 // Signal is back after an offline start: sign-in refreshes and everything loads as usual.
 async function goOnline() {
@@ -3783,9 +3786,9 @@ function renderHome() {
     ["map", "Map", "Cameras, spots and sits", ""],
     ["sort", "Sort", "Keeper or pass", "sort"],
     ["gallery", "Gallery", "Photos waiting for a name", ""],
-    ["disputes", "Disputes", "Settle the calls", ""],
+    ["disputes", "Disputes", "Settle the calls", "h-disputes"],
     ["roster", "Roster", "The named bucks", ""],
-    ["crew", "Crew", "Leaderboard", ""],
+    ["crew", "Crew", "Leaderboard", "h-crew"],
   ];
   wrap.className = "home";
   wrap.replaceChildren(...tiles.map(([tab, name, note, cls]) => {
@@ -4002,9 +4005,26 @@ $("vFrame").addEventListener("click", () => setViewerMode("frame"));
 // Names map to placeholder addresses (see buckbook/crew_admin.py); keep the two in step.
 const emailFor = name => name.trim().toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "") + "@buckbook.invalid";
 
+// A login that's been removed (a guest's, after the hunt) takes its map with it: the saved copy of cameras,
+// spots and parcels, the downloaded map pictures (they're all of our ground), and anything unsent.
+const ENDED = "buckbook-ended";
+let signingOut = false;                          // our own sign-outs, so the listener below leaves them alone
+async function forgetThisPhone() {
+  signingOut = true;
+  for (const k of [OFFLINE_COPY, OUTBOX, OUTBOX_FAILED, "buckbook-map-saved", "buckbook-map-slopes"]) { try { localStorage.removeItem(k); } catch {} }
+  try { await Promise.all((await caches.keys()).filter(k => k.startsWith("buckbook-tiles")).map(k => caches.delete(k))); } catch {}
+  try { await sb.auth.signOut({ scope: "local" }); } catch {}
+  try { sessionStorage.setItem(ENDED, "1"); } catch {}
+  location.reload();
+}
+// Supabase signs a removed login out the first time its token can't be renewed.
+sb.auth.onAuthStateChange(event => { if (event === "SIGNED_OUT" && state.myUid && !signingOut) forgetThisPhone(); });
+
 function showGate(msg = "") {
   $("gate").hidden = false;
-  $("gateErr").textContent = msg;
+  let ended = false;
+  try { ended = !!sessionStorage.getItem(ENDED); sessionStorage.removeItem(ENDED); } catch {}
+  $("gateErr").textContent = msg || (ended ? "This sign-in has ended. Ask the crew for a new one." : "");
   $("gateName").value = store.get("buckbook-name") || "";
 }
 
@@ -4031,6 +4051,7 @@ $("gateForm").addEventListener("submit", async e => {
 $("signOut").addEventListener("click", async () => {
   if (outbox.length) return toast("Some of what you saved offline hasn't sent yet. Sign out once you have signal.");
   try { localStorage.removeItem(OFFLINE_COPY); } catch {}
+  signingOut = true;
   await sb.auth.signOut();
   location.reload();
 });
@@ -4064,6 +4085,7 @@ async function start(myName) {
   document.body.classList.toggle("nophotos", !state.photosLoaded);
   await sync();
   flushOutbox();
+  if (document.body.classList.contains("viewer") && document.body.dataset.tab === "home") showTab("map");   // guests come for the map
   if (!$("view-home").hidden) renderHome();
   if (!channel) {
     const live = table => payload => onLive(table, payload);
@@ -4095,10 +4117,15 @@ document.addEventListener("visibilitychange", () => {
   if (!navigator.onLine && copy) return startOffline(copy);
   let session = null;
   try { session = (await sb.auth.getSession()).data.session; } catch {}
-  if (!session) return copy && !navigator.onLine ? startOffline(copy) : showGate();
+  if (!session) {
+    if (copy && !navigator.onLine) return startOffline(copy);
+    if (copy) return forgetThisPhone();          // signed out while away (a removed login): the saved map goes too
+    return showGate();
+  }
   const { data, error } = await sb.from("crew").select("name").eq("user_id", session.user.id).maybeSingle();
   if (error && netError(error) && copy) return startOffline(copy);   // signal too weak to reach the server
-  if (error || !data) return showGate();
+  if (!error && !data) return forgetThisPhone();  // signed in, but no longer on the crew
+  if (error) return showGate();
   start(data.name);
 })();
 </script>

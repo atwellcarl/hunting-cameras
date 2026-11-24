@@ -11,6 +11,10 @@ Commands:
   type "Name" T   Set their member type (needs 008_member_types.sql): admin (can also merge
                   bucks straight away), user (the default), or viewer (read-only).
   list            Show crew and when each last signed in.
+  guest           Start a new shared guest login for a hunt: deletes any existing "Guest" account
+                  (which signs out every phone using it) and creates a fresh viewer one with a new
+                  password. Guests see the map, the Gallery and the Roster; no sits.
+  guest off       Delete the Guest account after the hunt, without making a new one.
 
 Usage: .venv/bin/python -m buckbook.crew_admin add "Big Mike"
 """
@@ -111,6 +115,24 @@ def set_type(name, user_type):
     print(f"{name} is now {'an' if user_type == 'admin' else 'a'} {user_type}.")
 
 
+GUEST = "Guest"
+
+
+def guest(off=False):
+    """One shared viewer login for visiting hunters. A password change might not sign out phones already
+    signed in, so a new hunt gets a whole new account: deleting the old one ends every session it had.
+    Spots guests added stay on the map, credited to Guest."""
+    if find_user(GUEST):
+        remove(GUEST)
+    elif off:
+        return print("No Guest account to remove.")
+    if off:
+        return print("Guest phones lose the map the next time they open the app with signal.")
+    add(GUEST)
+    set_type(GUEST, "viewer")
+    print("Share the sign-in with your guests. Run `guest off` (or `guest` again) once they've gone.")
+
+
 def list_crew():
     rows = rest("GET", "crew", query="?select=*")
     crew = {c["user_id"]: f"{c['name']} ({c.get('user_type', 'user')})" for c in rows}
@@ -134,5 +156,7 @@ if __name__ == "__main__":
         set_type(arg, arg2.lower())
     elif cmd == "list":
         list_crew()
+    elif cmd == "guest":
+        guest(off=arg == "off")
     else:
         raise SystemExit(__doc__)
