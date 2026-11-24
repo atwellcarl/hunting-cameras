@@ -710,7 +710,7 @@
   // wind lens direction, else the wind now at the property's weather town. WindNinja's wind is 20 ft above
   // the vegetation; "where you stand" brings it to 5 ft with the same canopy sheltering as wind_model.py.
   const mw = { on: !!prefs.mwind, height: prefs.mwHeight || "ground", leafOff: prefs.mwLeafOff ?? [10, 11, 0, 1, 2, 3].includes(new Date().getMonth()),
-    pick: null, now: {}, shown: null, cells: null, readout: "" };
+    pick: prefs.mwPick || null, shown: null, cells: null, readout: "" };
   const windSlug = p => p.toLowerCase().replace(/\s+/g, "");
   const windKey = (p, f) => `https://tiles.buckbook.invalid/wind/${windSlug(p)}/${f}`;
   async function windFile(p, f, raw = false) {
@@ -731,16 +731,17 @@
     const w = Math.min(1, Math.max(0, (cc - 5) / 20));
     return (1 - w) * OPEN + w * sheltered(Math.max(cc, 25));
   }
-  // The wind now at the property's weather town (cached half an hour).
-  async function windNow(p) {
-    const town = state.properties?.[p], hit = mw.now[p];
-    if (hit && Date.now() - hit.at < 1800e3) return hit;
-    if (!town?.weather_lat || !navigator.onLine) return hit || null;
-    try {
-      const q = new URLSearchParams({ latitude: town.weather_lat, longitude: town.weather_lon, current: "wind_speed_10m,wind_direction_10m", wind_speed_unit: "mph", timezone: "auto" });
-      const r = (await (await fetch("https://api.open-meteo.com/v1/forecast?" + q)).json()).current;
-      return mw.now[p] = { at: Date.now(), dir: WIND16[Math.round(r.wind_direction_10m / 22.5) % 16], mph: Math.round(r.wind_speed_10m) };
-    } catch { return hit || null; }
+  // The forecast wind at the property's weather town for a day and time (local), from the same service sits use.
+  async function forecastAt(p, day, time) {
+    const town = state.properties?.[p];
+    if (!town?.weather_lat) throw new Error("No weather town set for " + p);
+    const q = new URLSearchParams({ latitude: town.weather_lat, longitude: town.weather_lon, hourly: "wind_direction_10m,wind_speed_10m",
+      wind_speed_unit: "mph", timezone: "auto", forecast_days: 7 });
+    const h = (await (await fetch("https://api.open-meteo.com/v1/forecast?" + q)).json()).hourly;
+    const want = new Date(`${day}T${time}`).getTime();
+    let i = 0;
+    h.time.forEach((t, j) => { if (Math.abs(new Date(t).getTime() - want) < Math.abs(new Date(h.time[i]).getTime() - want)) i = j; });
+    return { dir: WIND16[Math.round(h.wind_direction_10m[i] / 22.5) % 16], mph: Math.round(h.wind_speed_10m[i]) };
   }
   async function mwShow() {
     const p = prop(), pill = ui.querySelector(".m-wpill");
@@ -749,14 +750,19 @@
     let idx;
     try { idx = await windFile(p, "index.json"); }
     catch { mw.shown = null; map.getSource("mwind")?.setData(fc([])); pill.textContent = `No modeled wind for ${p} on this phone yet`; return; }
-    const now = await windNow(p);
-    const want = mw.pick || now || { dir: idx.runs[0].dir, mph: 10 };
+    const want = mw.pick;
+    if (!want) {
+      mw.shown = null; map.getSource("mwind")?.setData(fc([]));
+      if (lens) { lens = null; draw(); }
+      pill.innerHTML = "<b>Tap to pick a wind</b>";
+      return;
+    }
     // The trees sat in this wind light up with it, as the wind lens did.
     if (lens?.dir !== want.dir) { lens = { dir: want.dir }; draw(); }
     const same = idx.runs.filter(r => r.dir === want.dir);
     if (!same.length) {
       mw.shown = null; map.getSource("mwind")?.setData(fc([]));
-      pill.innerHTML = `No run for a ${esc(want.dir)} wind yet (have ${esc([...new Set(idx.runs.map(r => r.dir))].join(", "))})<br><b>Tap to pick a wind</b>`;
+      pill.innerHTML = `Nothing here yet for a ${esc(want.dir)} wind (have ${esc([...new Set(idx.runs.map(r => r.dir))].join(", "))})<br><b>Tap to pick another</b>`;
       return;
     }
     const run = same.reduce((a, b) => Math.abs(b.mph - want.mph) < Math.abs(a.mph - want.mph) ? b : a);
@@ -769,7 +775,7 @@
       cells.push({ lon: grid.origin[0] + dlon[i] / 1e6, lat: grid.origin[1] + dlat[i] / 1e6, row: Math.floor(i / grid.cols), col: i % grid.cols,
         above, ground: above * standFactor(cc[i], mw.leafOff), from, canopy: cc[i] });
     }
-    mw.cells = cells; mw.shown = { ...run, want, source: mw.pick ? "picked" : now ? "now" : "default" };
+    mw.cells = cells; mw.shown = { ...run, want };
     const feats = [];
     const arrow = (c, len, lvl) => {
       const t = (c.from + 180) * Math.PI / 180, k = 1 / (111320 * Math.cos(c.lat * Math.PI / 180));
@@ -791,7 +797,7 @@
   function mwPill() {
     const pill = ui.querySelector(".m-wpill"), s = mw.shown;
     if (!s) return;
-    const why = s.source === "now" ? ` (now ${s.want.dir} ${s.want.mph})` : "";
+    const why = s.want.label ? ` (${esc(s.want.label)})` : "";
     pill.innerHTML = `<b>Modeled ${esc(s.dir)} ${s.mph} mph</b>${why} · ${mw.height === "ground" ? "where you stand" : "above the trees"}` + (mw.readout ? `<br>${mw.readout}` : "");
   }
   // A small marker where you tapped, so it's clear which spot the reading is for.
@@ -813,57 +819,81 @@
     mwPill();
   }
   function mwToggle() { parcelOff(); mw.on = !mw.on; prefs.mwind = mw.on; savePrefs(); mw.readout = ""; mwPinAt(null); mwShow(); }
-  // The wind tool: a wind (now, a forecast morning or evening, or picked on the clock and slider), the modeled
-  // arrows for it, and what our sits say about it: trees sat in that wind, and how often the model matched
-  // the wind we felt.
-  async function mwCard(fromPill = false) {
+  // The wind tool. First the dial and a speed, then Apply: the run nearest that wind goes on the map (or "nothing
+  // here yet"). Or Use Local Weather: pick a day and the time you'll walk in, and the forecast wind for that hour
+  // is applied. Below: how the arrows are drawn, our sits on days with that wind, and the model check.
+  let mwDraft = null;                          // the dial and slider before Apply
+  async function mwCard() {
     let idx = null;
     try { idx = await windFile(prop(), "index.json"); } catch {}
-    const s = mw.shown, now = mw.now[prop()];
     const dirs = idx ? [...new Set(idx.runs.map(r => r.dir))] : [];
-    const want = mw.pick || s?.want || (now && { dir: now.dir, mph: now.mph }) || { dir: dirs[0] || "S", mph: 12 };
-    // Opened from the pill with nothing on the map (no run for the wind now): show the nearest wind we have.
-    if (fromPill && idx && !s && !mw.pick) { mw.pick = { dir: dirs.includes(want.dir) ? want.dir : dirs[0], mph: want.mph }; await mwShow(); return mwCard(); }
+    const applied = mw.pick, s = mw.shown;
+    mwDraft ||= { dir: applied?.dir || "S", mph: applied?.mph ?? 10 };
     const speeds = d => idx ? idx.runs.filter(r => r.dir === d).map(r => r.mph).sort((a, b) => a - b) : [];
     const nearest = (d, v) => speeds(d).reduce((a, b) => Math.abs(b - v) < Math.abs(a - v) ? b : a, speeds(d)[0]);
-    const status = () => {
-      const w = mw.pick || want;
-      if (!idx) return `${esc(w.dir)} at ${w.mph} mph (no modeled wind on this phone yet; it needs signal the first time)`;
-      return speeds(w.dir).length ? `${esc(w.dir)} at ${w.mph} mph → showing the ${esc(w.dir)} ${nearest(w.dir, w.mph)} mph run` : `No run for a ${esc(w.dir)} wind yet. Runs so far: ${esc(dirs.join(", "))}.`;
-    };
+    const showing = !applied ? "Nothing applied yet."
+      : !idx ? "No modeled wind on this phone yet; it needs signal the first time."
+      : s ? `Showing the ${esc(s.dir)} ${s.mph} mph run for ${esc(applied.dir)} ${applied.mph} mph${applied.label ? `, ${esc(applied.label)}` : ""}.`
+      : `Nothing here yet for ${applied.label ? `the ${esc(applied.label)} wind, ${esc(applied.dir)} ${applied.mph} mph` : `a ${esc(applied.dir)} wind`}. Runs so far: ${esc(dirs.join(", ") || "none")}.`;
+    const days = Array.from({ length: 5 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() + i);
+      return [localDate(d), i === 0 ? "Today" : i === 1 ? "Tomorrow" : d.toLocaleDateString("en-US", { weekday: "short" })]; });
     const el = openCard(`
       <p class="label">Wind</p>
-      <p class="m-sub">${mw.pick ? "Your wind:" : now ? `The wind now is ${esc(now.dir)} ${now.mph} mph:` : "Pick a wind:"} <b id="mwStatus">${status()}</b></p>
-      <div class="m-fc" id="mFc"></div>
+      <p class="m-sub m-showing${applied && !s ? " m-none" : ""}">${showing}</p>
       <div id="mwDial"></div>
-      <label class="m-speed"><span>Speed <b id="mwMph">${want.mph}</b> mph</span><input type="range" id="mwRange" min="0" max="25" step="1" value="${want.mph}"></label>
-      ${btnRow(b("now", "Use the Wind Now"))}
-      <div id="mRank"></div>
+      <label class="m-speed"><span>Speed <b id="mwMph">${mwDraft.mph}</b> mph</span><input type="range" id="mwRange" min="0" max="25" step="1" value="${mwDraft.mph}"></label>
+      <p class="m-sub" id="mwWill"></p>
+      ${btnRow(b("apply", "Apply"))}
+      <button type="button" class="btn ghost m-localbtn" data-act="local">Use Local Weather</button>
+      <div class="m-local" hidden>
+        <p class="label">When you'll walk in</p>
+        <div class="chips m-kinds" id="mwDays">${days.map(([v, l], i) => `<button type="button" data-day="${v}" aria-pressed="${i === 0}">${l}</button>`).join("")}</div>
+        <div class="m-when"><input type="hidden" id="mwTime" data-wheel="required"></div>
+        ${btnRow(b("forecast", "Apply Forecast Wind"))}
+        <p class="m-sub" id="mwFc"></p>
+      </div>
       <p class="label">Arrows</p>
       <div class="chips m-kinds"><button type="button" data-h="ground" aria-pressed="${mw.height === "ground"}">Where You Stand</button><button type="button" data-h="above" aria-pressed="${mw.height === "above"}">Above the Trees</button></div>
       <div class="chips m-kinds" style="margin-top:6px"><button type="button" data-leaf="on" aria-pressed="${!mw.leafOff}">Leaves On</button><button type="button" data-leaf="off" aria-pressed="${mw.leafOff}">Leaves Off</button></div>
       <div class="m-legend"><i></i><span>0</span><span>22+ mph</span></div>
+      <div id="mRank"></div>
       <p class="m-sub" style="margin-top:10px">Modeled with WindNinja over the lidar terrain, with sheltering under the trees from USFS canopy cover. Tap the map for the wind at a spot.</p>
       ${btnRow(b("off", "Turn Off"))}`, "m-mwind");
-    const redo = () => { mwShow().then(() => mwCard()); };
-    const setWind = w => { mw.pick = w; redo(); };
-    windClock(el.querySelector("#mwDial"), (mw.pick || want).dir, d => { if (d) setWind({ dir: d, mph: +el.querySelector("#mwRange").value }); }, { variable: false, clearable: false });
+    const will = () => { el.querySelector("#mwWill").innerHTML = !idx ? "" : speeds(mwDraft.dir).length
+      ? `Apply shows the ${esc(mwDraft.dir)} ${nearest(mwDraft.dir, mwDraft.mph)} mph run.` : `Nothing here yet for a ${esc(mwDraft.dir)} wind.`; };
+    const apply = w => { mw.pick = w; prefs.mwPick = w; savePrefs(); mwDraft = { dir: w.dir, mph: w.mph }; mw.readout = ""; mwPinAt(null); mwShow().then(() => mwCard()); };
+    windClock(el.querySelector("#mwDial"), mwDraft.dir, d => { if (!d) return; mwDraft.dir = d; mwCard(); }, { variable: false, clearable: false });
     const range = el.querySelector("#mwRange");
-    range.addEventListener("input", () => { el.querySelector("#mwMph").textContent = range.value; mw.pick = { dir: (mw.pick || want).dir, mph: +range.value }; el.querySelector("#mwStatus").innerHTML = status(); });
-    range.addEventListener("change", () => setWind({ dir: (mw.pick || want).dir, mph: +range.value }));
-    el.querySelectorAll("[data-h]").forEach(x => x.addEventListener("click", () => { mw.height = x.dataset.h; prefs.mwHeight = mw.height; savePrefs(); redo(); }));
-    el.querySelectorAll("[data-leaf]").forEach(x => x.addEventListener("click", () => { mw.leafOff = x.dataset.leaf === "off"; prefs.mwLeafOff = mw.leafOff; savePrefs(); redo(); }));
-    on(el, { now: () => setWind(null), off: () => { mwToggle(); closeCard(); } });
-    // Forecast mornings and evenings: tap one to see that wind.
-    forecast(prop()).then(rows => {
-      const box = el.querySelector("#mFc");
-      if (!box || !rows?.length) return;
-      box.innerHTML = `<p class="label">Forecast at ${esc(state.properties[prop()].weather_label || "the property")}</p><div class="chips m-kinds">${rows.map((r, i) =>
-        `<button type="button" data-fc="${i}">${esc(r.label)} <b>${r.dir}</b> ${r.mph}</button>`).join("")}</div>`;
-      box.querySelectorAll("[data-fc]").forEach(x => x.addEventListener("click", () => { const r = rows[+x.dataset.fc]; setWind({ dir: r.dir, mph: r.mph }); }));
+    range.addEventListener("input", () => { mwDraft.mph = +range.value; el.querySelector("#mwMph").textContent = range.value; will(); });
+    will();
+    // Local weather: a day and the time you'll walk in (the same time wheel as a sit).
+    const t = el.querySelector("#mwTime"), soon = new Date(Date.now() + 30 * 60e3);
+    soon.setMinutes(soon.getMinutes() < 30 ? 0 : 30);
+    t.value = localTime(soon);
+    timeWheel(t);
+    let day = days[0][0];
+    el.querySelectorAll("[data-day]").forEach(x => x.addEventListener("click", () => {
+      day = x.dataset.day; el.querySelectorAll("[data-day]").forEach(y => y.setAttribute("aria-pressed", String(y === x)));
+    }));
+    el.querySelectorAll("[data-h]").forEach(x => x.addEventListener("click", () => { mw.height = x.dataset.h; prefs.mwHeight = mw.height; savePrefs(); mwShow().then(() => mwCard()); }));
+    el.querySelectorAll("[data-leaf]").forEach(x => x.addEventListener("click", () => { mw.leafOff = x.dataset.leaf === "off"; prefs.mwLeafOff = mw.leafOff; savePrefs(); mwShow().then(() => mwCard()); }));
+    on(el, {
+      apply: () => apply({ dir: mwDraft.dir, mph: mwDraft.mph }),
+      local: () => { el.querySelector(".m-local").hidden = !el.querySelector(".m-local").hidden; },
+      forecast: async () => {
+        const out = el.querySelector("#mwFc");
+        if (!navigator.onLine) return out.textContent = "The forecast needs signal. Pick the wind on the dial instead.";
+        out.textContent = "Looking up the forecast…";
+        try {
+          const w = await forecastAt(prop(), day, t.value);
+          const when = `${days.find(d => d[0] === day)[1]} ${fmtWhen(new Date(`${day}T${t.value}`).toISOString(), false)}`;
+          apply({ ...w, label: `forecast ${when}` });
+        } catch (e) { out.textContent = `Couldn't get the forecast (${e.message}).`; }
+      },
+      off: () => { mwToggle(); closeCard(); },
     });
-    // What our sits say: the trees sat in this wind, and how often the model matched the wind we felt.
-    const dir = (mw.pick || want).dir, ts = trees();
+    // What our sits say about this wind: trees sat on days with it, and how often the model matched what we felt.
+    const dir = applied?.dir || mwDraft.dir, ts = trees();
     const ranked = ts.map(t => ({ t, hits: t.sits.filter(x => sitMatches(x, dir)) })).filter(r => r.hits.length)
       .map(r => ({ ...r, k: tally(r.hits) })).sort((a, b) => b.hits.length - a.hits.length || b.k.deer - a.k.deer || a.k.bad - b.k.bad);
     const cams = state.photosLoaded ? cameras().map(c => {
@@ -886,7 +916,8 @@
     el.querySelector("#mLoadPhotos")?.addEventListener("click", () => ensurePhotos().then(() => mwCard()));
     modelCheck(prop()).then(c => {
       const box = el.querySelector("#mCheck");
-      if (!box || !c.compared) return box && (box.textContent = c.skipped ? `Model check: none of our sits yet had a day's wind we've modeled (${c.skipped} sit${c.skipped === 1 ? "" : "s"} waiting on other directions).` : "");
+      if (!box) return;
+      if (!c.compared) return box.textContent = c.skipped ? `Model check: none of our sits yet had a day's wind we've modeled (${c.skipped} waiting on other directions).` : "";
       box.innerHTML = `<b>Model check:</b> on ${c.compared} sit${c.compared === 1 ? "" : "s"}, the model's wind at the tree matched the wind we felt ${c.matched} time${c.matched === 1 ? "" : "s"}` +
         (c.skipped ? ` (${c.skipped} more need other directions modeled).` : ".");
     });
@@ -930,7 +961,7 @@
     }
     return out;
   }
-  ui.querySelector(".m-wpill").addEventListener("click", () => mwCard(true));
+  ui.querySelector(".m-wpill").addEventListener("click", () => mwCard());
 
   // ---------- wind lens and planning ----------
   // The modeled wind's direction at a tree (degrees it comes from), when a run is showing.
@@ -963,35 +994,7 @@
     map.getSource("cones").setData(fc(cones));
     map.getSource("paths").setData(fc(paths));
   }
-  const forecasts = {};
-  async function forecast(p) {
-    const town = state.properties?.[p];
-    if (!town?.weather_lat || !navigator.onLine) return null;
-    const hit = forecasts[p];
-    if (hit && Date.now() - hit.at < 3600e3) return hit.rows;
-    try {
-      const q = new URLSearchParams({ latitude: town.weather_lat, longitude: town.weather_lon, hourly: "wind_direction_10m,wind_speed_10m",
-        wind_speed_unit: "mph", timezone: "auto", forecast_days: 3 });
-      const r = await (await fetch("https://api.open-meteo.com/v1/forecast?" + q)).json();
-      const rows = [];
-      const now = new Date();
-      for (let day = 0; day < 3; day++) for (const [part, from, to] of [["AM", 6, 9], ["PM", 15, 18]]) {
-        const idx = r.hourly.time.map((t, i) => [new Date(t), i]).filter(([d]) => {
-          const ref = new Date(now); ref.setDate(now.getDate() + day);
-          return d.toDateString() === ref.toDateString() && d.getHours() >= from && d.getHours() <= to && d > now;
-        }).map(([, i]) => i);
-        if (!idx.length) continue;
-        // Average the wind as arrows, not numbers: N at 350° and 10° averages to N, not S.
-        let x = 0, y = 0, mph = 0;
-        idx.forEach(i => { const a = r.hourly.wind_direction_10m[i] * Math.PI / 180, v = r.hourly.wind_speed_10m[i]; x += Math.sin(a) * v; y += Math.cos(a) * v; mph += v; });
-        const dir = WIND16[Math.round(((Math.atan2(x, y) * 180 / Math.PI + 360) % 360) / 22.5) % 16];
-        const when = new Date(now); when.setDate(now.getDate() + day);
-        rows.push({ label: `${day === 0 ? "Today" : day === 1 ? "Tomorrow" : when.toLocaleDateString("en-US", { weekday: "short" })} ${part}`, dir, mph: Math.round(mph / idx.length) });
-      }
-      forecasts[p] = { at: Date.now(), rows };
-      return rows;
-    } catch { return null; }
-  }
+
   // ---------- where you are ----------
   function locate(center) {
     if (!navigator.geolocation) return toast("This phone won't share its location.");

@@ -125,3 +125,8 @@
 .m-pi-body .linkish { padding: 4px 0 0; font-size: 12px; }
 .m-sit .m-check:not(:empty) { color: var(--ink); }
 .m-sit .m-check.bad { color: #E88A70; }
+.m-showing { color: var(--ink); }
+.m-showing.m-none { color: #E88A70; }
+.m-localbtn { width: 100%; margin-top: 8px; }
+.m-local { margin-top: 6px; }
+.m-when { margin-top: 8px; }
