@@ -3847,6 +3847,8 @@ function loadMapFiles() {
     add("link", { rel: "stylesheet", href: "https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" }),
     add("link", { rel: "stylesheet", href: "map.css" }),
     add("script", { src: "https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js" }),
+    // Merges a property's parcels into one outline (map.js); the map works without it, just with every line.
+    add("script", { src: "https://cdn.jsdelivr.net/npm/polygon-clipping@0.15.7/dist/polygon-clipping.umd.min.js" }).catch(() => {}),
   ]).then(() => add("script", { src: "map.js" })).catch(e => { mapLoading = null; throw e; });
 }
 function openMap() {

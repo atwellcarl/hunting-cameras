@@ -153,3 +153,9 @@
 /* Picking a property's parcels: only the card, the map and the parcel lines. */
 .m-claiming .m-tools, .m-claiming .m-pinfo, .m-claiming .m-wpill { display: none; }
 .m-claiming .m-pin { pointer-events: none; opacity: .5; }
+/* The moving wind's own canvas (map.js), over the map and under the pins. */
+.m-flow { position: absolute; left: 0; top: 0; pointer-events: none; }
+/* Moving wind / arrows, under 3D; only while modeled wind is on. */
+.m-wstyle { position: absolute; left: 12px; top: 112px; }
+.m-wstyle[hidden] { display: none; }
+.m-picking .m-wstyle, .m-claiming .m-wstyle { display: none; }

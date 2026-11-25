@@ -266,6 +266,7 @@
     </div>
     <button type="button" class="m-tool m-north" data-act="north" aria-label="North up, or square to our parcels"><svg viewBox="0 0 24 24"><path d="M12 3l5 15-5-3.5L7 18z" fill="#FF6B1A"/><text x="12" y="23.5" text-anchor="middle" font-size="6" font-weight="700" fill="currentColor" font-family="sans-serif">N</text></svg></button>
     <button type="button" class="m-tool m-3d" aria-pressed="false" aria-label="3D terrain">3D</button>
+    <button type="button" class="m-tool m-wstyle" hidden></button>
     <div class="m-cross" hidden><i></i></div>
     <button type="button" class="m-wpill" hidden></button>
     <div class="m-pinfo" hidden></div>
@@ -282,7 +283,7 @@
   }
   style.layers.unshift({ id: "bg", type: "background", paint: { "background-color": "#1b2118" } });
   const fc = features => ({ type: "FeatureCollection", features });
-  for (const id of ["parcels", "wparcels", "claim", "propnames", "pland", "closed", "cones", "paths", "mwind", "mflow"]) style.sources[id] = { type: "geojson", data: fc([]) };
+  for (const id of ["parcels", "ourlines", "wparcels", "claim", "propnames", "pland", "closed", "cones", "paths", "mwind"]) style.sources[id] = { type: "geojson", data: fc([]) };
   // Modeled wind arrows: every 160 m zoomed out, 80 m, then 40 m close in. Color is speed; the scale runs to
   // the run's fastest wind above the trees, so ground level reads as calmer on the same scale.
   const mwColor = ["interpolate", ["linear"], ["get", "v"], 0, "#3b0f70", 5, "#8c2981", 10, "#de4968", 15, "#fe9f6d", 22, "#fcfdbf"];
@@ -305,7 +306,7 @@
     // in a thinner orange, so you can see where the properties sit from each other.
     { id: "parcel-fill", type: "fill", source: "parcels", paint: { "fill-color": "#FF6B1A", "fill-opacity": ["case", ["!", ["get", "ours"]], 0, ["get", "here"], .07, .16] } },
     { id: "parcel-line", type: "line", source: "parcels", filter: ["!", ["get", "ours"]], paint: { "line-color": "#ffffff", "line-opacity": .55, "line-width": 1 } },
-    { id: "ours-line", type: "line", source: "parcels", filter: ["get", "ours"], paint: { "line-color": "#FF6B1A", "line-width": ["case", ["get", "here"], 3, 2], "line-opacity": ["case", ["get", "here"], 1, .85] } },
+    { id: "ours-line", type: "line", source: "ourlines", paint: { "line-color": "#FF6B1A", "line-width": ["case", ["get", "here"], 3, 2], "line-opacity": ["case", ["get", "here"], 1, .85] } },
     // Parcels being picked for a property.
     { id: "claim-fill", type: "fill", source: "claim", paint: { "fill-color": "#FF6B1A", "fill-opacity": .38 } },
     { id: "claim-line", type: "line", source: "claim", paint: { "line-color": "#FFB27A", "line-width": 2.5 } },
@@ -321,10 +322,6 @@
         paint: { "line-color": "#000", "line-opacity": .5, "line-width": 4 }, layout: { "line-cap": "round" } },
       { id, type: "line", source: "mwind", filter: ["==", ["get", "lvl"], lvl], minzoom: min, maxzoom: max,
         paint: { "line-color": mwColor, "line-width": 2 }, layout: { "line-cap": "round" } }]),
-    { id: "mflow-case", type: "line", source: "mflow", layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": "#000", "line-width": 4.6, "line-opacity": ["*", .45, ["get", "a"]] } },
-    { id: "mflow", type: "line", source: "mflow", layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": mwColor, "line-width": 2.8, "line-opacity": ["get", "a"] } },
   );
   // Place names, for finding your way: counties zoomed out, then towns by size (from places.json, the 2020
   // census; tools/places.py). The font ships with the app (fonts/), so names show with no signal too.
@@ -401,6 +398,7 @@
       const c = await keepCache(), saved = store.get(DL) || {}, keepKeys = new Set();
       for (const p of Object.keys(saved)) {
         tileList(p).forEach(t => keepKeys.add(tileKey(...t)));
+        wpTiles(p).forEach(([x, y]) => keepKeys.add(tileKey("parcels", WP_ZOOM, x, y)));
         const hit = await c.match(windKey(p, "index.json"));
         const idx = hit ? JSON.parse(await hit.text()) : { runs: [] };
         ["index.json", "grid.json", ...idx.runs.map(r => r.file)].forEach(f => keepKeys.add(windKey(p, f)));
@@ -469,6 +467,34 @@
   let me = null, meMarker = null, watch = null;
   let claim = null;              // picking a property's parcels: { prop (editing one) or null (new), name, sel, orig }
   let drawnIds = new Set();      // parcel ids drawn from our table, so the statewide layer doesn't draw them twice
+  // A property's outline: its parcels merged into one shape, so the lines between our own parcels don't
+  // clutter the map under the pins. The state's parcel lines don't always meet exactly, so gaps between
+  // them that come out as small holes (under 2,000 m², half an acre) are filled; a real hole (a neighbor's
+  // parcel inside ours) stays. Without the merging library, every parcel's own line.
+  const outlines = new Map();
+  function outlineOf(name) {
+    const rows = (state.parcels || []).filter(q => q.property === name && q.ours);
+    if (!rows.length) return null;
+    const key = rows.map(q => q.id).sort().join(",");
+    if (outlines.get(name)?.key === key) return outlines.get(name).geom;
+    let geom;
+    const round = c => typeof c[0] === "number" ? [+c[0].toFixed(6), +c[1].toFixed(6)] : c.map(round);
+    const polys = rows.map(q => q.geom.type === "MultiPolygon" ? round(q.geom.coordinates) : [round(q.geom.coordinates)]);
+    try {
+      if (!window.polygonClipping) throw new Error("no merging");
+      const merged = polygonClipping.union(...polys);
+      const ringM2 = ring => {                 // a ring's area in square metres (flat, fine at this size)
+        const k = 111320 * Math.cos(ring[0][1] * Math.PI / 180);
+        let a = 0; for (let i = 0; i < ring.length - 1; i++) a += ring[i][0] * k * ring[i + 1][1] * 111320 - ring[i + 1][0] * k * ring[i][1] * 111320;
+        return Math.abs(a / 2);
+      };
+      geom = { type: "MultiLineString", coordinates: merged.flatMap(poly => [poly[0], ...poly.slice(1).filter(h => ringM2(h) >= 2000)]) };
+    } catch {
+      geom = { type: "MultiLineString", coordinates: polys.flatMap(mp => mp.flatMap(poly => poly)) };
+    }
+    outlines.set(name, { key, geom });
+    return geom;
+  }
   // The middle of a property's own parcels (else its map box).
   function propCenter(name) {
     let w = 180, s = 90, e = -180, n = -90;
@@ -489,6 +515,10 @@
     drawnIds = new Set(shown.map(x => x.id));
     map.getSource("parcels").setData(fc(shown.map(x => ({
       type: "Feature", geometry: x.geom, properties: { id: `${x.property}|${x.id}`, ours: !!x.ours, here: x.property === p } }))));
+    map.getSource("ourlines").setData(fc(propertyNames().flatMap(name => {
+      const g = outlineOf(name);
+      return g ? [{ type: "Feature", geometry: g, properties: { here: name === p } }] : [];
+    })));
     map.getSource("propnames").setData(fc(propertyNames().map(name => {
       const c = propCenter(name);
       return c && { type: "Feature", geometry: { type: "Point", coordinates: c }, properties: { name, here: name === p } };
@@ -514,13 +544,17 @@
   // and acres are public record; they show only when a parcel is tapped.
   const WP_URL = "https://services3.arcgis.com/n6uYoouQZW75n5WI/ArcGIS/rest/services/Wisconsin_Statewide_Parcels_DB/FeatureServer/0/query";
   const wpSquares = new Map(), wpById = new Map(), wpGeom = new Map();          // "x/y" -> features; parcel id -> its properties
-  async function wpSquare(x, y) {
+  // keep: part of a Download Map, so it's kept with the download rather than in Recent.
+  async function wpSquare(x, y, keep = false) {
     const key = `${x}/${y}`;
-    if (wpSquares.has(key)) return wpSquares.get(key);
+    if (wpSquares.has(key) && !keep) return wpSquares.get(key);
     const ck = tileKey("parcels", WP_ZOOM, x, y), hit = await fromPhone(ck);
     let feats = null;
-    if (hit) feats = JSON.parse(await hit.text());
-    else if (navigator.onLine) {
+    if (hit) {
+      const text = await hit.text();
+      feats = JSON.parse(text);
+      if (keep && !(await (await keepCache()).match(ck))) await savePhone(ck, text, "application/json", true);
+    } else if (navigator.onLine) {
       const n = 2 ** WP_ZOOM, lon = i => i / n * 360 - 180, lat = j => Math.atan(Math.sinh(Math.PI * (1 - 2 * j / n))) * 180 / Math.PI;
       const q = new URLSearchParams({ where: "1=1", geometry: `${lon(x)},${lat(y + 1)},${lon(x + 1)},${lat(y)}`, geometryType: "esriGeometryEnvelope",
         inSR: 4326, spatialRel: "esriSpatialRelIntersects", outFields: "STATEID,OWNERNME1,OWNERNME2,GISACRES,DEEDACRES", outSR: 4326,
@@ -532,7 +566,7 @@
         feats = j.features.filter(f => f.geometry).map(f => ({ type: "Feature", geometry: f.geometry, properties: { id: f.properties.STATEID,
           owner: (f.properties.OWNERNME1 || "").trim() || null, owner2: (f.properties.OWNERNME2 || "").trim() || null,
           acres: Math.round((f.properties.GISACRES || f.properties.DEEDACRES || 0) * 10) / 10 || null } }));
-        savePhone(ck, JSON.stringify(feats), "application/json").catch(() => {});
+        await savePhone(ck, JSON.stringify(feats), "application/json", keep).catch(() => {});
       } catch { return null; }                 // try again next time the map moves
     }
     if (feats) wpSquares.set(key, feats);
@@ -1166,6 +1200,16 @@
     on(el, { download: () => download(prop()), forget: () => forget(prop()), clearRecent: () => clearRecent().then(() => { toast("Recently viewed map cleared"); layersCard(); }) });
     if (dl) showProgress();
   }
+  // The statewide parcel squares (zoom 14, about a mile across) over a property's map box: the neighbors
+  // around it, with owners and acres, for a Download Map.
+  function wpTiles(p) {
+    const box = boxOf(p);
+    if (!box) return [];
+    const [[w, s], [e, n]] = box, z = 2 ** WP_ZOOM, out = [];
+    const tx = lon => Math.floor((lon + 180) / 360 * z), ty = lat => Math.floor((1 - Math.asinh(Math.tan(lat * Math.PI / 180)) / Math.PI) / 2 * z);
+    for (let x = tx(w); x <= tx(e); x++) for (let y = ty(n); y <= ty(s); y++) out.push([x, y]);
+    return out;
+  }
   // Every tile a property needs: each layer at the zooms it keeps, over the property's map box.
   function tileList(p) {
     const box = boxOf(p);
@@ -1217,6 +1261,11 @@
     // One more try for the ones that didn't come back; the state's server drops a few under load.
     dl.failed = 0;
     for (const t of misses) { try { const n = (await getTile(...t, undefined, true)).byteLength; dl.bytes += n; } catch { dl.failed++; } }
+    // The neighbors' parcel lines and owners, so a deer that crosses the line can be followed with no signal.
+    for (const [x, y] of wpTiles(p)) {
+      const feats = (await wpSquare(x, y, true)) || (await wpSquare(x, y, true));
+      if (feats) dl.bytes += JSON.stringify(feats).length; else dl.failed++;
+    }
     const saved = store.get(DL) || {};
     saved[p] = { at: Date.now(), bytes: dl.bytes, tiles: list.length - dl.failed };
     store.set(DL, saved);
@@ -1228,6 +1277,7 @@
   async function forget(p) {
     const c = await keepCache(), list = tileList(p);
     await Promise.all(list.map(t => c.delete(tileKey(...t))));
+    await Promise.all(wpTiles(p).map(([x, y]) => c.delete(tileKey("parcels", WP_ZOOM, x, y))));   // the neighbors' parcels
     try {                                        // and its modeled wind
       const hit = await c.match(windKey(p, "index.json"));
       const idx = hit ? JSON.parse(await hit.text()) : { runs: [] };
@@ -1243,7 +1293,7 @@
   // wind lens direction, else the wind now at the property's weather town. WindNinja's wind is 20 ft above
   // the vegetation; ground level brings it to 5 ft with the same canopy sheltering as wind_model.py.
   const mw = { on: !!prefs.mwind, height: prefs.mwHeight || "ground", leafOff: prefs.mwLeafOff ?? [10, 11, 0, 1, 2, 3].includes(new Date().getMonth()),
-    pick: prefs.mwPick || null, shown: null, cells: null, readout: "", style: prefs.mwStyle || "moving" };
+    pick: prefs.mwPick || null, shown: null, cells: null, readout: "", style: prefs.mwStyle === "arrows" ? "arrows" : "moving" };   // "both" from before counts as moving
   const windSlug = p => p.toLowerCase().replace(/\s+/g, "");
   const windKey = (p, f) => `https://tiles.buckbook.invalid/wind/${windSlug(p)}/${f}`;
   // Runs never change once made, so they come from the phone's copy; the index lists which runs exist and
@@ -1286,14 +1336,14 @@
   }
   async function mwShow() {
     const p = prop(), pill = ui.querySelector(".m-wpill");
-    if (!mw.on) { pill.hidden = true; flowStop(true); if (ready) map.getSource("mwind").setData(fc([])); if (lens) { lens = null; draw(); } return; }
+    if (!mw.on) { pill.hidden = true; mwStyleBtn(); flowStop(true); if (ready) map.getSource("mwind").setData(fc([])); if (lens) { lens = null; draw(); } return; }
     pill.hidden = false;
     let idx;
     try { idx = await windFile(p, "index.json"); }
     catch { mw.shown = null; map.getSource("mwind")?.setData(fc([])); pill.textContent = `No modeled wind for ${p} on this phone yet`; return; }
     const want = mw.pick;
     if (!want) {
-      mw.shown = null; flowStop(true); map.getSource("mwind")?.setData(fc([]));
+      mw.shown = null; mwStyleBtn(); flowStop(true); map.getSource("mwind")?.setData(fc([]));
       if (lens) { lens = null; draw(); }
       pill.innerHTML = "<b>Tap to pick a wind</b>";
       return;
@@ -1302,7 +1352,7 @@
     if (lens?.dir !== want.dir) { lens = { dir: want.dir }; draw(); }
     const same = idx.runs.filter(r => r.dir === want.dir);
     if (!same.length) {
-      mw.shown = null; flowStop(true); map.getSource("mwind")?.setData(fc([]));
+      mw.shown = null; mwStyleBtn(); flowStop(true); map.getSource("mwind")?.setData(fc([]));
       pill.innerHTML = `Nothing here yet for a ${esc(want.dir)} wind (have ${esc([...new Set(idx.runs.map(r => r.dir))].join(", "))})<br><b>Tap to pick another</b>`;
       return;
     }
@@ -1337,82 +1387,180 @@
     drawLens(trees());                          // scent cones follow the modeled wind at each tree
     mwPill();
   }
-  // Moving wind: short streaks drift with the modeled wind, faster where it's stronger, colored like the
-  // arrows, lying on the terrain in 3D. About 350 at a time over what's on screen; each fades out after a
-  // moment and starts again somewhere else. They run only while the wind is on and the map is showing.
-  const flow = { cells: null, cols: 0, inv: null, o: null, parts: [], raf: null, last: 0 };
+  // Moving wind: particles ride the modeled wind across the property, leaving fading trails, faster where
+  // it's stronger and colored like the arrows. Each lives 4 to 10 seconds, curving smoothly from one model
+  // point to the next (the wind between points is blended from the four around it), so you can follow one
+  // across the ground. There are as many as the modeled area on screen calls for, zoomed out or in.
+  // They're drawn on their own canvas just over the map (under the pins) every frame, not as map data, so
+  // a phone keeps up. Positions are kept on the ground, so they stay put while the map moves, and in 3D
+  // they lie on the terrain. They run only while the wind is on and the map is showing.
+  const flow = { cells: null, cols: 0, rows: 0, inv: null, o: null, vec: null, vecFor: "", parts: [], raf: null, last: 0, want: 0, canvas: null, ctx: null };
+  const FLOW_DENSITY = 420;                     // one particle per this many screen pixels of modeled ground
+  const FLOW_MAX = 2200;
+  const FLOW_PX = 1.6;                          // screen pixels a frame (60 a second) at 12 mph
+  const FLOW_FADE = .968;                       // trail kept each frame: about half a second of tail
+  // So a trail is about 50 px at 12 mph and 18 px in a 4 mph breeze at ground level.
+  // The arrows' speed colors by whole mph, mixed a third of the way to white: thin trails in the darkest
+  // purples read as shadows on the photos.
+  const FLOW_COLORS = (() => {
+    const stops = [[0, [59, 15, 112]], [5, [140, 41, 129]], [10, [222, 73, 104]], [15, [254, 159, 109]], [22, [252, 253, 191]]];
+    return Array.from({ length: 26 }, (_, v) => {
+      const i = Math.max(0, stops.findIndex((s, k) => k === stops.length - 1 || v < stops[k + 1][0]));
+      const [a, ca] = stops[i], [b, cb] = stops[Math.min(i + 1, stops.length - 1)], t = b === a ? 0 : Math.min(1, (v - a) / (b - a));
+      return `rgb(${ca.map((x, j) => Math.round((x + (cb[j] - x) * t) * .66 + 255 * .34)).join(",")})`;
+    });
+  })();
+  function flowCanvas() {
+    if (flow.canvas) return flow.canvas;
+    const cv = document.createElement("canvas");
+    cv.className = "m-flow";
+    map.getCanvasContainer().insertBefore(cv, map.getCanvas().nextSibling);   // over the map, under the pins
+    flow.canvas = cv; flow.ctx = cv.getContext("2d");
+    flowSize();
+    return cv;
+  }
+  function flowSize() {
+    if (!flow.canvas) return;
+    const m = map.getCanvas(), dpr = Math.min(devicePixelRatio || 1, 2);
+    flow.canvas.width = m.clientWidth * dpr; flow.canvas.height = m.clientHeight * dpr;
+    flow.canvas.style.width = m.clientWidth + "px"; flow.canvas.style.height = m.clientHeight + "px";
+    flow.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    flowCount();
+  }
+  map.on("resize", flowSize);
   function flowSetup(cells, cols) {
-    flow.cells = cells; flow.cols = cols;
+    flow.cells = cells; flow.cols = cols; flow.rows = cells.length / cols; flow.vecFor = "";
     // Cell positions as an affine grid: lon/lat -> (column, row), from the first cell and its two neighbours.
     const a = cells[0], b = cells[1], c = cells[cols];
     const ux = b.lon - a.lon, uy = b.lat - a.lat, vx = c.lon - a.lon, vy = c.lat - a.lat, det = ux * vy - uy * vx;
     flow.o = a; flow.inv = [vy / det, -vx / det, -uy / det, ux / det];
     flow.parts = [];
+    flowCanvas(); flowCount(); flowClear();
     flowStart();
   }
-  function flowCell(lon, lat) {
-    if (!flow.cells) return null;
-    const dx = lon - flow.o.lon, dy = lat - flow.o.lat, [p, q, r, t] = flow.inv;
-    const col = Math.round(p * dx + q * dy), row = Math.round(r * dx + t * dy), rows = flow.cells.length / flow.cols;
-    if (col < 0 || row < 0 || col >= flow.cols || row >= rows) return null;
-    return flow.cells[row * flow.cols + col];
+  // Each cell's wind as east and north parts (mph), for blending; rebuilt when the height changes.
+  function flowVectors() {
+    if (flow.vecFor === mw.height && flow.vec) return flow.vec;
+    const n = flow.cells.length, vec = new Float32Array(n * 2);
+    flow.cells.forEach((c, i) => {
+      const v = mw.height === "ground" ? c.ground : c.above, t = (c.from + 180) * Math.PI / 180;
+      vec[i * 2] = Math.sin(t) * v; vec[i * 2 + 1] = Math.cos(t) * v;
+    });
+    flow.vecFor = mw.height; flow.vec = vec;
+    return vec;
   }
-  // New streaks are spread evenly over the screen, not the map: in 3D the view reaches to the horizon, and
-  // spreading over the map would put most of them miles off. The top sixth (sky when tilted) is skipped.
+  // The wind at a point, blended from the four model points around it; null off the modeled area.
+  function flowWind(lon, lat) {
+    const dx = lon - flow.o.lon, dy = lat - flow.o.lat, [p, q, r, t] = flow.inv;
+    const fc_ = p * dx + q * dy, fr = r * dx + t * dy;
+    if (fc_ < 0 || fr < 0 || fc_ > flow.cols - 1 || fr > flow.rows - 1) return null;
+    const c0 = Math.min(Math.floor(fc_), flow.cols - 2), r0 = Math.min(Math.floor(fr), flow.rows - 2), ax = fc_ - c0, ay = fr - r0;
+    const vec = flowVectors(), i00 = (r0 * flow.cols + c0) * 2, i10 = i00 + 2, i01 = i00 + flow.cols * 2, i11 = i01 + 2;
+    const e = (vec[i00] * (1 - ax) + vec[i10] * ax) * (1 - ay) + (vec[i01] * (1 - ax) + vec[i11] * ax) * ay;
+    const nn = (vec[i00 + 1] * (1 - ax) + vec[i10 + 1] * ax) * (1 - ay) + (vec[i01 + 1] * (1 - ax) + vec[i11 + 1] * ax) * ay;
+    return [e, nn];
+  }
+  // How many particles: by how much of the screen the modeled area covers (checked at a grid of points).
+  function flowCount() {
+    if (!flow.cells || !flow.canvas) return;
+    const W = flow.canvas.clientWidth || map.getCanvas().clientWidth, H = flow.canvas.clientHeight || map.getCanvas().clientHeight;
+    let hit = 0, n = 0;
+    for (let i = .5; i < 12; i++) for (let j = .5; j < 16; j++) {
+      n++; const ll = map.unproject([W * i / 12, H * j / 16]);
+      if (ll && flowWind(ll.lng, ll.lat)) hit++;
+    }
+    flow.want = Math.min(FLOW_MAX, Math.round(hit / n * W * H / FLOW_DENSITY));
+  }
+  map.on("moveend", flowCount);
+  // A new particle somewhere on the modeled ground on screen (in 3D, the sky is skipped by the same test).
   function flowSpawn() {
-    const cv = map.getCanvas(), W = cv.clientWidth, H = cv.clientHeight;
-    for (let tries = 0; tries < 8; tries++) {
-      const ll = map.unproject([Math.random() * W, H * (map.getPitch() > 20 ? .17 : 0) + Math.random() * H * (map.getPitch() > 20 ? .83 : 1)]);
-      if (ll && flowCell(ll.lng, ll.lat)) return { pts: [[ll.lng, ll.lat]], age: Math.floor(Math.random() * 20), life: 40 + Math.random() * 50 };
+    const W = flow.canvas.clientWidth, H = flow.canvas.clientHeight;
+    for (let tries = 0; tries < 10; tries++) {
+      const ll = map.unproject([Math.random() * W, Math.random() * H]);
+      if (ll && flowWind(ll.lng, ll.lat)) return { lon: ll.lng, lat: ll.lat, age: 0, life: 240 + Math.random() * 360 };
     }
     return null;
   }
-  function flowStep() {
-    if (!flow.cells || !ready) return;
-    const z = map.getZoom(), lat0 = map.getCenter().lat;
-    const mpp = 40075016 * Math.cos(lat0 * Math.PI / 180) / (512 * 2 ** z);       // metres per screen pixel, at the centre
-    const want = Math.round(Math.min(450, 260 + (z - 13) * 40));
-    while (flow.parts.length < want) { const p = flowSpawn(); if (!p) break; flow.parts.push(p); }
-    flow.parts.length = Math.min(flow.parts.length, want);
-    const feats = [];
-    flow.parts = flow.parts.map(p => {
-      const [lon, lat] = p.pts[p.pts.length - 1], c = flowCell(lon, lat);
-      if (!c || p.age > p.life) return flowSpawn() || p;
-      const v = mw.height === "ground" ? c.ground : c.above;
-      // About 2.2 screen pixels a step at 12 mph, whatever the zoom; still air barely creeps.
-      const d = Math.max(v, .4) / 12 * 2.2 * mpp, t = (c.from + 180) * Math.PI / 180;
-      p.pts.push([lon + Math.sin(t) * d / (111320 * Math.cos(lat * Math.PI / 180)), lat + Math.cos(t) * d / 111320]);
-      if (p.pts.length > 12) p.pts.shift();           // a tail of about 25 px at 12 mph
-      p.age++;
-      if (p.pts.length > 1) feats.push({ type: "Feature", properties: { v: +v.toFixed(1), a: +Math.min(1, p.age / 8, (p.life - p.age) / 12).toFixed(2) },
-        geometry: { type: "LineString", coordinates: p.pts } });
-      return p;
-    });
-    map.getSource("mflow")?.setData(fc(feats));
+  let flowMoving = false;
+  map.on("movestart", () => { flowMoving = true; }); map.on("moveend", () => { flowMoving = false; });
+  function flowClear() { if (flow.ctx) flow.ctx.clearRect(0, 0, flow.canvas.width, flow.canvas.height); }
+  function flowStep(dt) {
+    if (!flow.cells || !ready || !flow.ctx) return;
+    const ctx = flow.ctx, W = flow.canvas.clientWidth, H = flow.canvas.clientHeight;
+    // Trails: last frame's drawing fades a little each frame. While the map moves the picture is redrawn
+    // fresh (the trails would smear), and they grow back as soon as it stops.
+    if (flowMoving) ctx.clearRect(0, 0, W, H);
+    else { ctx.globalCompositeOperation = "destination-in"; ctx.fillStyle = `rgba(0,0,0,${Math.pow(FLOW_FADE, dt)})`; ctx.fillRect(0, 0, W, H); }
+    ctx.globalCompositeOperation = "source-over";
+    while (flow.parts.length < flow.want) { const p = flowSpawn(); if (!p) break; flow.parts.push(p); }
+    if (flow.parts.length > flow.want) flow.parts.length = flow.want;
+    const mpp = 40075016 * Math.cos(map.getCenter().lat * Math.PI / 180) / (512 * 2 ** map.getZoom());   // metres per pixel
+    const byColor = new Map();
+    for (let i = 0; i < flow.parts.length; i++) {
+      const p = flow.parts[i], w = flowWind(p.lon, p.lat);
+      if (!w || p.age > p.life) { flow.parts[i] = flowSpawn() || p; if (!w) flow.parts[i].age = flow.parts[i].life + 1; continue; }
+      const v = Math.hypot(w[0], w[1]), k = Math.max(v, .5) / v || 0;            // still air still creeps
+      const d = FLOW_PX / 12 * mpp * dt, cos = Math.cos(p.lat * Math.PI / 180);
+      const lon2 = p.lon + w[0] * k * d / (111320 * cos), lat2 = p.lat + w[1] * k * d / 111320;
+      const a = map.project([p.lon, p.lat]), b = map.project([lon2, lat2]);
+      p.lon = lon2; p.lat = lat2; p.age += dt;
+      if (b.x < -20 || b.y < -20 || b.x > W + 20 || b.y > H + 20) { p.age = p.life + 1; continue; }
+      const key = Math.min(25, Math.round(v));
+      let segs = byColor.get(key); if (!segs) byColor.set(key, segs = []);
+      segs.push(a.x, a.y, b.x, b.y);
+    }
+    ctx.lineCap = "round";
+    for (const pass of [0, 1]) {               // a dark edge under each color, so slow (dark) wind shows on dark ground
+      for (const [key, segs] of byColor) {
+        ctx.beginPath();
+        for (let i = 0; i < segs.length; i += 4) { ctx.moveTo(segs[i], segs[i + 1]); ctx.lineTo(segs[i + 2], segs[i + 3]); }
+        ctx.strokeStyle = pass ? FLOW_COLORS[key] : "rgba(0,0,0,.28)"; ctx.lineWidth = pass ? 1.8 : 3.2;
+        ctx.stroke();
+      }
+    }
   }
   function flowStart() {
     if (flow.raf || !flow.cells || !mw.on || mw.style === "arrows" || view.hidden || document.hidden) return;
+    if (flow.canvas) flow.canvas.hidden = false;
+    flow.last = 0;
     const tick = time => {
       flow.raf = requestAnimationFrame(tick);
-      if (time - flow.last < 40) return;                    // about 25 steps a second
-      flow.last = time; flowStep();
+      const dt = flow.last ? Math.min(3, (time - flow.last) / (1000 / 60)) : 1;   // in 60ths of a second, so speed holds on slow phones
+      flow.last = time; flowStep(dt);
     };
     flow.raf = requestAnimationFrame(tick);
   }
   function flowStop(clear = false) {
     if (flow.raf) cancelAnimationFrame(flow.raf);
     flow.raf = null;
-    if (clear) { flow.cells = null; flow.parts = []; if (ready) map.getSource("mflow")?.setData(fc([])); }
+    if (clear) { flow.cells = null; flow.parts = []; flowClear(); if (flow.canvas) flow.canvas.hidden = true; }
   }
   document.addEventListener("visibilitychange", () => document.hidden ? flowStop() : flowStart());
-  // Arrows show for the Arrows and Both styles; Moving shows only the streaks.
+  // Arrows show in the arrows view; the moving view shows only the moving wind.
   function mwArrowsShown() {
     if (!ready) return;
-    const vis = mw.style === "moving" ? "none" : "visible";
+    const vis = mw.style === "arrows" ? "visible" : "none";
     mwLayers.forEach(([id]) => { map.setLayoutProperty(id, "visibility", vis); map.setLayoutProperty(id + "-case", "visibility", vis); });
   }
+  // Moving wind or arrows: a map button under 3D, like 3D/2D, there only while modeled wind is showing.
+  // It shows what a tap switches to.
+  const btnStyle = ui.querySelector(".m-wstyle");
+  const ICON_ARROWS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 19V8M3 11l3-3 3 3M15 21V10M12 13l3-3 3 3M19 13V4M16 7l3-3 3 3"/></svg>';
+  const ICON_MOVING = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8c3-2 5 2 8 0s5-2 8 0M3 13c3-2 5 2 8 0s5-2 8 0M3 18c3-2 5 2 8 0"/></svg>';
+  function mwStyleBtn() {
+    btnStyle.hidden = !(mw.on && mw.shown);
+    const moving = mw.style !== "arrows";
+    btnStyle.innerHTML = moving ? ICON_ARROWS : ICON_MOVING;
+    btnStyle.setAttribute("aria-label", moving ? "Show wind arrows" : "Show moving wind");
+  }
+  btnStyle.addEventListener("click", () => {
+    mw.style = mw.style === "arrows" ? "moving" : "arrows"; prefs.mwStyle = mw.style; savePrefs();
+    mwArrowsShown(); mwStyleBtn();
+    if (mw.style === "arrows") { flowStop(); flowClear(); } else flowStart();
+  });
   function mwPill() {
     const pill = ui.querySelector(".m-wpill"), s = mw.shown;
+    mwStyleBtn();
     if (!s) return;
     const why = s.want.label ? ` (${esc(s.want.label)})` : "";
     pill.innerHTML = `<b>Modeled ${esc(s.dir)} ${s.mph} mph</b>${why} · ${mw.height === "ground" ? "ground level" : "above canopy"}` + (mw.readout ? `<br>${mw.readout}` : "");
@@ -1472,7 +1620,6 @@
       <p class="label">Arrows</p>
       <div class="chips m-kinds"><button type="button" data-h="ground" aria-pressed="${mw.height === "ground"}">Ground Level</button><button type="button" data-h="above" aria-pressed="${mw.height === "above"}">Above Canopy</button></div>
       <div class="chips m-kinds" style="margin-top:6px"><button type="button" data-leaf="on" aria-pressed="${!mw.leafOff}">Leaves On</button><button type="button" data-leaf="off" aria-pressed="${mw.leafOff}">Leaves Off</button></div>
-      <div class="chips m-kinds" style="margin-top:6px">${[["moving", "Moving"], ["arrows", "Arrows"], ["both", "Both"]].map(([v, l]) => `<button type="button" data-style="${v}" aria-pressed="${mw.style === v}">${l}</button>`).join("")}</div>
       <div class="m-legend"><i></i><span>0</span><span>22+ mph</span></div>
       <div id="mRank"></div>
       ${btnRow(b("off", "Turn Off"))}`, "m-mwind");
@@ -1493,11 +1640,6 @@
       day = x.dataset.day; el.querySelectorAll("[data-day]").forEach(y => y.setAttribute("aria-pressed", String(y === x)));
     }));
     el.querySelectorAll("[data-h]").forEach(x => x.addEventListener("click", () => { mw.height = x.dataset.h; prefs.mwHeight = mw.height; savePrefs(); mwShow().then(() => mwCard()); }));
-    el.querySelectorAll("[data-style]").forEach(x => x.addEventListener("click", () => {
-      mw.style = x.dataset.style; prefs.mwStyle = mw.style; savePrefs(); mwArrowsShown();
-      if (mw.style === "arrows") { flowStop(); map.getSource("mflow")?.setData(fc([])); } else flowStart();
-      el.querySelectorAll("[data-style]").forEach(y => y.setAttribute("aria-pressed", String(y === x)));
-    }));
     el.querySelectorAll("[data-leaf]").forEach(x => x.addEventListener("click", () => { mw.leafOff = x.dataset.leaf === "off"; prefs.mwLeafOff = mw.leafOff; savePrefs(); mwShow().then(() => mwCard()); }));
     on(el, {
       apply: () => apply({ dir: mwDraft.dir, mph: mwDraft.mph }),
