@@ -133,7 +133,7 @@
     get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
   };
-  const prefs = Object.assign({ base: "leafoff", contours: false, show: { cameras: true, spots: true, trees: true, parcels: true } }, store.get("buckbook-map") || {});
+  const prefs = Object.assign({ base: "leafoff", contours: false, land: "", show: { cameras: true, spots: true, trees: true, parcels: true } }, store.get("buckbook-map") || {});
   const savePrefs = () => store.set("buckbook-map", prefs);
 
   const SPOT_KINDS = [["stand", "Stand"], ["saddle", "Saddle Tree"], ["scrape", "Scrape"], ["rub", "Rub"], ["bedding", "Bedding"],
@@ -279,12 +279,21 @@
   }
   style.layers.unshift({ id: "bg", type: "background", paint: { "background-color": "#1b2118" } });
   const fc = features => ({ type: "FeatureCollection", features });
-  for (const id of ["parcels", "wparcels", "cones", "paths", "mwind", "mflow"]) style.sources[id] = { type: "geojson", data: fc([]) };
+  for (const id of ["parcels", "wparcels", "pland", "closed", "cones", "paths", "mwind", "mflow"]) style.sources[id] = { type: "geojson", data: fc([]) };
   // Modeled wind arrows: every 160 m zoomed out, 80 m, then 40 m close in. Color is speed; the scale runs to
   // the run's fastest wind above the trees, so ground level reads as calmer on the same scale.
   const mwColor = ["interpolate", ["linear"], ["get", "v"], 0, "#3b0f70", 5, "#8c2981", 10, "#de4968", 15, "#fe9f6d", 22, "#fcfdbf"];
   const mwLayers = [["mw-sparse", 2, 0, 14.5], ["mw-coarse", 1, 14.5, 15.5], ["mw-fine", 0, 15.5, 24]];
+  // Public land (blue), or in hunting view just what's open to hunting: yellow open, lavender partly or check the
+  // rules, red the state's closed and restricted areas on top. Under the parcel lines.
+  const huntColor = ["match", ["get", "hunt"], "yes", "#FFD23F", "part", "#B98CFF", "#4FA3E0"];
   style.layers.push(
+    { id: "pl-fill", type: "fill", source: "pland", layout: { visibility: "none" }, paint: { "fill-color": "#4FA3E0", "fill-opacity": .32 } },
+    { id: "pl-line", type: "line", source: "pland", layout: { visibility: "none" }, paint: { "line-color": "#4FA3E0", "line-opacity": .95, "line-width": 2 } },
+    { id: "closed-fill", type: "fill", source: "closed", layout: { visibility: "none" }, paint: { "fill-color": "#FF5A47", "fill-opacity": .32 } },
+    { id: "closed-line", type: "line", source: "closed", layout: { visibility: "none" }, paint: { "line-color": "#FF5A47", "line-width": 2 } },
+    { id: "pl-pick", type: "line", source: "pland", filter: ["==", ["get", "id"], ""], paint: { "line-color": "#ffffff", "line-width": 3, "line-dasharray": [2, 1] } },
+    { id: "closed-pick", type: "line", source: "closed", filter: ["==", ["get", "id"], ""], paint: { "line-color": "#ffffff", "line-width": 3, "line-dasharray": [2, 1] } },
     // Every other parcel in the state, fetched for what's on screen once zoomed in (statewide parcel map).
     { id: "wp-fill", type: "fill", source: "wparcels", minzoom: WP_ZOOM, paint: { "fill-color": "#fff", "fill-opacity": 0 } },
     { id: "wp-line", type: "line", source: "wparcels", minzoom: WP_ZOOM, paint: { "line-color": "#ffffff", "line-opacity": .45, "line-width": .9 } },
@@ -370,7 +379,7 @@
     ready = true; applyLayers(); draw();
     if (prefs.threeD) threeD(true, false);
     if (mw.on) mwShow();                       // the wind that was on last time
-    wpRefresh();
+    wpRefresh(); plRefresh();
   };
   map.on("style.load", whenStyled); map.on("styledata", whenStyled); map.once("load", whenStyled);
   whenStyled();
@@ -389,6 +398,13 @@
     for (const id of ["parcel-line", "wp-line"]) map.setPaintProperty(id, "line-color", light ? "#2b2f2a" : "#ffffff");
     for (const id of ["parcel-pick", "wp-pick"]) map.setPaintProperty(id, "line-color", light ? "#000000" : "#ffffff");
     for (const id of ["parcel-fill", "parcel-line", "ours-line", "parcel-pick", "wp-fill", "wp-line", "wp-pick"]) map.setLayoutProperty(id, "visibility", prefs.show.parcels ? "visible" : "none");
+    const hunt = prefs.land === "hunt";
+    for (const id of ["pl-fill", "pl-line"]) map.setLayoutProperty(id, "visibility", prefs.land ? "visible" : "none");
+    for (const id of ["closed-fill", "closed-line"]) map.setLayoutProperty(id, "visibility", hunt ? "visible" : "none");
+    map.setFilter("pl-fill", hunt ? ["!=", ["get", "hunt"], "no"] : null);
+    map.setFilter("pl-line", hunt ? ["!=", ["get", "hunt"], "no"] : null);
+    map.setPaintProperty("pl-fill", "fill-color", hunt ? huntColor : "#4FA3E0");
+    map.setPaintProperty("pl-line", "line-color", hunt ? huntColor : "#4FA3E0");
   }
 
   // ---------- markers ----------
@@ -486,6 +502,137 @@
     }
   }
   map.on("moveend", wpRefresh);
+
+  // ---------- public land ----------
+  // One layer built from the state's and federal agencies' public-land maps: DNR land (owned, easements,
+  // leases), county and national forests, state trust land, federal refuges and production areas, national
+  // park land, local parks, land leased for public hunting, and Managed Forest Law land enrolled as open.
+  // Each piece carries whether it's open to hunting: "yes", "part" (some of it, or rules vary: check), or
+  // "no". Fetched for each zoom-11 square on screen (about 10 miles across), kept in Recent like the parcels.
+  const PL_ZOOM = 11, PL_MIN = 10;
+  const DNRM = "https://dnrmaps.wi.gov/arcgis/rest/services", DNRM2 = "https://dnrmaps.wi.gov/arcgis2/rest/services";
+  const AGOL = "https://services5.arcgis.com/Ul9AyFFeFTjf08DW/arcgis/rest/services";
+  const PUB = `${DNRM}/LF_DML/LF_DNR_PUBLIC_LAND_WTM_Ext/MapServer`, DML = `${DNRM}/LF_DML/LF_DNR_MGD_PROP_WTM_Ext/MapServer`;
+  // DNR access text reads "Open to …. Closed to …"; hunting is open when it's in the first half.
+  const dnrHunt = t => /hunting/i.test(String(t || "").split(/closed/i)[0]) ? "yes" : "no";
+  const tidyName = t => String(t || "").trim().toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase());
+  const PL_SOURCES = [
+    { key: "dnr", url: `${DML}/2`, fields: "PROP_NAME,LOCAL_NAME_LABEL,PUBLIC_ACCESS,RE_INFO_URL",
+      make: a => ({ name: a.LOCAL_NAME_LABEL || a.PROP_NAME, who: "Wisconsin DNR land", hunt: dnrHunt(a.PUBLIC_ACCESS), note: a.PUBLIC_ACCESS, url: a.RE_INFO_URL }) },
+    { key: "dnre", url: `${DML}/3`, fields: "PROP_NAME,LOCAL_NAME_LABEL,PUBLIC_ACCESS,RE_INFO_URL",
+      make: a => ({ name: a.LOCAL_NAME_LABEL || a.PROP_NAME, who: "DNR public access easement", hunt: dnrHunt(a.PUBLIC_ACCESS), note: a.PUBLIC_ACCESS, url: a.RE_INFO_URL }) },
+    { key: "dnrl", url: `${DML}/4`, fields: "PROP_NAME,LOCAL_NAME_LABEL,PUBLIC_ACCESS,RE_INFO_URL",
+      make: a => ({ name: a.LOCAL_NAME_LABEL || a.PROP_NAME, who: "Land leased by the DNR", hunt: dnrHunt(a.PUBLIC_ACCESS), note: a.PUBLIC_ACCESS, url: a.RE_INFO_URL }) },
+    { key: "cf", url: `${PUB}/0`, fields: "FR_PROP_NAME",
+      make: a => ({ name: a.FR_PROP_NAME, who: "County forest", hunt: "yes", note: "Open to hunting under the county forest's rules." }) },
+    { key: "bcpl", url: `${PUB}/1`, fields: "PLSS_DTRSQQ_CODE",
+      make: () => ({ name: "State trust land", who: "Board of Commissioners of Public Lands", hunt: "yes", note: "Open to public hunting, fishing, trapping and hiking." }) },
+    // Federal: only land the government owns outright (not easements on private ground, not farm-agency interests).
+    { key: "fws", url: `${PUB}/2`, fields: "ORGNAME,RSL_TYPE", where: "INTTYPE1='O' AND RSL_TYPE IN ('NWR','WPA','COORD')",
+      make: a => ({ name: tidyName(a.ORGNAME), who: "US Fish & Wildlife Service", hunt: a.RSL_TYPE === "NWR" ? "part" : "yes",
+        note: a.RSL_TYPE === "NWR" ? "Parts of refuges are closed to hunting. Check the refuge's hunting rules." : "Waterfowl production areas are open to hunting." }) },
+    { key: "nps", url: `${PUB}/3`, fields: "PROP_NAME",
+      make: a => ({ name: a.PROP_NAME, who: "National Park Service", hunt: "part", note: "Hunting is allowed in parts of it. Check the park's rules." }) },
+    { key: "usfs", url: `${PUB}/4`, fields: "NAME1",
+      make: a => ({ name: a.NAME1 || "National forest", who: "US Forest Service", hunt: "yes", note: "Open to hunting except where posted." }) },
+    { key: "park", url: `${PUB}/5`, fields: "PROP_NAME,COUNTY_NAME",
+      make: a => ({ name: a.PROP_NAME, who: "Local park", hunt: "no", note: "Parks are generally closed to hunting." }) },
+    { key: "crl", url: `${PUB}/6`, fields: "PROP_NAME,OWNER_DESC",
+      make: a => ({ name: a.PROP_NAME, who: "Conservation land", hunt: "part", note: "Rules vary. Check with the owner." }) },
+    { key: "vpa", url: `${DNRM}/WM_VPA/WM_VPA_HUNT_LEASE_LAND_WTM/MapServer/0`, fields: "COUNTY_NAME,PROPERTY_ACRE_AMT,PROGRAM,PDF_MAP",
+      make: a => ({ name: `${tidyName(a.COUNTY_NAME)} County hunting lease`, who: "Private land leased for public hunting", hunt: "yes",
+        note: "Open to public hunting. Stay inside the boundary; the land around it is private.", url: a.PDF_MAP }) },
+  ];
+  // Closed and restricted areas inside public land (refuges, closed seasons), drawn red in the hunting view.
+  const CLOSED_URL = `${DNRM2}/WM_PROP_MGMT/WM_CLOSED_RESTRICTED_AREAS_WTM_Ext/MapServer/0`;
+  // Managed Forest Law: the public map has a point per enrolled forty (ACCESS O open, C closed, B some of
+  // each); the forty's outline comes from the state's quarter-quarter map, which shares the code.
+  const MFL_PTS = `${AGOL}/X13661_FR_GIS_TAXLAW_PT_SV/FeatureServer/0`, QQ = `${AGOL}/PLSS_Quarter_Quarters/FeatureServer/0`;
+
+  async function arcQuery(url, params, host = "dnr", geom = true) {
+    const q = new URLSearchParams({ outSR: 4326, f: "geojson", geometryPrecision: 5, maxAllowableOffset: .0001, returnGeometry: String(geom), ...params });
+    const res = await gently(host, () => q.toString().length > 1800 ? fetch(`${url}/query`, { method: "POST", body: q }) : fetch(`${url}/query?${q}`));
+    const j = await res.json();
+    if (!j.features) throw new Error("no features");
+    return geom ? j.features.filter(f => f.geometry) : j.features;
+  }
+  async function mflOpen(box, land) {
+    const pts = await arcQuery(MFL_PTS, { ...box, where: "ACCESS IN ('O','B')", outFields: "DTRSQQ_CO,ACCESS,AC_OP_PLS" }, "agol", false);
+    const by = new Map();                      // forty's code -> { open acres, some closed }
+    for (const { properties: a } of pts) {
+      const c = String(a.DTRSQQ_CO), o = by.get(c) || { open: 0, some: false };
+      o.open += a.AC_OP_PLS || 0; o.some ||= a.ACCESS === "B"; by.set(c, o);
+    }
+    const codes = [...by.keys()];
+    for (let i = 0; i < codes.length; i += 150) {
+      const where = `PLSS_DTRSQ IN (${codes.slice(i, i + 150).map(c => `'${c.replace(/\D/g, "")}'`).join(",")})`;
+      for (const f of await arcQuery(QQ, { where, outFields: "PLSS_DTRSQ" }, "agol")) {
+        const c = String(f.properties.PLSS_DTRSQ), o = by.get(c);
+        if (!o) continue;
+        land.push({ type: "Feature", geometry: f.geometry, properties: { id: `mfl:${c}`, name: "Managed Forest Law land",
+          who: "Private land enrolled open to the public", hunt: o.some ? "part" : "yes",
+          note: o.some ? `About ${Math.round(o.open)} acres of this forty are open, and the map can't show which part. Go by the owner's signs.`
+                       : "Open to hunting, fishing, hiking, sightseeing and cross-country skiing, on foot." } });
+      }
+    }
+  }
+  const plSquares = new Map(), plById = new Map();
+  async function plSquare(x, y) {
+    const key = `${x}/${y}`;
+    if (plSquares.has(key)) return plSquares.get(key);
+    const ck = tileKey("publand", PL_ZOOM, x, y), hit = await fromPhone(ck);
+    let out = null;
+    if (hit) out = JSON.parse(await hit.text());
+    else if (navigator.onLine) {
+      const n = 2 ** PL_ZOOM, lon = i => i / n * 360 - 180, lat = j => Math.atan(Math.sinh(Math.PI * (1 - 2 * j / n))) * 180 / Math.PI;
+      const box = { geometry: `${lon(x)},${lat(y + 1)},${lon(x + 1)},${lat(y)}`, geometryType: "esriGeometryEnvelope", inSR: 4326, spatialRel: "esriSpatialRelIntersects" };
+      try {
+        const land = [], closed = [];
+        await Promise.all([
+          ...PL_SOURCES.map(async src => {
+            for (const f of await arcQuery(src.url, { ...box, where: src.where || "1=1", outFields: `OBJECTID,${src.fields}` }))
+              land.push({ type: "Feature", geometry: f.geometry, properties: { id: `${src.key}:${f.id ?? f.properties.OBJECTID}`, ...src.make(f.properties) } });
+          }),
+          arcQuery(CLOSED_URL, { ...box, where: "1=1", outFields: "OBJECTID,PROP_NAME,PROP_NAME_LABEL,RESTRICTIONS,EXCEPTIONS,CLOSED,PUBLIC_ENTRY,PROP_URL" }).then(fs => fs.forEach(f => {
+            const a = f.properties;
+            closed.push({ type: "Feature", geometry: f.geometry, properties: { id: `closed:${f.id ?? a.OBJECTID}`, name: a.PROP_NAME_LABEL || a.PROP_NAME,
+              what: a.RESTRICTIONS, when: a.CLOSED, entry: a.PUBLIC_ENTRY, more: a.EXCEPTIONS, url: a.PROP_URL } });
+          })),
+          mflOpen(box, land),
+        ]);
+        out = { land, closed };
+        savePhone(ck, JSON.stringify(out), "application/json").catch(() => {});
+      } catch { return null; }                 // try again next time the map moves
+    }
+    if (out) plSquares.set(key, out);
+    return out;
+  }
+  let plBusy = false, plAgain = false;
+  async function plRefresh() {
+    if (!ready || !prefs.land || map.getZoom() < PL_MIN - .01) return;
+    if (plBusy) { plAgain = true; return; }
+    plBusy = true;
+    try {
+      const n = 2 ** PL_ZOOM, bd = map.getBounds();
+      const tx = lon => Math.floor((lon + 180) / 360 * n), ty = lat => Math.floor((1 - Math.asinh(Math.tan(lat * Math.PI / 180)) / Math.PI) / 2 * n);
+      const x0 = tx(bd.getWest()), x1 = tx(bd.getEast()), y0 = ty(bd.getNorth()), y1 = ty(bd.getSouth());
+      if ((x1 - x0 + 1) * (y1 - y0 + 1) > 24) return;
+      const jobs = [];
+      for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) jobs.push(plSquare(x, y));
+      await Promise.all(jobs);
+      const seen = new Set(), land = [], closed = [];
+      for (const sq of plSquares.values()) for (const [list, into] of [[sq.land, land], [sq.closed, closed]]) for (const f of list) {
+        if (seen.has(f.properties.id)) continue;
+        seen.add(f.properties.id); plById.set(f.properties.id, f.properties); into.push(f);
+      }
+      map.getSource("pland").setData(fc(land));
+      map.getSource("closed").setData(fc(closed));
+    } finally {
+      plBusy = false;
+      if (plAgain) { plAgain = false; plRefresh(); }
+    }
+  }
+  map.on("moveend", plRefresh);
 
   // ---------- the bottom card ----------
   function openCard(html, cls = "") {
@@ -620,7 +767,7 @@
     const ourRow = (state.parcels || []).find(p => p.id === id);
     const x = ourRow || wpById.get(id), chip = ui.querySelector(".m-pinfo");
     if (!x) return parcelOff();
-    parcelOn = id;
+    parcelOn = id; landPick("");
     map.setFilter("parcel-pick", ["==", ["get", "id"], ourRow ? id : ""]);
     map.setFilter("wp-pick", ["==", ["get", "id"], ourRow ? "" : id]);
     chip.hidden = false;
@@ -638,7 +785,33 @@
   function parcelOff() {
     parcelOn = null;
     ui.querySelector(".m-pinfo").hidden = true;
-    if (ready) { map.setFilter("parcel-pick", ["==", ["get", "id"], ""]); map.setFilter("wp-pick", ["==", ["get", "id"], ""]); }
+    if (ready) { map.setFilter("parcel-pick", ["==", ["get", "id"], ""]); map.setFilter("wp-pick", ["==", ["get", "id"], ""]); landPick(""); }
+  }
+  // A tapped piece of public land, or a closed area, in the same chip.
+  function landPick(id) {
+    if (!ready) return;
+    map.setFilter("pl-pick", ["==", ["get", "id"], id.startsWith("closed:") ? "" : id]);
+    map.setFilter("closed-pick", ["==", ["get", "id"], id.startsWith("closed:") ? id : ""]);
+  }
+  const HUNT_SAYS = { yes: "Open to hunting", part: "Hunting: check the rules", no: "Closed to hunting" };
+  function landInfo(id, open = false) {
+    const x = plById.get(id), chip = ui.querySelector(".m-pinfo");
+    if (!x) return parcelOff();
+    parcelOn = id;
+    map.setFilter("parcel-pick", ["==", ["get", "id"], ""]); map.setFilter("wp-pick", ["==", ["get", "id"], ""]);
+    landPick(id);
+    const isClosed = id.startsWith("closed:");
+    const head = isClosed ? (x.entry === "N" ? "Closed area · no entry" : "Closed or restricted area")
+      : prefs.land === "hunt" ? HUNT_SAYS[x.hunt] : x.who;
+    const link = x.url && /^https:\/\//.test(x.url) ? `<br><a href="${esc(x.url)}" target="_blank" rel="noopener">Property map and rules</a>` : "";
+    const bodyHtml = isClosed
+      ? `<b>${esc(x.name || "Closed area")}</b><br>${esc(x.what || "Restrictions apply")}${x.when ? ` · ${esc(x.when)}` : ""}${x.entry === "L" ? "<br>Limited public entry" : x.entry === "N" ? "<br>No public entry" : ""}${x.more ? `<br>${esc(x.more)}` : ""}${link}`
+      : `<b>${esc(x.name || x.who)}</b><br>${esc(x.who)}${x.note ? `<br>${esc(x.note)}` : ""}${link}`;
+    chip.hidden = false;
+    chip.classList.toggle("open", open);
+    chip.innerHTML = `<button type="button" class="m-pi-head"><span class="m-i">i</span>${esc(head)}</button>` + (open ? `
+      <div class="m-pi-body">${bodyHtml}<br><span class="m-pi-fine">From the state's and agencies' public maps. Signs and the regulations rule.</span></div>` : "");
+    chip.querySelector(".m-pi-head").addEventListener("click", () => landInfo(id, !open));
   }
 
   // Taps on the map itself: a parcel, or nothing (close the card).
@@ -647,6 +820,8 @@
     if (adding || picking) return;
     closeCard();
     if (mw.on) { parcelOff(); return mwReadout(e.lngLat); }
+    const land = prefs.land && ((prefs.land === "hunt" && map.queryRenderedFeatures(e.point, { layers: ["closed-fill"] })[0]) || map.queryRenderedFeatures(e.point, { layers: ["pl-fill"] })[0]);
+    if (land) return land.properties.id !== parcelOn ? landInfo(land.properties.id) : parcelOff();
     const hit = prefs.show.parcels && (map.queryRenderedFeatures(e.point, { layers: ["parcel-fill"] })[0] || map.queryRenderedFeatures(e.point, { layers: ["wp-fill"] })[0]);
     if (hit && hit.properties.id !== parcelOn) parcelInfo(hit.properties.id);
     else parcelOff();
@@ -782,6 +957,13 @@
         <button type="button" data-show="contours" aria-pressed="${prefs.contours}">Contours</button>
         ${[["parcels", "Parcels"], ["cameras", "Cameras"], ["spots", "Spots"], ["trees", "Sits"]].map(([k, l]) => `<button type="button" data-show="${k}" aria-pressed="${!!prefs.show[k]}">${l}</button>`).join("")}
       </div>
+      <p class="label">Public Land</p>
+      <div class="chips m-show">
+        ${[["public", "Public Land"], ["hunt", "Open to Hunting"]].map(([k, l]) => `<button type="button" data-land="${k}" aria-pressed="${prefs.land === k}">${l}</button>`).join("")}
+      </div>
+      ${prefs.land === "hunt" ? `<p class="m-sub m-legend-land"><i style="background:#FFD23F"></i>Open <i style="background:#B98CFF"></i>Partly, or check the rules <i style="background:#FF5A47"></i>Closed or restricted</p>`
+        : prefs.land ? `<p class="m-sub m-legend-land"><i style="background:#4FA3E0"></i>Land the public can use: state, county, federal, open MFL and leased hunting land</p>` : ""}
+      ${prefs.land ? `<p class="m-sub">Shows from about 10 miles across, closer in. From the state's and agencies' maps: posted signs and the regulations have the last word.</p>` : ""}
       <p class="label">Offline</p>
       <div class="m-dl">
         <p class="m-sub" id="mDlNote">${here ? `${esc(prop())} saved ${fmtDay(new Date(here.at).toISOString())} · ${(here.bytes / 1e6).toFixed(0)} MB. Works with no signal.` : `Save ${esc(prop())} on this phone for no signal: about ${Math.max(1, Math.round(est.reduce((n, t) => n + (LAYERS[t[0]].px ? 0.07 : LAYERS[t[0]].dem ? 0.1 : 0.015), 0)))} MB. The leaf-off photos come slowly, so give it 10 to 20 minutes on Wi-Fi with the app open.`}</p>
@@ -795,6 +977,11 @@
       if (k === "contours") prefs.contours = !prefs.contours; else prefs.show[k] = !prefs.show[k];
       savePrefs(); applyLayers(); draw(); layersCard();
       if (k === "parcels") wpRefresh();
+    }));
+    el.querySelectorAll("[data-land]").forEach(x => x.addEventListener("click", () => {
+      prefs.land = prefs.land === x.dataset.land ? "" : x.dataset.land;
+      savePrefs(); applyLayers(); parcelOff(); layersCard(); plRefresh();
+      if (prefs.land && map.getZoom() < PL_MIN) toast("Zoom in to see public land");
     }));
     on(el, { download: () => download(prop()), forget: () => forget(prop()), clearRecent: () => clearRecent().then(() => { toast("Recently viewed map cleared"); layersCard(); }) });
     if (dl) showProgress();

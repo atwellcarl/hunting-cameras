@@ -136,3 +136,8 @@
 .m-picking .m-3d { display: none; }
 .m-recent { margin-top: 10px; font-size: 12px; }
 .m-recent .linkish { font-size: 12px; padding: 0; margin-left: 4px; }
+.m-legend-land { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.m-legend-land i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; opacity: .85; }
+.m-legend-land i:not(:first-child) { margin-left: 6px; }
+.m-pi-body a { color: var(--blaze); }
+.m-pi-fine { font-size: 11px; opacity: .8; }
