@@ -174,7 +174,7 @@ Rules the database enforces: only crew can read or write anything; viewers can't
 
 - **Home** is where it opens. Only the photo sections (Sort, Gallery, Disputes, Roster, Crew) load the photo list, the first time one is opened, so Sits works on a weak signal.
 - **Property filter** on Sort, Gallery, Disputes, Roster and Map: those screens work inside the chosen property. Sits lists both.
-- **Sits**: Start a sit (set, planned down, wind; GPS taken automatically), then Add Event for deer, other animals or a wind change, and I'm down. Past sits can be logged from notes. Each buck's page lists the sits he was seen on.
+- **Sits**: Pick a property at the top (every property, the ones added on the map too, with its count of sits) to see its sits; your own open sit stays on top whichever is picked. Start a sit (set, planned down, wind; GPS taken automatically), then Add Event for deer, other animals or a wind change, and I'm down. Past sits can be logged from notes. Each buck's page lists the sits he was seen on.
 - **Sort**: swipe right (buck) or left (not). Then "Seen him before?": pick from the book, **Compare** (his photos full screen with yours as an inset; swipe through him, tap the inset to swap), name a new buck, or **Can't ID him**.
 - **Disputes**: called out the moment they happen, with who disagrees, a switch button, and a comment thread. The deck skips settled photos and puts disputed ones first.
 - **Gallery**: photos nobody has named, one camera at a time, grouped by burst; Select (or long-press) to tag or pass several at once.

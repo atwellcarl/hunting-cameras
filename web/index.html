@@ -457,6 +457,12 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 .sitopen small { font: 12px/1.5 var(--mono); color: var(--muted); }
 .sitopen .btnrow .btn { flex: 1 1 auto; min-height: 44px; }
 .sitlist { display: flex; flex-direction: column; gap: 8px; }
+/* The Sits tab's property picker: as many across as fit, full names, wrapping to more rows (squarer
+   corners when there are more than two properties). */
+.sitprops { display: flex; flex-wrap: wrap; margin: 0 0 14px; }
+.sitprops.many { border-radius: 18px; }
+.sitprops button { flex: 1 1 auto; padding: 0 14px; white-space: nowrap; }
+body.nophotos .sitprops small { visibility: visible !important; }
 .sitrow { appearance: none; text-align: left; background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; color: var(--ink); cursor: pointer; display: flex; flex-direction: column; gap: 3px; }
 .sitrow b { font-weight: 600; }
 .sitrow small { font: 12px/1.45 var(--mono); color: var(--muted); }
@@ -3065,14 +3071,32 @@ function windClock(el, current, onPick, { variable = true, clearable = true } = 
 function renderSits() {
   const wrap = $("sits");
   if (state.mode === "loading") return wrap.replaceChildren();
-  const all = sitsHere();
-  const open = all.find(s => !s.down_at && s.hunter === state.myUid);
+  // Pick a property, see its sits. Every property is here, the ones added on the map too. Your own open
+  // sit stays on top whichever property is picked, so you can always get down.
+  const everyone = sitsHere(), here = state.property;
+  const open = everyone.find(s => !s.down_at && s.hunter === state.myUid);
+  const all = everyone.filter(s => s.property === here);
   wrap.replaceChildren();
+
+  const names = propertyNames(), picker = document.createElement("div");
+  picker.className = "proptoggle sitprops" + (names.length > 2 ? " many" : "");
+  picker.setAttribute("role", "group"); picker.setAttribute("aria-label", "Property");
+  names.forEach(p => {
+    const b = document.createElement("button");
+    b.type = "button"; b.setAttribute("aria-pressed", String(p === here));
+    b.innerHTML = "<span></span><small></small>";
+    const n = everyone.filter(s => s.property === p).length;
+    b.querySelector("span").textContent = p;
+    b.querySelector("small").textContent = n || "";
+    b.addEventListener("click", () => setProperty(p));
+    picker.append(b);
+  });
+  wrap.append(picker);
 
   const bar = document.createElement("div");
   bar.className = "sitbar";
   bar.innerHTML = `<p class="label" style="margin:0"></p><span class="btnrow"></span>`;
-  bar.querySelector("p").textContent = `${all.length} sit${all.length === 1 ? "" : "s"}`;
+  bar.querySelector("p").textContent = `${all.length} sit${all.length === 1 ? "" : "s"} at ${here}`;
   const add = (label, cls, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn " + cls; b.textContent = label; b.addEventListener("click", fn); bar.querySelector(".btnrow").append(b); };
   if (!open) add("Start a Sit", "", () => openSitForm());
   add("Log a Past Sit", "ghost", () => openSitForm(null, { past: true }));
@@ -3084,7 +3108,7 @@ function renderSits() {
     const planned = open.planned_down_at ? ` · planned down ${fmtWhen(open.planned_down_at, false)}` : "";
     const n = eventsOf(open.id).length;
     card.innerHTML = `<b></b><small></small><div class="btnrow"></div>`;
-    card.querySelector("b").textContent = `In the tree${open.spot ? " · " + open.spot : ""}`;
+    card.querySelector("b").textContent = `In the tree${open.property !== here ? " at " + open.property : ""}${open.spot ? " · " + open.spot : ""}`;
     card.querySelector("small").textContent = `Set ${fmtWhen(open.set_at, false)}${planned} · wind ${open.wind_dir || "—"} · ${n} event${n === 1 ? "" : "s"}`;
     const row = card.querySelector(".btnrow");
     [["Open Sit", "", () => openSitView(open.id)], ["I'm Down", "ghost", () => markDown(open.id)]].forEach(([l, c, f]) => {
@@ -3099,7 +3123,7 @@ function renderSits() {
   all.filter(s => s !== open).forEach(s => list.append(sitRow(s)));
   if (!all.length) {
     const e = document.createElement("div"); e.className = "empty";
-    e.textContent = "No sits logged here yet. Start one when you're set, or log a past sit from your notes.";
+    e.textContent = `No sits at ${here} yet. Start one when you're set, or log a past sit from your notes.`;
     list.append(e);
   }
   wrap.append(list);
@@ -3115,7 +3139,7 @@ function sitRow(s) {
   const wx = weatherAt(s.id, s.set_at);
   b.innerHTML = `<b></b><small></small><small></small>`;
   const [t, line1, line2] = b.children;
-  t.textContent = `${fmtDay(s.set_at)} · ${sitPart(s)} · ${s.property}${s.spot ? " · " + s.spot : ""}`;
+  t.textContent = `${fmtDay(s.set_at)} · ${sitPart(s)}${s.spot ? " · " + s.spot : ""}`;     // the list is one property's
   line1.innerHTML = "";
   line1.append(`${s.hunter_name || "Someone"} · ${fmtWhen(s.set_at, false)}–`);
   if (s.down_at) {
