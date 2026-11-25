@@ -947,7 +947,14 @@ body:not([data-tab="sort"]) :is(.count, .bar) { visibility: hidden; }
 let ALL_CARDS = [];   // every photo, both properties
 let CARDS = [];       // photos on the current property; every screen works from these
 let CARD = {};        // lookup by id across both properties
-const PROPERTIES = ["Stoddard", "North Ridge"];
+// The camera properties: photos and bucks belong to one of these. The crew can add more properties on the
+// map (014_claim_properties.sql) for sits and spots; those come from the properties table.
+const PHOTO_PROPERTIES = ["Stoddard", "North Ridge"];
+function propertyNames() {
+  const rest = Object.values(state.properties || {}).filter(r => !PHOTO_PROPERTIES.includes(r.name))
+    .sort((a, b) => (a.created_at || "").localeCompare(b.created_at || "") || a.name.localeCompare(b.name)).map(r => r.name);
+  return [...PHOTO_PROPERTIES, ...rest];
+}
 const POINT_CHOICES = [null, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const CONFIDENCE = [[1, "Guess"], [2, "Leaning"], [3, "Probably"], [4, "Pretty sure"], [5, "Certain"]];
 const URL_TTL = 6 * 60 * 60; // signed photo links last 6 hours
@@ -977,6 +984,7 @@ function setProperty(p) {
   if (p === state.property) return;
   state.property = p;
   store.set("buckbook-property", p);
+  if (PHOTO_PROPERTIES.includes(p)) store.set("buckbook-photo-property", p);
   CARDS = ALL_CARDS.filter(c => c.property === p);
   forcedTop = null; renderedTop = null; nameQueue = null; knownMine = null;
   if (sheetState) closeSheet();
@@ -993,7 +1001,7 @@ function renderPropToggle() {
 }
 function fillPropToggle(el) {
   el.replaceChildren();
-  PROPERTIES.forEach(p => {
+  PHOTO_PROPERTIES.forEach(p => {
     const b = document.createElement("button");
     b.type = "button";
     b.setAttribute("aria-pressed", String(p === state.property));
@@ -1009,7 +1017,7 @@ const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
 };
-state.property = PROPERTIES.includes(store.get("buckbook-property")) ? store.get("buckbook-property") : PROPERTIES[0];
+state.property = store.get("buckbook-property") || PHOTO_PROPERTIES[0];   // checked against the list once it loads (sync)
 
 // ---------- helpers ----------
 function fmtWhen(iso, withDate = true) {
@@ -1189,11 +1197,14 @@ async function sync() {
     // Sits (010_sits.sql): admins and users only; viewers get nothing back.
     const [st, se, sw, props, sm] = await Promise.all(["sits", "sit_events", "sit_weather", "properties", "sit_event_members"]
       .map(t => fetchAll(t, q => t === "sit_weather" ? q.order("hour") : t === "sits" ? q.order("set_at") : t === "sit_events" ? q.order("created_at") : q).catch(() => [])));
-    // The map (013_map.sql): everyone signed in sees cameras, spots and parcel lines.
-    const [cs, spots, parcels] = await Promise.all([
+    // The map (013_map.sql): everyone signed in sees cameras, spots and parcel lines. Parcels are the big
+    // one, so they're fetched again only when a property is added or its parcels change (parcels_at, 014).
+    const sig = props.map(r => `${r.name}:${r.parcels_at || ""}`).sort().join("|");
+    const [cs, spots, freshParcels] = await Promise.all([
       fetchAll("camera_spots").catch(() => []), fetchAll("spots").catch(() => []),
-      state.parcels?.length ? Promise.resolve(state.parcels) : fetchAll("parcels").catch(() => []),
+      state.parcels?.length && state.parcelsSig === sig ? Promise.resolve(state.parcels) : fetchAll("parcels").catch(() => null),
     ]);
+    const parcels = freshParcels || state.parcels || [], parcelsSig = freshParcels ? sig : state.parcelsSig;   // a failed fetch tries again next sync
     const cm = photos ? await fetchAll("comments", q => q.order("at")) : [];
     const comments = {};
     cm.forEach(r => (comments[r.card_id] ||= []).push(r));
@@ -1227,8 +1238,9 @@ async function sync() {
     Object.assign(state, { votes, bucks, users, consensus, scores, comments, isAdmin, crewById, proposals,
       sits: Object.fromEntries(st.map(r => [r.id, r])), sitEvents, sitWeather,
       properties: Object.fromEntries(props.map(r => [r.name, r])), mode: "shared",
-      cameraSpots: cs, spots: Object.fromEntries(spots.map(r => [r.id, r])), parcels });
+      cameraSpots: cs, spots: Object.fromEntries(spots.map(r => [r.id, r])), parcels, parcelsSig });
     applyOutbox();
+    if (props.length && !propertyNames().includes(state.property)) setProperty(PHOTO_PROPERTIES[0]);   // a property that's gone
     saveOfflineCopy();
     renderAll();
     if (photos) noticeDisputes();
@@ -3219,7 +3231,7 @@ function openSitForm(id = null, opts = {}) {
 }
 function syncSitForm() {
   const pr = $("sitProp"); pr.replaceChildren();
-  PROPERTIES.forEach(name => {
+  propertyNames().forEach(name => {
     const b = document.createElement("button"); b.type = "button"; b.role = "radio"; b.textContent = name;
     b.setAttribute("aria-selected", String(sitForm.property === name));
     b.addEventListener("click", () => { sitForm.property = name; sitForm.propPicked = true; syncSitForm(); });
@@ -3725,7 +3737,7 @@ async function flushOutbox() {
 function saveOfflineCopy() {
   try {
     const keep = ["bucks", "users", "crewById", "isAdmin", "proposals", "sits", "sitEvents", "sitWeather", "properties", "me", "myUid",
-      "cameraSpots", "spots", "parcels"];
+      "cameraSpots", "spots", "parcels", "parcelsSig"];
     localStorage.setItem(OFFLINE_COPY, JSON.stringify({ at: Date.now(), name: state.crewById?.[state.myUid] || null,
       viewer: document.body.classList.contains("role-viewer"), state: Object.fromEntries(keep.map(k => [k, state[k]])) }));
   } catch {}
@@ -3783,6 +3795,9 @@ $("homeLink").addEventListener("click", () => showTab("home"));
 // ---------- tabs & keys ----------
 function showTab(name) {
   document.body.dataset.tab = name;
+  // The photo screens are about the camera properties; coming from a map-only property, go back to the last one.
+  if (["sort", "gallery", "disputes", "roster"].includes(name) && !PHOTO_PROPERTIES.includes(state.property))
+    setProperty(PHOTO_PROPERTIES.includes(store.get("buckbook-photo-property")) ? store.get("buckbook-photo-property") : PHOTO_PROPERTIES[0]);
   if (PHOTO_TABS.includes(name) && !state.photosLoaded) ensurePhotos().then(() => { if (state.photosLoaded && !$("view-" + name).hidden) renderAll(); });
   document.querySelectorAll(".tabbar button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
   document.querySelectorAll(".view").forEach(v => v.hidden = v.id !== "view-" + name);

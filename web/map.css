@@ -150,3 +150,6 @@
 .m-legend-land i:not(:first-child) { margin-left: 6px; }
 .m-pi-body a { color: var(--blaze); }
 .m-pi-fine { font-size: 11px; opacity: .8; }
+/* Picking a property's parcels: only the card, the map and the parcel lines. */
+.m-claiming .m-tools, .m-claiming .m-pinfo, .m-claiming .m-wpill { display: none; }
+.m-claiming .m-pin { pointer-events: none; opacity: .5; }

@@ -282,7 +282,7 @@
   }
   style.layers.unshift({ id: "bg", type: "background", paint: { "background-color": "#1b2118" } });
   const fc = features => ({ type: "FeatureCollection", features });
-  for (const id of ["parcels", "wparcels", "pland", "closed", "cones", "paths", "mwind", "mflow"]) style.sources[id] = { type: "geojson", data: fc([]) };
+  for (const id of ["parcels", "wparcels", "claim", "propnames", "pland", "closed", "cones", "paths", "mwind", "mflow"]) style.sources[id] = { type: "geojson", data: fc([]) };
   // Modeled wind arrows: every 160 m zoomed out, 80 m, then 40 m close in. Color is speed; the scale runs to
   // the run's fastest wind above the trees, so ground level reads as calmer on the same scale.
   const mwColor = ["interpolate", ["linear"], ["get", "v"], 0, "#3b0f70", 5, "#8c2981", 10, "#de4968", 15, "#fe9f6d", 22, "#fcfdbf"];
@@ -301,9 +301,14 @@
     { id: "wp-fill", type: "fill", source: "wparcels", minzoom: WP_ZOOM, paint: { "fill-color": "#fff", "fill-opacity": 0 } },
     { id: "wp-line", type: "line", source: "wparcels", minzoom: WP_ZOOM, paint: { "line-color": "#ffffff", "line-opacity": .45, "line-width": .9 } },
     { id: "wp-pick", type: "line", source: "wparcels", filter: ["==", ["get", "id"], ""], paint: { "line-color": "#ffffff", "line-width": 3, "line-dasharray": [2, 1] } },
-    { id: "parcel-fill", type: "fill", source: "parcels", paint: { "fill-color": "#FF6B1A", "fill-opacity": ["case", ["get", "ours"], .07, 0] } },
+    // The property on screen: its parcels bold orange, its neighbors white. Every other property's parcels
+    // in a thinner orange, so you can see where the properties sit from each other.
+    { id: "parcel-fill", type: "fill", source: "parcels", paint: { "fill-color": "#FF6B1A", "fill-opacity": ["case", ["!", ["get", "ours"]], 0, ["get", "here"], .07, .16] } },
     { id: "parcel-line", type: "line", source: "parcels", filter: ["!", ["get", "ours"]], paint: { "line-color": "#ffffff", "line-opacity": .55, "line-width": 1 } },
-    { id: "ours-line", type: "line", source: "parcels", filter: ["get", "ours"], paint: { "line-color": "#FF6B1A", "line-width": 3 } },
+    { id: "ours-line", type: "line", source: "parcels", filter: ["get", "ours"], paint: { "line-color": "#FF6B1A", "line-width": ["case", ["get", "here"], 3, 2], "line-opacity": ["case", ["get", "here"], 1, .85] } },
+    // Parcels being picked for a property.
+    { id: "claim-fill", type: "fill", source: "claim", paint: { "fill-color": "#FF6B1A", "fill-opacity": .38 } },
+    { id: "claim-line", type: "line", source: "claim", paint: { "line-color": "#FFB27A", "line-width": 2.5 } },
     { id: "parcel-pick", type: "line", source: "parcels", filter: ["==", ["get", "id"], ""], paint: { "line-color": "#ffffff", "line-width": 3, "line-dasharray": [2, 1] } },
     { id: "cones", type: "fill", source: "cones", paint: { "fill-color": "#FF6B1A", "fill-opacity": .22 } },
     { id: "cone-edge", type: "line", source: "cones", paint: { "line-color": "#FF6B1A", "line-opacity": .7, "line-width": 1 } },
@@ -336,6 +341,14 @@
   ];
   for (const L of PLACE_LAYERS) style.layers.push({ ...L, type: "symbol", source: "places",
     paint: { "text-color": "#ffffff", "text-halo-color": "rgba(0,0,0,.85)", "text-halo-width": 1.4, "text-opacity": L.id === "pn-county" ? .75 : 1 } });
+  // Each property's name on its land, and a dot for it zoomed out: the properties in relation to each other.
+  style.layers.push(
+    { id: "prop-dot", type: "circle", source: "propnames", maxzoom: 12,
+      paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 4, 12, 6], "circle-color": "#FF6B1A", "circle-stroke-color": "#fff", "circle-stroke-width": 1.5 } },
+    { id: "prop-label", type: "symbol", source: "propnames", maxzoom: 13,
+      layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Medium"], "text-size": ["interpolate", ["linear"], ["zoom"], 6, 13, 14, 16],
+        "text-offset": ["step", ["zoom"], ["literal", [0, 1.2]], 12, ["literal", [0, 0]]], "text-allow-overlap": true, "symbol-sort-key": 0 },
+      paint: { "text-color": "#FFB27A", "text-halo-color": "rgba(0,0,0,.9)", "text-halo-width": 1.6 } });
   let placesP = null;
   function loadPlaces() {
     placesP ||= fetch("places.json").then(r => r.json()).then(rows => map.getSource("places").setData(fc(rows.map(([n, lon, lat, pop, k]) =>
@@ -420,7 +433,9 @@
     map.setPaintProperty("contours", "raster-opacity", light ? .45 : .6);
     for (const id of ["parcel-line", "wp-line"]) map.setPaintProperty(id, "line-color", light ? "#2b2f2a" : "#ffffff");
     for (const id of ["parcel-pick", "wp-pick"]) map.setPaintProperty(id, "line-color", light ? "#000000" : "#ffffff");
-    for (const id of ["parcel-fill", "parcel-line", "ours-line", "parcel-pick", "wp-fill", "wp-line", "wp-pick"]) map.setLayoutProperty(id, "visibility", prefs.show.parcels ? "visible" : "none");
+    for (const id of ["parcel-fill", "parcel-line", "ours-line", "parcel-pick", "wp-fill", "wp-line", "wp-pick"]) map.setLayoutProperty(id, "visibility", prefs.show.parcels || claim ? "visible" : "none");
+    map.setPaintProperty("wp-line", "line-opacity", claim ? .85 : .45);          // bolder while picking parcels
+    map.setPaintProperty("wp-line", "line-width", claim ? 1.4 : .9);
     // The topo map has its own names; over the photos white names, over the light terrain shading dark ones.
     for (const L of PLACE_LAYERS) {
       map.setLayoutProperty(L.id, "visibility", prefs.base === "topo" ? "none" : "visible");
@@ -452,6 +467,17 @@
     return el;
   }
   let me = null, meMarker = null, watch = null;
+  let claim = null;              // picking a property's parcels: { prop (editing one) or null (new), name, sel, orig }
+  let drawnIds = new Set();      // parcel ids drawn from our table, so the statewide layer doesn't draw them twice
+  // The middle of a property's own parcels (else its map box).
+  function propCenter(name) {
+    let w = 180, s = 90, e = -180, n = -90;
+    (state.parcels || []).filter(q => q.property === name && q.ours).forEach(q => JSON.stringify(q.geom.coordinates).match(/-?\d+\.?\d*/g).forEach((v, i) => {
+      v = +v; if (i % 2) { s = Math.min(s, v); n = Math.max(n, v); } else { w = Math.min(w, v); e = Math.max(e, v); }
+    }));
+    if (w > e) { const bx = boxOf(name); if (!bx) return null; [[w, s], [e, n]] = bx; }
+    return [(w + e) / 2, (s + n) / 2];
+  }
   let lens = null;               // { dir } while the wind tool is on: sits in that wind light up
   let picked = null;             // what the card is showing, so a redraw keeps it
   function draw() {
@@ -459,8 +485,14 @@
     markers.forEach(m => m.remove()); markers = [];
     const p = prop();
     // parcels
-    map.getSource("parcels").setData(fc((state.parcels || []).filter(x => x.property === p).map(x => ({
-      type: "Feature", geometry: x.geom, properties: { id: x.id, ours: !!x.ours } }))));
+    const shown = (state.parcels || []).filter(x => x.property === p || x.ours);
+    drawnIds = new Set(shown.map(x => x.id));
+    map.getSource("parcels").setData(fc(shown.map(x => ({
+      type: "Feature", geometry: x.geom, properties: { id: `${x.property}|${x.id}`, ours: !!x.ours, here: x.property === p } }))));
+    map.getSource("propnames").setData(fc(propertyNames().map(name => {
+      const c = propCenter(name);
+      return c && { type: "Feature", geometry: { type: "Point", coordinates: c }, properties: { name, here: name === p } };
+    }).filter(Boolean)));
     if (prefs.show.cameras) cameras(p).forEach(c => marker([c.lon, c.lat], "m-cam", svg("camera"), c.camera, () => pick({ type: "camera", id: c.camera })));
     if (prefs.show.spots) spots(p).forEach(s => marker([s.lon, s.lat], "m-spot k-" + s.kind, svg(s.kind), s.label || kindLabel(s.kind), () => pick({ type: "spot", id: s.id })));
     const ts = trees(p);
@@ -481,7 +513,7 @@
   // (about a mile across) once zoomed in that far, and kept on the phone like the map pictures. Owner names
   // and acres are public record; they show only when a parcel is tapped.
   const WP_URL = "https://services3.arcgis.com/n6uYoouQZW75n5WI/ArcGIS/rest/services/Wisconsin_Statewide_Parcels_DB/FeatureServer/0/query";
-  const wpSquares = new Map(), wpById = new Map();          // "x/y" -> features; parcel id -> its properties
+  const wpSquares = new Map(), wpById = new Map(), wpGeom = new Map();          // "x/y" -> features; parcel id -> its properties
   async function wpSquare(x, y) {
     const key = `${x}/${y}`;
     if (wpSquares.has(key)) return wpSquares.get(key);
@@ -508,7 +540,7 @@
   }
   let wpBusy = false, wpAgain = false;
   async function wpRefresh() {
-    if (!ready || !prefs.show.parcels || map.getZoom() < WP_ZOOM - .01) return;
+    if (!ready || !(prefs.show.parcels || claim) || map.getZoom() < WP_ZOOM - .01) return;
     if (wpBusy) { wpAgain = true; return; }
     wpBusy = true;
     try {
@@ -518,10 +550,11 @@
       if ((x1 - x0 + 1) * (y1 - y0 + 1) > 30) return;              // a tilted view to the horizon: just the squares nearby
       const jobs = [];
       for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) jobs.push(wpSquare(x, y));
-      await Promise.all(jobs);
-      const ours = new Set((state.parcels || []).map(p => p.id)), seen = new Set(), feats = [];
+      if ((await Promise.all(jobs)).includes(null) && navigator.onLine) setTimeout(wpRefresh, 4000);   // a square that didn't come: try again
+      const seen = new Set(), feats = [];
       for (const list of wpSquares.values()) for (const f of list) {
-        if (seen.has(f.properties.id) || ours.has(f.properties.id)) continue;
+        wpGeom.set(f.properties.id, f.geometry);
+        if (seen.has(f.properties.id) || drawnIds.has(f.properties.id)) continue;
         seen.add(f.properties.id); wpById.set(f.properties.id, f.properties); feats.push(f);
       }
       map.getSource("wparcels").setData(fc(feats));
@@ -671,7 +704,7 @@
   function closeCard() {
     card.hidden = true; picked = null; cross.hidden = true; adding = null;
   }
-  ui.querySelector(".m-x").addEventListener("click", () => picking ? endPick(null) : closeCard());
+  ui.querySelector(".m-x").addEventListener("click", () => claim ? endClaim() : picking ? endPick(null) : closeCard());
   const fromYou = lngLat => me ? `<p class="m-away">${away(metres(me, lngLat))} ${WIND16[Math.round(bearing(me, lngLat) / 22.5) % 16]} of you</p>` : "";
   const btnRow = (...btns) => `<div class="m-btns">${btns.filter(Boolean).join("")}</div>`;
   const b = (act, label, cls = "") => `<button type="button" class="btn ${cls}" data-act="${act}">${esc(label)}</button>`;
@@ -793,23 +826,20 @@
   // A tapped parcel is outlined, with a small info chip at the bottom; tap the chip for owner and acres.
   let parcelOn = null;
   function parcelInfo(id, open = false) {
-    const ourRow = (state.parcels || []).find(p => p.id === id);
+    const ourRow = (state.parcels || []).find(p => `${p.property}|${p.id}` === id);
     const x = ourRow || wpById.get(id), chip = ui.querySelector(".m-pinfo");
+    const other = ourRow && ourRow.property !== prop() ? ourRow.property : null;
     if (!x) return parcelOff();
     parcelOn = id; landPick("");
     map.setFilter("parcel-pick", ["==", ["get", "id"], ourRow ? id : ""]);
     map.setFilter("wp-pick", ["==", ["get", "id"], ourRow ? "" : id]);
     chip.hidden = false;
     chip.classList.toggle("open", open);
-    chip.innerHTML = `<button type="button" class="m-pi-head"><span class="m-i">i</span>${ourRow ? (x.ours ? "Our ground" : "Neighbor") : "Parcel"}${x.acres ? ` · ${x.acres < 10 ? x.acres : Math.round(x.acres)} ac` : ""}</button>` + (open ? `
+    chip.innerHTML = `<button type="button" class="m-pi-head"><span class="m-i">i</span>${other ? esc(other) : ourRow ? (x.ours ? "Our ground" : "Neighbor") : "Parcel"}${x.acres ? ` · ${x.acres < 10 ? x.acres : Math.round(x.acres)} ac` : ""}</button>` + (open ? `
       <div class="m-pi-body"><b>${esc(x.owner || "Owner not listed")}</b>${x.owner2 ? `<br>${esc(x.owner2)}` : ""}<br>${x.acres ? `${x.acres} acres · ` : ""}Wisconsin parcel map
-      ${state.isAdmin && ourRow ? `<br><button type="button" class="linkish" data-act="ours">${x.ours ? "Not ours" : "Mark as ours"}</button>` : ""}</div>` : "");
+      ${other ? `<br><button type="button" class="linkish" data-act="go">Go to ${esc(other)}</button>` : ""}</div>` : "");
     chip.querySelector(".m-pi-head").addEventListener("click", () => parcelInfo(id, !open));
-    on(chip, { ours: async () => {
-      const { error } = await sb.from("parcels").update({ ours: !x.ours }).eq("id", x.id);
-      if (error) return toast(netError(error) ? "That needs signal." : friendly(error));
-      x.ours = !x.ours; draw(); parcelInfo(id, true);
-    } });
+    on(chip, { go: () => { parcelOff(); setProperty(other); } });
   }
   function parcelOff() {
     parcelOn = null;
@@ -846,7 +876,10 @@
   // Taps on the map itself: a parcel, or nothing (close the card).
   // Taps on the map itself: with Modeled Wind on, the wind at that spot; otherwise a parcel (or nothing).
   map.on("click", e => {
+    if (claim) return claimTap(e.point);
     if (adding || picking) return;
+    const pn = map.queryRenderedFeatures(e.point, { layers: ["prop-dot", "prop-label"] })[0];
+    if (pn && pn.properties.name !== prop()) { closeCard(); parcelOff(); return setProperty(pn.properties.name); }
     closeCard();
     if (mw.on) { parcelOff(); return mwReadout(e.lngLat); }
     const land = prefs.land && ((prefs.land === "hunt" && map.queryRenderedFeatures(e.point, { layers: ["closed-fill"] })[0]) || map.queryRenderedFeatures(e.point, { layers: ["pl-fill"] })[0]);
@@ -908,13 +941,131 @@
       },
     });
   }
+  // ---------- a property's parcels ----------
+  // New Property (or Edit Parcels): tap the state's parcel lines to add or remove them, name it, save.
+  // A property's parcels are its rows in parcels with ours = true; its map box is them plus 400 m, and
+  // its weather comes from their middle. Whoever adds a property (or an admin) can change it later.
+  const canChangeProp = p => canEdit() && !!state.properties?.[p] && (state.isAdmin || (!!state.myUid && state.properties[p].created_by === state.myUid));
+  const MAX_PARCELS = 150;
+  function startClaim(p) {
+    closeCard(); parcelOff(); goMenu(false);
+    const sel = new Map();
+    if (p) (state.parcels || []).filter(q => q.property === p && q.ours)
+      .forEach(q => sel.set(q.id, { id: q.id, owner: q.owner, owner2: q.owner2, acres: q.acres, geom: q.geom }));
+    claim = { prop: p, name: "", sel, orig: new Set(sel.keys()) };
+    view.classList.add("m-claiming");
+    applyLayers(); claimDraw(); claimCard();
+    if (map.getZoom() < WP_ZOOM + .3) map.easeTo({ zoom: WP_ZOOM + .5 }); else wpRefresh();
+  }
+  function endClaim() {
+    claim = null;
+    view.classList.remove("m-claiming");
+    if (ready) map.getSource("claim").setData(fc([]));
+    applyLayers(); closeCard(); wpRefresh();
+  }
+  const claimAcres = () => [...claim.sel.values()].reduce((a, q) => a + (q.acres || 0), 0);
+  function claimDraw() {
+    if (ready) map.getSource("claim").setData(fc([...claim.sel.values()].map(q => ({ type: "Feature", geometry: q.geom, properties: { id: q.id } }))));
+  }
+  function claimHint() {
+    const el = body.querySelector(".m-claimsub"), n = claim?.sel.size;
+    if (!el || !claim) return;
+    el.innerHTML = (n ? `<b>${n} parcel${n === 1 ? "" : "s"} · ${Math.round(claimAcres())} acres.</b> ` : "") +
+      (map.getZoom() < WP_ZOOM - .01 ? "Zoom in until parcel lines show, then tap parcels to add them." : "Tap parcels to add or remove them.");
+  }
+  function claimCard() {
+    const el = openCard(`
+      <p class="label">${claim.prop ? `${esc(claim.prop)} Parcels` : "New Property"}</p>
+      ${claim.prop ? "" : `<input class="newname sitsmall" id="mPropName" maxlength="30" autocomplete="off" placeholder="Name it: Lake Forty, Dad's…" value="${esc(claim.name)}">`}
+      <p class="m-sub m-claimsub"></p>
+      ${btnRow(b("cancel", "Cancel"), b("save", claim.prop ? "Save" : "Save Property"))}`, "m-claim");
+    el.querySelector("#mPropName")?.addEventListener("input", ev => { claim.name = ev.target.value; });
+    on(el, { cancel: endClaim, save: saveClaim });
+    claimHint();
+  }
+  map.on("zoomend", claimHint);
+  function claimTap(point) {
+    const f = map.queryRenderedFeatures(point, { layers: ["parcel-fill", "wp-fill"] })[0];
+    if (!f) return;
+    let rec;
+    if (f.layer.id === "wp-fill") {
+      const id = f.properties.id, x = wpById.get(id), g = wpGeom.get(id);
+      if (!g) return;
+      rec = { id, owner: x?.owner || null, owner2: x?.owner2 || null, acres: x?.acres ?? null, geom: g };
+    } else {
+      const row = (state.parcels || []).find(q => `${q.property}|${q.id}` === f.properties.id);
+      if (!row) return;
+      if (row.ours && row.property !== claim.prop) return toast(`That's part of ${row.property}`);
+      rec = { id: row.id, owner: row.owner, owner2: row.owner2, acres: row.acres, geom: row.geom };
+    }
+    if (claim.sel.has(rec.id)) claim.sel.delete(rec.id);
+    else if (claim.sel.size >= MAX_PARCELS) return toast(`${MAX_PARCELS} parcels is the most for one property.`);
+    else claim.sel.set(rec.id, rec);
+    claimDraw(); claimHint();
+  }
+  async function saveClaim() {
+    const c = claim, name = c.prop || (c.name || "").trim().replace(/\s+/g, " ");
+    if (!name) return toast("Give the property a name.");
+    if (!c.prop && propertyNames().some(n => n.toLowerCase() === name.toLowerCase())) return toast("There's already a property by that name.");
+    if (!c.sel.size) return toast("Tap at least one parcel.");
+    if (!navigator.onLine) return toast("Saving a property needs signal.");
+    let w = 180, s = 90, e = -180, n = -90;
+    for (const q of c.sel.values()) JSON.stringify(q.geom.coordinates).match(/-?\d+\.?\d*/g).forEach((v, i) => {
+      v = +v; if (i % 2) { s = Math.min(s, v); n = Math.max(n, v); } else { w = Math.min(w, v); e = Math.max(e, v); }
+    });
+    const padLat = 400 / 111320, padLon = padLat / Math.cos((s + n) / 2 * Math.PI / 180);
+    const box = { map_west: w - padLon, map_south: s - padLat, map_east: e + padLon, map_north: n + padLat, parcels_at: new Date().toISOString() };
+    const btn = body.querySelector('[data-act="save"]'), label = btn?.textContent;
+    if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+    const wasNew = !c.prop;
+    try {
+      let row = null;
+      if (!c.prop) {
+        const r = await sb.from("properties").insert({ name, ...box, weather_label: name, weather_lat: (s + n) / 2, weather_lon: (w + e) / 2 }).select().single();
+        if (r.error) throw r.error;
+        row = r.data;
+        state.properties = { ...state.properties, [name]: row };
+        c.prop = name; c.isNew = true;  // from here on it's an edit, so a retry after a failure doesn't add it twice
+      }
+      const rows = [...c.sel.values()].map(q => ({ id: q.id, property: name, ours: true, owner: q.owner, owner2: q.owner2, acres: q.acres, geom: q.geom }));
+      for (let i = 0; i < rows.length; i += 50) {
+        const r = await sb.from("parcels").upsert(rows.slice(i, i + 50), { onConflict: "property,id" });
+        if (r.error) throw r.error;
+      }
+      const gone = [...c.orig].filter(id => !c.sel.has(id));
+      if (gone.length) {
+        const r = await sb.from("parcels").update({ ours: false }).eq("property", name).in("id", gone);
+        if (r.error) throw r.error;
+      }
+      if (!row) {
+        const r = await sb.from("properties").update(box).eq("name", name).select().single();
+        if (r.error) throw r.error;
+        row = r.data;
+      }
+      // This phone's copy, until the next sync brings everyone's.
+      state.properties = { ...state.properties, [name]: row };
+      const before = state.parcels || [];
+      state.parcels = [...before.filter(q => !(q.property === name && (c.sel.has(q.id) || gone.includes(q.id)))), ...rows,
+        ...before.filter(q => q.property === name && gone.includes(q.id)).map(q => ({ ...q, ours: false }))];
+      state.parcelsSig = null;
+      endClaim();
+      saveOfflineCopy();
+      if (prop() !== name) setProperty(name);
+      else { draw(); const bx = boxOf(name); if (bx) map.fitBounds(bx, { padding: 20 }); }
+      toast(c.isNew ? `${name} added: ${rows.length} parcel${rows.length === 1 ? "" : "s"}. Add spots with +, and sits from Sits.` : `${name} saved`);
+    } catch (err) {
+      toast(netError(err) ? "That needs signal." : friendly(err));
+      if (claim) { if (wasNew && c.prop) claimCard(); else if (btn) { btn.disabled = false; btn.textContent = label; } }
+    }
+  }
   function addMenu() {
     const loose = canEdit() ? unplaced() : [];
     const el = openCard(`
       <p class="label">Add to the Map</p>
       ${btnRow(b("spot", "Add a Spot"))}
+      ${canEdit() ? `<p class="label">Properties</p>${btnRow(b("newprop", "New Property"), canChangeProp(prop()) ? b("editprop", `Edit ${prop()} Parcels`) : "")}` : ""}
       ${loose.length ? `<p class="label">Cameras With No GPS</p><div class="chips">${loose.map(n => `<button type="button" data-cam="${esc(n)}">${esc(n)}</button>`).join("")}</div><p class="m-sub">Tap one to place it.</p>` : ""}`, "m-menu");
-    on(el, { spot: () => startAdd({ kind: "spot" }) });
+    on(el, { spot: () => startAdd({ kind: "spot" }), newprop: () => startClaim(null), editprop: () => startClaim(prop()) });
     el.querySelectorAll("[data-cam]").forEach(x => x.addEventListener("click", () => startAdd({ kind: "camera", camera: x.dataset.cam })));
   }
   function spotForm(s) {
@@ -1490,7 +1641,7 @@
     goto.hidden = !open; goBtn.setAttribute("aria-expanded", String(open));
     if (!open) return;
     goto.innerHTML = `<button type="button" data-go=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>My Location</button>` +
-      PROPERTIES.map(p => `<button type="button" data-go="${esc(p)}" aria-current="${p === prop()}">${pin}${esc(p)}</button>`).join("");
+      propertyNames().map(p => `<button type="button" data-go="${esc(p)}" aria-current="${p === prop()}">${pin}${esc(p)}</button>`).join("");
     goto.querySelectorAll("[data-go]").forEach(el => el.addEventListener("click", () => {
       goMenu(false);
       const p = el.dataset.go;

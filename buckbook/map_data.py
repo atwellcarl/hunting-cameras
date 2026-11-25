@@ -243,10 +243,10 @@ def push(assume_yes=False):
     from buckbook.supabase_sync import rest, rest_all
     data = json.loads((OUT / "prepared.json").read_text())
     try:
-        marked = {r["id"]: r["ours"] for r in rest_all("parcels", "?select=id,ours")}
+        marked = {(r["property"], r["id"]): r["ours"] for r in rest_all("parcels", "?select=property,id,ours")}
     except SystemExit as err:
         raise SystemExit(f"Can't read parcels; has 013_map.sql been run? ({err})")
-    parcels = [{**p, "ours": marked.get(p["id"], p["ours"])} for p in data["parcels"]]
+    parcels = [{**p, "ours": marked.get((p["property"], p["id"]), p["ours"])} for p in data["parcels"]]
     cams = [c for c in data["cameras"]]
     size = len(json.dumps(parcels).encode()) + len(json.dumps(cams).encode())
     print(f"Writes {len(cams)} camera rows, {len(parcels)} parcels ({sum(p['ours'] for p in parcels)} ours), "
@@ -256,7 +256,7 @@ def push(assume_yes=False):
     for i in range(0, len(cams), 200):
         rest("POST", "camera_spots", cams[i:i + 200], "?on_conflict=id", "resolution=merge-duplicates,return=minimal")
     for i in range(0, len(parcels), 100):
-        rest("POST", "parcels", parcels[i:i + 100], "?on_conflict=id", "resolution=merge-duplicates,return=minimal")
+        rest("POST", "parcels", parcels[i:i + 100], "?on_conflict=property,id", "resolution=merge-duplicates,return=minimal")
     for prop, box in data["properties"].items():
         rest("PATCH", "properties", box, "?name=eq." + urllib.parse.quote(prop), "return=minimal")
     print("Sent.")
