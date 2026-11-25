@@ -52,8 +52,22 @@ def slug(prop):
     return prop.lower().replace(" ", "")
 
 
+_PREPARED = None
+
+
 def prepared():
-    return json.loads((ROOT / "data" / "map" / "prepared.json").read_text())
+    """Each property's map box and parcels: data/map/prepared.json (map_data.py) for the camera properties,
+    and the database for properties the crew added on the map (014_claim_properties.sql)."""
+    global _PREPARED
+    if _PREPARED is None:
+        path = ROOT / "data" / "map" / "prepared.json"
+        _PREPARED = json.loads(path.read_text()) if path.exists() else {"properties": {}, "parcels": []}
+        from buckbook.supabase_sync import rest_all
+        for r in rest_all("properties", "?select=name,map_west,map_south,map_east,map_north", order="name"):
+            if r["name"] not in _PREPARED["properties"] and r["map_west"] is not None:
+                _PREPARED["properties"][r["name"]] = {k: r[k] for k in ("map_west", "map_south", "map_east", "map_north")}
+                _PREPARED["parcels"] += rest_all("parcels", "?select=id,property,ours,geom&property=eq." + urllib.parse.quote(r["name"]), order="id")
+    return _PREPARED
 
 
 def docker(*args, capture=False):
