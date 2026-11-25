@@ -3987,7 +3987,7 @@ const ENDED = "buckbook-ended";
 let signingOut = false;                          // our own sign-outs, so the listener below leaves them alone
 async function forgetThisPhone() {
   signingOut = true;
-  for (const k of [OFFLINE_COPY, OUTBOX, OUTBOX_FAILED, "buckbook-map-saved", "buckbook-map-slopes"]) { try { localStorage.removeItem(k); } catch {} }
+  for (const k of [OFFLINE_COPY, OUTBOX, OUTBOX_FAILED, "buckbook-map-saved", "buckbook-map-slopes", "buckbook-recent-idx"]) { try { localStorage.removeItem(k); } catch {} }
   try { await Promise.all((await caches.keys()).filter(k => k.startsWith("buckbook-tiles")).map(k => caches.delete(k))); } catch {}
   try { await sb.auth.signOut({ scope: "local" }); } catch {}
   try { sessionStorage.setItem(ENDED, "1"); } catch {}

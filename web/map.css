@@ -134,3 +134,5 @@
 .m-3d { position: absolute; left: 12px; top: 112px; font: 800 14px var(--display); letter-spacing: .04em; }
 .m-3d[aria-pressed="true"] { background: var(--blaze); color: var(--blaze-ink); border: 0; }
 .m-picking .m-3d { display: none; }
+.m-recent { margin-top: 10px; font-size: 12px; }
+.m-recent .linkish { font-size: 12px; padding: 0; margin-left: 4px; }

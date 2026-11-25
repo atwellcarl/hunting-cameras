@@ -47,19 +47,62 @@
     running[host] = (running[host] || 0) + 1;
     try { return await job(); } finally { running[host]--; waiting[host]?.shift()?.(); }
   }
-  let cacheP = null;
-  const tiles = () => cacheP ||= caches.open(TILE_CACHE);
-  async function getTile(layer, z, x, y, signal) {
-    const key = tileKey(layer, z, x, y), c = await tiles();
-    const hit = await c.match(key);
-    if (hit) return hit.arrayBuffer();
+  // ---------- what's kept on the phone ----------
+  // Two stores. Kept: only what you asked for with Download Map (a property's map pictures, 3D elevation and
+  // modeled wind), until you remove it. Recent: everything else the map loads as you browse (map pictures,
+  // parcel lines, wind you looked at), capped at 50 MB, least recently used out first. Wide views (below zoom
+  // 12) aren't saved at all. A removed login erases both (index.html).
+  const RECENT = "buckbook-tiles-recent", RECENT_MAX = 50e6, RECENT_IDX = "buckbook-recent-idx";
+  let keepP = null, recentP = null;
+  const keepCache = () => keepP ||= caches.open(TILE_CACHE), recentCache = () => recentP ||= caches.open(RECENT);
+  const recent = (() => { try { return JSON.parse(localStorage.getItem(RECENT_IDX)) || {}; } catch { return {}; } })();   // key -> [last used, bytes]
+  let recentTimer = null;
+  const saveRecentIdx = () => { clearTimeout(recentTimer); recentTimer = setTimeout(() => { try { localStorage.setItem(RECENT_IDX, JSON.stringify(recent)); } catch {} }, 1500); };
+  const recentBytes = () => Object.values(recent).reduce((a, v) => a + v[1], 0);
+  async function fromPhone(key) {
+    const k = await (await keepCache()).match(key);
+    if (k) return k;
+    const r = await (await recentCache()).match(key);
+    if (r && recent[key]) { recent[key][0] = Date.now(); saveRecentIdx(); }
+    return r || null;
+  }
+  async function savePhone(key, body, type, keep = false) {
+    const size = typeof body === "string" ? body.length : body.byteLength;
+    if (keep) {
+      await (await keepCache()).put(key, new Response(body, { headers: { "content-type": type } }));
+      if (recent[key]) { await (await recentCache()).delete(key); delete recent[key]; saveRecentIdx(); }
+      return;
+    }
+    await (await recentCache()).put(key, new Response(body, { headers: { "content-type": type } }));
+    recent[key] = [Date.now(), size];
+    let total = recentBytes();
+    if (total > RECENT_MAX) {
+      const c = await recentCache();
+      for (const [k, v] of Object.entries(recent).sort((a, b) => a[1][0] - b[1][0])) {
+        if (total <= RECENT_MAX * .9) break;
+        await c.delete(k); delete recent[k]; total -= v[1];
+      }
+    }
+    saveRecentIdx();
+  }
+  async function clearRecent() {
+    await caches.delete(RECENT); recentP = null;
+    for (const k in recent) delete recent[k];
+    try { localStorage.setItem(RECENT_IDX, "{}"); } catch {}
+  }
+  async function getTile(layer, z, x, y, signal, keep = false) {
+    const key = tileKey(layer, z, x, y), hit = await fromPhone(key);
+    if (hit) {
+      const buf = await hit.arrayBuffer();
+      if (keep) await savePhone(key, buf, hit.headers.get("content-type") || "image/png", true);   // Recent -> Kept
+      return buf;
+    }
     const url = LAYERS[layer].url(z, x, y);
     const res = await gently(new URL(url).host, () => fetch(url, { signal }));
     const type = res.headers.get("content-type") || "";
     if (!res.ok || !type.startsWith("image/")) throw new Error(`no ${layer} tile`);   // the services report errors as JSON
     const buf = await res.arrayBuffer();
-    // Browsing saves what it loads, for no signal later, but not wide views: panning the state would fill the phone.
-    if (z >= 12) c.put(key, new Response(buf, { headers: { "content-type": type } })).catch(() => {});
+    if (keep || z >= 12) savePhone(key, buf, type, keep).catch(() => {});
     return buf;
   }
   maplibregl.addProtocol("bbt", async (params, abort) => {
@@ -307,8 +350,23 @@
   let ready = false, shownProp = prop();
   // Pins and lines go on as soon as the style is in; "load" would wait for every photo tile first.
   // (isStyleLoaded() waits for tiles too, so use the style's own flag and its "style.load" event.)
+  async function tidyOnce() {
+    if (store.get("buckbook-tiles-tidied")) return;
+    try {
+      const c = await keepCache(), saved = store.get(DL) || {}, keepKeys = new Set();
+      for (const p of Object.keys(saved)) {
+        tileList(p).forEach(t => keepKeys.add(tileKey(...t)));
+        const hit = await c.match(windKey(p, "index.json"));
+        const idx = hit ? JSON.parse(await hit.text()) : { runs: [] };
+        ["index.json", "grid.json", ...idx.runs.map(r => r.file)].forEach(f => keepKeys.add(windKey(p, f)));
+      }
+      for (const req of await c.keys()) if (!keepKeys.has(req.url)) await c.delete(req);
+      store.set("buckbook-tiles-tidied", true);
+    } catch {}
+  }
   const whenStyled = () => {
     if (ready || !map.style?._loaded) return;
+    tidyOnce();
     ready = true; applyLayers(); draw();
     if (prefs.threeD) threeD(true, false);
     if (mw.on) mwShow();                       // the wind that was on last time
@@ -382,7 +440,7 @@
   async function wpSquare(x, y) {
     const key = `${x}/${y}`;
     if (wpSquares.has(key)) return wpSquares.get(key);
-    const c = await tiles(), ck = tileKey("parcels", WP_ZOOM, x, y), hit = await c.match(ck);
+    const ck = tileKey("parcels", WP_ZOOM, x, y), hit = await fromPhone(ck);
     let feats = null;
     if (hit) feats = JSON.parse(await hit.text());
     else if (navigator.onLine) {
@@ -397,7 +455,7 @@
         feats = j.features.filter(f => f.geometry).map(f => ({ type: "Feature", geometry: f.geometry, properties: { id: f.properties.STATEID,
           owner: (f.properties.OWNERNME1 || "").trim() || null, owner2: (f.properties.OWNERNME2 || "").trim() || null,
           acres: Math.round((f.properties.GISACRES || f.properties.DEEDACRES || 0) * 10) / 10 || null } }));
-        c.put(ck, new Response(JSON.stringify(feats), { headers: { "content-type": "application/json" } })).catch(() => {});
+        savePhone(ck, JSON.stringify(feats), "application/json").catch(() => {});
       } catch { return null; }                 // try again next time the map moves
     }
     if (feats) wpSquares.set(key, feats);
@@ -729,6 +787,7 @@
         <p class="m-sub" id="mDlNote">${here ? `${esc(prop())} saved ${fmtDay(new Date(here.at).toISOString())} · ${(here.bytes / 1e6).toFixed(0)} MB. Works with no signal.` : `Save ${esc(prop())} on this phone for no signal: about ${Math.max(1, Math.round(est.reduce((n, t) => n + (LAYERS[t[0]].px ? 0.07 : LAYERS[t[0]].dem ? 0.1 : 0.015), 0)))} MB. The leaf-off photos come slowly, so give it 10 to 20 minutes on Wi-Fi with the app open.`}</p>
         <div class="m-bar" hidden><i></i></div>
         ${btnRow(b("download", here ? "Update" : "Download Map"), here ? b("forget", "Remove", "danger") : "")}
+        <p class="m-sub m-recent">Recently viewed, kept for no signal: ${(recentBytes() / 1e6).toFixed(1)} MB of ${RECENT_MAX / 1e6} MB, oldest cleared first. <button type="button" class="linkish" data-act="clearRecent">Clear</button></p>
       </div>`, "m-layers");
     el.querySelectorAll("[data-base]").forEach(x => x.addEventListener("click", () => { prefs.base = x.dataset.base; savePrefs(); applyLayers(); layersCard(); }));
     el.querySelectorAll("[data-show]").forEach(x => x.addEventListener("click", () => {
@@ -737,7 +796,7 @@
       savePrefs(); applyLayers(); draw(); layersCard();
       if (k === "parcels") wpRefresh();
     }));
-    on(el, { download: () => download(prop()), forget: () => forget(prop()) });
+    on(el, { download: () => download(prop()), forget: () => forget(prop()), clearRecent: () => clearRecent().then(() => { toast("Recently viewed map cleared"); layersCard(); }) });
     if (dl) showProgress();
   }
   // Every tile a property needs: each layer at the zooms it keeps, over the property's map box.
@@ -764,7 +823,7 @@
     if (dl && !dl.finished) return;
     if (!navigator.onLine) return toast("Downloading the map needs signal.");
     navigator.storage?.persist?.().catch(() => {});
-    const list = tileList(p), c = await tiles();
+    const list = tileList(p);
     dl = { prop: p, total: list.length, done: 0, bytes: 0, failed: 0 };
     showProgress();
     let next = 0;
@@ -775,8 +834,7 @@
         try {
           // Size first, then add: "dl.bytes += await …" would read the total before the wait and lose the
           // other workers' additions.
-          const hit = await c.match(tileKey(...t));
-          const n = hit ? (await hit.arrayBuffer()).byteLength : (await getTile(...t)).byteLength;
+          const n = (await getTile(...t, undefined, true)).byteLength;
           dl.bytes += n;
         } catch { misses.push(t); dl.failed++; }
         dl.done++;
@@ -786,12 +844,12 @@
     await Promise.all(Array.from({ length: 6 }, worker));
     // The modeled wind for this property, so it works with no signal too.
     try {
-      const idx = await windFile(p, "index.json");
-      for (const f of ["grid.json", ...idx.runs.map(r => r.file)]) { const t = await windFile(p, f, true); dl.bytes += t.length; }
+      const idx = await windFile(p, "index.json", false, true);
+      for (const f of ["grid.json", ...idx.runs.map(r => r.file)]) { const t = await windFile(p, f, true, true); dl.bytes += t.length; }
     } catch {}
     // One more try for the ones that didn't come back; the state's server drops a few under load.
     dl.failed = 0;
-    for (const t of misses) { try { const n = (await getTile(...t)).byteLength; dl.bytes += n; } catch { dl.failed++; } }
+    for (const t of misses) { try { const n = (await getTile(...t, undefined, true)).byteLength; dl.bytes += n; } catch { dl.failed++; } }
     const saved = store.get(DL) || {};
     saved[p] = { at: Date.now(), bytes: dl.bytes, tiles: list.length - dl.failed };
     store.set(DL, saved);
@@ -801,8 +859,13 @@
     toast(dl.failed ? `${p} map saved, with a few gaps` : `${p} map saved for no signal`);
   }
   async function forget(p) {
-    const c = await tiles(), list = tileList(p);
+    const c = await keepCache(), list = tileList(p);
     await Promise.all(list.map(t => c.delete(tileKey(...t))));
+    try {                                        // and its modeled wind
+      const hit = await c.match(windKey(p, "index.json"));
+      const idx = hit ? JSON.parse(await hit.text()) : { runs: [] };
+      await Promise.all(["index.json", "grid.json", ...idx.runs.map(r => r.file)].map(f => c.delete(windKey(p, f))));
+    } catch {}
     const saved = store.get(DL) || {}; delete saved[p]; store.set(DL, saved);
     toast(`${p} map removed from this phone`); layersCard();
   }
@@ -819,24 +882,20 @@
   // Runs never change once made, so they come from the phone's copy; the index lists which runs exist and
   // grows as we model more, so with signal it's fetched fresh once per session.
   const freshIndex = new Set();
-  async function windFile(p, f, raw = false) {
-    const c = await tiles(), fresh = f === "index.json" && navigator.onLine && !freshIndex.has(p);
-    const hit = fresh ? null : await c.match(windKey(p, f));
-    let text = hit ? await hit.text() : null;
-    if (fresh) {
+  async function windFile(p, f, raw = false, keep = false) {
+    const key = windKey(p, f), fresh = f === "index.json" && navigator.onLine && !freshIndex.has(p);
+    keep ||= !!(await (await keepCache()).match(key));        // already part of a download: stays kept
+    const hit = await fromPhone(key);
+    let text = hit && !fresh ? await hit.text() : null;
+    if (text == null) {
       try {
         const { data, error } = await sb.storage.from("photos").download(`wind/${windSlug(p)}/${f}`);
         if (error) throw error;
-        text = await data.text(); freshIndex.add(p);
-        c.put(windKey(p, f), new Response(text, { headers: { "content-type": "application/json" } })).catch(() => {});
-      } catch { const old = await c.match(windKey(p, f)); text = old ? await old.text() : null; }
+        text = await data.text();
+        if (fresh) freshIndex.add(p);
+      } catch (e) { if (!hit) throw e; text = await hit.text(); }   // no signal: the copy we have
     }
-    if (text == null) {
-      const { data, error } = await sb.storage.from("photos").download(`wind/${windSlug(p)}/${f}`);
-      if (error) throw error;
-      text = await data.text();
-      c.put(windKey(p, f), new Response(text, { headers: { "content-type": "application/json" } })).catch(() => {});
-    }
+    if (!hit || fresh || keep) savePhone(key, text, "application/json", keep).catch(() => {});
     return raw ? text : JSON.parse(text);
   }
   const bytes = (b64, T) => { const s = atob(b64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new T(u.buffer); };
