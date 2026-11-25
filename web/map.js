@@ -258,7 +258,10 @@
     <div class="m-tools">
       <button type="button" class="m-tool" data-act="layers" aria-label="Map layers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg></button>
       <button type="button" class="m-tool" data-act="wind" aria-label="Wind lens"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9h11a3 3 0 1 0-3-3M3 15h15a3 3 0 1 1-3 3M3 12h7"/></svg><span class="m-windtag" hidden></span></button>
-      <button type="button" class="m-tool" data-act="locate" aria-label="Where I am"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+      <div class="m-gowrap">
+        <button type="button" class="m-tool" data-act="locate" aria-label="Go to my location or a property" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+        <div class="m-goto" hidden></div>
+      </div>
       <button type="button" class="m-tool m-add" data-act="add" aria-label="Add to the map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
     </div>
     <button type="button" class="m-tool m-north" data-act="north" aria-label="North up, or square to our parcels"><svg viewBox="0 0 24 24"><path d="M12 3l5 15-5-3.5L7 18z" fill="#FF6B1A"/><text x="12" y="23.5" text-anchor="middle" font-size="6" font-weight="700" fill="currentColor" font-family="sans-serif">N</text></svg></button>
@@ -318,6 +321,26 @@
     { id: "mflow", type: "line", source: "mflow", layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-color": mwColor, "line-width": 2.8, "line-opacity": ["get", "a"] } },
   );
+  // Place names, for finding your way: counties zoomed out, then towns by size (from places.json, the 2020
+  // census; tools/places.py). The font ships with the app (fonts/), so names show with no signal too.
+  style.glyphs = location.href.replace(/[?#].*$/, "").replace(/[^/]*$/, "") + "fonts/{fontstack}/{range}.pbf";
+  style.sources.places = { type: "geojson", data: fc([]) };
+  const placeText = (min, max) => ({ "text-field": ["get", "n"], "text-font": ["Noto Sans Medium"], "text-max-width": 8,
+    "text-size": ["interpolate", ["linear"], ["zoom"], 6, min, 13, max], "symbol-sort-key": ["-", 0, ["get", "pop"]], "text-padding": 4 });
+  const PLACE_LAYERS = [
+    { id: "pn-county", filter: ["==", ["get", "k"], "k"], minzoom: 6, maxzoom: 9.5,
+      layout: { ...placeText(11, 13), "text-transform": "uppercase", "text-letter-spacing": .18 } },
+    { id: "pn-big", filter: ["all", ["!=", ["get", "k"], "k"], [">=", ["get", "pop"], 10000]], minzoom: 6.5, layout: placeText(12, 17) },
+    { id: "pn-mid", filter: ["all", ["!=", ["get", "k"], "k"], [">=", ["get", "pop"], 2000], ["<", ["get", "pop"], 10000]], minzoom: 8.5, layout: placeText(11, 15) },
+    { id: "pn-small", filter: ["all", ["!=", ["get", "k"], "k"], ["<", ["get", "pop"], 2000]], minzoom: 10, layout: placeText(10, 13.5) },
+  ];
+  for (const L of PLACE_LAYERS) style.layers.push({ ...L, type: "symbol", source: "places",
+    paint: { "text-color": "#ffffff", "text-halo-color": "rgba(0,0,0,.85)", "text-halo-width": 1.4, "text-opacity": L.id === "pn-county" ? .75 : 1 } });
+  let placesP = null;
+  function loadPlaces() {
+    placesP ||= fetch("places.json").then(r => r.json()).then(rows => map.getSource("places").setData(fc(rows.map(([n, lon, lat, pop, k]) =>
+      ({ type: "Feature", geometry: { type: "Point", coordinates: [lon, lat] }, properties: { n, pop, k } }))))).catch(() => { placesP = null; });
+  }
 
   const start = boxOf(prop());
   const map = new maplibregl.Map({
@@ -379,7 +402,7 @@
     ready = true; applyLayers(); draw();
     if (prefs.threeD) threeD(true, false);
     if (mw.on) mwShow();                       // the wind that was on last time
-    wpRefresh(); plRefresh();
+    wpRefresh(); plRefresh(); loadPlaces();
   };
   map.on("style.load", whenStyled); map.on("styledata", whenStyled); map.once("load", whenStyled);
   whenStyled();
@@ -398,6 +421,12 @@
     for (const id of ["parcel-line", "wp-line"]) map.setPaintProperty(id, "line-color", light ? "#2b2f2a" : "#ffffff");
     for (const id of ["parcel-pick", "wp-pick"]) map.setPaintProperty(id, "line-color", light ? "#000000" : "#ffffff");
     for (const id of ["parcel-fill", "parcel-line", "ours-line", "parcel-pick", "wp-fill", "wp-line", "wp-pick"]) map.setLayoutProperty(id, "visibility", prefs.show.parcels ? "visible" : "none");
+    // The topo map has its own names; over the photos white names, over the light terrain shading dark ones.
+    for (const L of PLACE_LAYERS) {
+      map.setLayoutProperty(L.id, "visibility", prefs.base === "topo" ? "none" : "visible");
+      map.setPaintProperty(L.id, "text-color", light ? "#1d211b" : "#ffffff");
+      map.setPaintProperty(L.id, "text-halo-color", light ? "rgba(255,255,255,.85)" : "rgba(0,0,0,.85)");
+    }
     const hunt = prefs.land === "hunt";
     for (const id of ["pl-fill", "pl-line"]) map.setLayoutProperty(id, "visibility", prefs.land ? "visible" : "none");
     for (const id of ["closed-fill", "closed-line"]) map.setLayoutProperty(id, "visibility", hunt ? "visible" : "none");
@@ -1453,11 +1482,31 @@
   }
   function stopLocate() { if (watch != null) navigator.geolocation.clearWatch(watch); watch = null; }
 
+  // The locate button opens a short menu: my location, or one of the properties (which switches the whole
+  // app to it, as the old toggle at the top did, and fits the map to it). While marking a sit it just locates.
+  const goto = ui.querySelector(".m-goto"), goBtn = ui.querySelector('[data-act="locate"]');
+  const pin = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></svg>';
+  function goMenu(open) {
+    goto.hidden = !open; goBtn.setAttribute("aria-expanded", String(open));
+    if (!open) return;
+    goto.innerHTML = `<button type="button" data-go=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>My Location</button>` +
+      PROPERTIES.map(p => `<button type="button" data-go="${esc(p)}" aria-current="${p === prop()}">${pin}${esc(p)}</button>`).join("");
+    goto.querySelectorAll("[data-go]").forEach(el => el.addEventListener("click", () => {
+      goMenu(false);
+      const p = el.dataset.go;
+      if (!p) return locate(true);
+      if (p !== prop()) return setProperty(p);           // the page redraws, and the map fits the new property
+      const bx = boxOf(p);
+      if (bx) map.fitBounds(bx, { padding: 20, bearing: squareBearing() });
+    }));
+  }
+  map.on("click", () => goMenu(false)); map.on("dragstart", () => goMenu(false));
+  ui.querySelectorAll(".m-tool:not([data-act=locate])").forEach(el => el.addEventListener("click", () => goMenu(false)));
   on(ui.querySelector(".m-tools"), {
     layers: () => card.hidden || !card.classList.contains("m-layers") ? layersCard() : closeCard(),
     // Turning the wind on loads its run first, so the card says what's showing.
     wind: () => { if (!mw.on) return mwToggle().then(() => mwCard()); if (!card.hidden && card.classList.contains("m-mwind")) return closeCard(); mwCard(); },
-    locate: () => locate(true),
+    locate: () => picking ? locate(true) : goMenu(goto.hidden),
     add: () => { const open = !card.hidden && card.classList.contains("m-menu"); closeCard(); if (!open) addMenu(); },
   });
 
@@ -1473,7 +1522,7 @@
       // GPS only while the map is open, so it doesn't drain the phone; quietly, without moving the map.
       if (navigator.permissions?.query) navigator.permissions.query({ name: "geolocation" }).then(r => { if (r.state === "granted") locate(false); }).catch(() => {});
     },
-    hide() { stopLocate(); flowStop(); if (picking) endPick(null); },
+    hide() { goMenu(false); stopLocate(); flowStop(); if (picking) endPick(null); },
     // Where was a sit? Resolves to { lat, lon, label? }, or null if cancelled (index.html's Mark on Map).
     pick(opts = {}) {
       return new Promise(resolve => {
