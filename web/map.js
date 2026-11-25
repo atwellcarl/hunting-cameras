@@ -32,6 +32,9 @@
       url: (z, x, y) => exportUrl(DEP, z, x, y, { format: "jpgpng", renderingRule: rule("Hillshade Multidirectional") }) },
     contours: { name: "Contours", note: "10 ft lines", overlay: true, min: 13, max: 17, save: [13, 17],
       url: (z, x, y) => exportUrl(DEP, z, x, y, { format: "png32", transparent: "true", renderingRule: rule("Preset 10ft Contour Interval") }) },
+    // Elevation for the 3D view: AWS terrain tiles (USGS 3DEP in the US, to zoom 15), heights encoded in the colors.
+    dem: { name: "Elevation", dem: true, min: 0, max: 15, save: [12, 15],
+      url: (z, x, y) => `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png` },
   };
   const BASES = ["leafoff", "summer", "topo", "terrain"];          // the order they're offered in
   const tileKey = (layer, z, x, y) => `https://tiles.buckbook.invalid/${layer}/${z}/${x}/${y}`;
@@ -214,6 +217,7 @@
       <button type="button" class="m-tool m-add" data-act="add" aria-label="Add to the map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
     </div>
     <button type="button" class="m-tool m-north" data-act="north" aria-label="North up, or square to our parcels"><svg viewBox="0 0 24 24"><path d="M12 3l5 15-5-3.5L7 18z" fill="#FF6B1A"/><text x="12" y="23.5" text-anchor="middle" font-size="6" font-weight="700" fill="currentColor" font-family="sans-serif">N</text></svg></button>
+    <button type="button" class="m-tool m-3d" aria-pressed="false" aria-label="3D terrain">3D</button>
     <div class="m-cross" hidden><i></i></div>
     <button type="button" class="m-wpill" hidden></button>
     <div class="m-pinfo" hidden></div>
@@ -223,6 +227,7 @@
 
   const style = { version: 8, sources: {}, layers: [] };
   for (const [id, L] of Object.entries(LAYERS)) {
+    if (L.dem) { style.sources[id] = { type: "raster-dem", tiles: [`bbt://${id}/{z}/{x}/{y}`], tileSize: 256, encoding: "terrarium", maxzoom: L.max }; continue; }
     style.sources[id] = { type: "raster", tiles: [`bbt://${id}/{z}/{x}/{y}`], tileSize: L.px || 256, minzoom: L.min, maxzoom: L.max };
     style.layers.push({ id, type: "raster", source: id, layout: { visibility: "none" },
       paint: L.overlay ? { "raster-opacity": .6 } : { "raster-fade-duration": 150 } });
@@ -255,13 +260,36 @@
   const start = boxOf(prop());
   const map = new maplibregl.Map({
     container: "map", style, minZoom: 12, maxZoom: 20, attributionControl: false,
-    pitchWithRotate: false, touchPitch: false, renderWorldCopies: false,      // two fingers turn the map
+    pitchWithRotate: false, touchPitch: false, renderWorldCopies: false, maxPitch: 72,   // two fingers turn the map; in 3D, slide up/down to tilt
     // With nothing to fit yet, the middle of Wisconsin (the repo is public: no property coordinates here).
     ...(start ? { bounds: start, fitBoundsOptions: { padding: 20, bearing: squareBearing() } } : { center: [-89.8, 44.6], zoom: 12 }),
   });
   const north = ui.querySelector(".m-north");
   const pointNorth = () => { north.firstElementChild.style.transform = `rotate(${-map.getBearing()}deg)`; };
   map.on("rotate", pointNorth); map.on("moveend", pointNorth); pointNorth();
+  // 3D: the terrain under every layer (photos, shading, parcel lines and the wind arrows lie on it), heights
+  // shown 1.5x so the Driftless ridges and draws read, tilted to look across them. Two fingers slid up or
+  // down tilt further. Remembered between visits.
+  const btn3d = ui.querySelector(".m-3d");
+  function threeD(on, animate = true) {
+    prefs.threeD = on; savePrefs();
+    btn3d.setAttribute("aria-pressed", String(on)); btn3d.textContent = on ? "2D" : "3D";
+    if (!ready) return;
+    try { map.setSky({ "sky-color": "#1b2118", "horizon-color": "#2a3226", "fog-color": "#1b2118", "sky-horizon-blend": .6, "horizon-fog-blend": .6, "fog-ground-blend": .9 }); } catch {}
+    map.setTerrain(on ? { source: "dem", exaggeration: 1.5 } : null);
+    on ? map.touchPitch.enable() : map.touchPitch.disable();
+    map.easeTo({ pitch: on ? 60 : 0, duration: animate ? 700 : 0 });
+  }
+  btn3d.addEventListener("click", () => threeD(!prefs.threeD));
+  // MapLibre 4.7 freezes the camera's height during a camera animation and doesn't always let go afterwards, so
+  // a jump the app makes itself (switching property, Show on Map, picking a sit's place) could leave the camera
+  // at the old height, inside a hill. After every move, put it back on the ground under the center.
+  map.on("moveend", () => {
+    if (!map.terrain || map.isMoving()) return;
+    map._elevationFreeze = false;
+    const e = map.terrain.getElevationForLngLatZoom(map.transform.center, map.transform.tileZoom);
+    if (Math.abs((map.transform.elevation || 0) - e) > 1) { map.transform.elevation = e; map.triggerRepaint(); }
+  });
   // Square to our parcels, or north up if it's already square.
   north.addEventListener("click", () => { const sq = squareBearing(), b = map.getBearing(); map.easeTo({ bearing: Math.abs(b - sq) < 0.5 && sq ? 0 : sq }); });
   map.addControl(new maplibregl.ScaleControl({ unit: "imperial", maxWidth: 90 }), "bottom-left");
@@ -269,7 +297,12 @@
   let ready = false, shownProp = prop();
   // Pins and lines go on as soon as the style is in; "load" would wait for every photo tile first.
   // (isStyleLoaded() waits for tiles too, so use the style's own flag and its "style.load" event.)
-  const whenStyled = () => { if (ready || !map.style?._loaded) return; ready = true; applyLayers(); draw(); };
+  const whenStyled = () => {
+    if (ready || !map.style?._loaded) return;
+    ready = true; applyLayers(); draw();
+    if (prefs.threeD) threeD(true, false);
+    if (mw.on) mwShow();                       // the wind that was on last time
+  };
   map.on("style.load", whenStyled); map.on("styledata", whenStyled); map.once("load", whenStyled);
   whenStyled();
   // The credits start folded behind their (i), so they don't sit on the scale bar.
@@ -624,7 +657,7 @@
       </div>
       <p class="label">Offline</p>
       <div class="m-dl">
-        <p class="m-sub" id="mDlNote">${here ? `${esc(prop())} saved ${fmtDay(new Date(here.at).toISOString())} · ${(here.bytes / 1e6).toFixed(0)} MB. Works with no signal.` : `Save ${esc(prop())} on this phone for no signal: about ${Math.max(1, Math.round(est.reduce((n, t) => n + (LAYERS[t[0]].px ? 0.07 : 0.015), 0)))} MB. The leaf-off photos come slowly, so give it 10 to 20 minutes on Wi-Fi with the app open.`}</p>
+        <p class="m-sub" id="mDlNote">${here ? `${esc(prop())} saved ${fmtDay(new Date(here.at).toISOString())} · ${(here.bytes / 1e6).toFixed(0)} MB. Works with no signal.` : `Save ${esc(prop())} on this phone for no signal: about ${Math.max(1, Math.round(est.reduce((n, t) => n + (LAYERS[t[0]].px ? 0.07 : LAYERS[t[0]].dem ? 0.1 : 0.015), 0)))} MB. The leaf-off photos come slowly, so give it 10 to 20 minutes on Wi-Fi with the app open.`}</p>
         <div class="m-bar" hidden><i></i></div>
         ${btnRow(b("download", here ? "Update" : "Download Map"), here ? b("forget", "Remove", "danger") : "")}
       </div>`, "m-layers");
