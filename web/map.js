@@ -37,6 +37,7 @@
       url: (z, x, y) => `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png` },
   };
   const BASES = ["leafoff", "summer", "topo", "terrain"];          // the order they're offered in
+  const WP_ZOOM = 14;                                               // statewide parcel lines show from here in
   const tileKey = (layer, z, x, y) => `https://tiles.buckbook.invalid/${layer}/${z}/${x}/${y}`;
 
   // A few requests at a time per service: the state's server is slow, and we share it with everyone.
@@ -57,7 +58,8 @@
     const type = res.headers.get("content-type") || "";
     if (!res.ok || !type.startsWith("image/")) throw new Error(`no ${layer} tile`);   // the services report errors as JSON
     const buf = await res.arrayBuffer();
-    c.put(key, new Response(buf, { headers: { "content-type": type } })).catch(() => {});   // browsing saves it too
+    // Browsing saves what it loads, for no signal later, but not wide views: panning the state would fill the phone.
+    if (z >= 12) c.put(key, new Response(buf, { headers: { "content-type": type } })).catch(() => {});
     return buf;
   }
   maplibregl.addProtocol("bbt", async (params, abort) => {
@@ -234,12 +236,16 @@
   }
   style.layers.unshift({ id: "bg", type: "background", paint: { "background-color": "#1b2118" } });
   const fc = features => ({ type: "FeatureCollection", features });
-  for (const id of ["parcels", "cones", "paths", "mwind", "mflow"]) style.sources[id] = { type: "geojson", data: fc([]) };
+  for (const id of ["parcels", "wparcels", "cones", "paths", "mwind", "mflow"]) style.sources[id] = { type: "geojson", data: fc([]) };
   // Modeled wind arrows: every 160 m zoomed out, 80 m, then 40 m close in. Color is speed; the scale runs to
   // the run's fastest wind above the trees, so ground level reads as calmer on the same scale.
   const mwColor = ["interpolate", ["linear"], ["get", "v"], 0, "#3b0f70", 5, "#8c2981", 10, "#de4968", 15, "#fe9f6d", 22, "#fcfdbf"];
   const mwLayers = [["mw-sparse", 2, 0, 14.5], ["mw-coarse", 1, 14.5, 15.5], ["mw-fine", 0, 15.5, 24]];
   style.layers.push(
+    // Every other parcel in the state, fetched for what's on screen once zoomed in (statewide parcel map).
+    { id: "wp-fill", type: "fill", source: "wparcels", minzoom: WP_ZOOM, paint: { "fill-color": "#fff", "fill-opacity": 0 } },
+    { id: "wp-line", type: "line", source: "wparcels", minzoom: WP_ZOOM, paint: { "line-color": "#ffffff", "line-opacity": .45, "line-width": .9 } },
+    { id: "wp-pick", type: "line", source: "wparcels", filter: ["==", ["get", "id"], ""], paint: { "line-color": "#ffffff", "line-width": 3, "line-dasharray": [2, 1] } },
     { id: "parcel-fill", type: "fill", source: "parcels", paint: { "fill-color": "#FF6B1A", "fill-opacity": ["case", ["get", "ours"], .07, 0] } },
     { id: "parcel-line", type: "line", source: "parcels", filter: ["!", ["get", "ours"]], paint: { "line-color": "#ffffff", "line-opacity": .55, "line-width": 1 } },
     { id: "ours-line", type: "line", source: "parcels", filter: ["get", "ours"], paint: { "line-color": "#FF6B1A", "line-width": 3 } },
@@ -263,7 +269,7 @@
 
   const start = boxOf(prop());
   const map = new maplibregl.Map({
-    container: "map", style, minZoom: 12, maxZoom: 20, attributionControl: false,
+    container: "map", style, minZoom: 6, maxZoom: 20, attributionControl: false,     // 6: the whole state
     pitchWithRotate: false, touchPitch: false, renderWorldCopies: false, maxPitch: 72,   // two fingers turn the map; in 3D, slide up/down to tilt
     // With nothing to fit yet, the middle of Wisconsin (the repo is public: no property coordinates here).
     ...(start ? { bounds: start, fitBoundsOptions: { padding: 20, bearing: squareBearing() } } : { center: [-89.8, 44.6], zoom: 12 }),
@@ -306,6 +312,7 @@
     ready = true; applyLayers(); draw();
     if (prefs.threeD) threeD(true, false);
     if (mw.on) mwShow();                       // the wind that was on last time
+    wpRefresh();
   };
   map.on("style.load", whenStyled); map.on("styledata", whenStyled); map.once("load", whenStyled);
   whenStyled();
@@ -321,9 +328,9 @@
     const light = prefs.base === "topo" || prefs.base === "terrain";
     map.setPaintProperty("contours", "raster-brightness-min", light ? 0 : 1);
     map.setPaintProperty("contours", "raster-opacity", light ? .45 : .6);
-    map.setPaintProperty("parcel-line", "line-color", light ? "#2b2f2a" : "#ffffff");
-    map.setPaintProperty("parcel-pick", "line-color", light ? "#000000" : "#ffffff");
-    for (const id of ["parcel-fill", "parcel-line", "ours-line", "parcel-pick"]) map.setLayoutProperty(id, "visibility", prefs.show.parcels ? "visible" : "none");
+    for (const id of ["parcel-line", "wp-line"]) map.setPaintProperty(id, "line-color", light ? "#2b2f2a" : "#ffffff");
+    for (const id of ["parcel-pick", "wp-pick"]) map.setPaintProperty(id, "line-color", light ? "#000000" : "#ffffff");
+    for (const id of ["parcel-fill", "parcel-line", "ours-line", "parcel-pick", "wp-fill", "wp-line", "wp-pick"]) map.setLayoutProperty(id, "visibility", prefs.show.parcels ? "visible" : "none");
   }
 
   // ---------- markers ----------
@@ -365,6 +372,62 @@
     if (picked) pick(picked, true);
   }
   function meEl() { const el = document.createElement("div"); el.className = "m-me"; return el; }
+
+  // ---------- statewide parcels ----------
+  // The state's parcel map (the same service map_data.py uses), fetched for each zoom-14 square on screen
+  // (about a mile across) once zoomed in that far, and kept on the phone like the map pictures. Owner names
+  // and acres are public record; they show only when a parcel is tapped.
+  const WP_URL = "https://services3.arcgis.com/n6uYoouQZW75n5WI/ArcGIS/rest/services/Wisconsin_Statewide_Parcels_DB/FeatureServer/0/query";
+  const wpSquares = new Map(), wpById = new Map();          // "x/y" -> features; parcel id -> its properties
+  async function wpSquare(x, y) {
+    const key = `${x}/${y}`;
+    if (wpSquares.has(key)) return wpSquares.get(key);
+    const c = await tiles(), ck = tileKey("parcels", WP_ZOOM, x, y), hit = await c.match(ck);
+    let feats = null;
+    if (hit) feats = JSON.parse(await hit.text());
+    else if (navigator.onLine) {
+      const n = 2 ** WP_ZOOM, lon = i => i / n * 360 - 180, lat = j => Math.atan(Math.sinh(Math.PI * (1 - 2 * j / n))) * 180 / Math.PI;
+      const q = new URLSearchParams({ where: "1=1", geometry: `${lon(x)},${lat(y + 1)},${lon(x + 1)},${lat(y)}`, geometryType: "esriGeometryEnvelope",
+        inSR: 4326, spatialRel: "esriSpatialRelIntersects", outFields: "STATEID,OWNERNME1,OWNERNME2,GISACRES,DEEDACRES", outSR: 4326,
+        returnGeometry: "true", f: "geojson", geometryPrecision: 6, maxAllowableOffset: .00002, resultRecordCount: 2000 });
+      try {
+        const res = await gently("parcels", () => fetch(`${WP_URL}?${q}`));
+        const j = await res.json();
+        if (!j.features) throw new Error("no parcels");
+        feats = j.features.filter(f => f.geometry).map(f => ({ type: "Feature", geometry: f.geometry, properties: { id: f.properties.STATEID,
+          owner: (f.properties.OWNERNME1 || "").trim() || null, owner2: (f.properties.OWNERNME2 || "").trim() || null,
+          acres: Math.round((f.properties.GISACRES || f.properties.DEEDACRES || 0) * 10) / 10 || null } }));
+        c.put(ck, new Response(JSON.stringify(feats), { headers: { "content-type": "application/json" } })).catch(() => {});
+      } catch { return null; }                 // try again next time the map moves
+    }
+    if (feats) wpSquares.set(key, feats);
+    return feats;
+  }
+  let wpBusy = false, wpAgain = false;
+  async function wpRefresh() {
+    if (!ready || !prefs.show.parcels || map.getZoom() < WP_ZOOM - .01) return;
+    if (wpBusy) { wpAgain = true; return; }
+    wpBusy = true;
+    try {
+      const n = 2 ** WP_ZOOM, bd = map.getBounds();
+      const tx = lon => Math.floor((lon + 180) / 360 * n), ty = lat => Math.floor((1 - Math.asinh(Math.tan(lat * Math.PI / 180)) / Math.PI) / 2 * n);
+      const x0 = tx(bd.getWest()), x1 = tx(bd.getEast()), y0 = ty(bd.getNorth()), y1 = ty(bd.getSouth());
+      if ((x1 - x0 + 1) * (y1 - y0 + 1) > 30) return;              // a tilted view to the horizon: just the squares nearby
+      const jobs = [];
+      for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) jobs.push(wpSquare(x, y));
+      await Promise.all(jobs);
+      const ours = new Set((state.parcels || []).map(p => p.id)), seen = new Set(), feats = [];
+      for (const list of wpSquares.values()) for (const f of list) {
+        if (seen.has(f.properties.id) || ours.has(f.properties.id)) continue;
+        seen.add(f.properties.id); wpById.set(f.properties.id, f.properties); feats.push(f);
+      }
+      map.getSource("wparcels").setData(fc(feats));
+    } finally {
+      wpBusy = false;
+      if (wpAgain) { wpAgain = false; wpRefresh(); }
+    }
+  }
+  map.on("moveend", wpRefresh);
 
   // ---------- the bottom card ----------
   function openCard(html, cls = "") {
@@ -496,15 +559,17 @@
   // A tapped parcel is outlined, with a small info chip at the bottom; tap the chip for owner and acres.
   let parcelOn = null;
   function parcelInfo(id, open = false) {
-    const x = (state.parcels || []).find(p => p.id === id), chip = ui.querySelector(".m-pinfo");
+    const ourRow = (state.parcels || []).find(p => p.id === id);
+    const x = ourRow || wpById.get(id), chip = ui.querySelector(".m-pinfo");
     if (!x) return parcelOff();
     parcelOn = id;
-    map.setFilter("parcel-pick", ["==", ["get", "id"], id]);
+    map.setFilter("parcel-pick", ["==", ["get", "id"], ourRow ? id : ""]);
+    map.setFilter("wp-pick", ["==", ["get", "id"], ourRow ? "" : id]);
     chip.hidden = false;
     chip.classList.toggle("open", open);
-    chip.innerHTML = `<button type="button" class="m-pi-head"><span class="m-i">i</span>${x.ours ? "Our ground" : "Neighbor"}${x.acres ? ` · ${Math.round(x.acres)} ac` : ""}</button>` + (open ? `
+    chip.innerHTML = `<button type="button" class="m-pi-head"><span class="m-i">i</span>${ourRow ? (x.ours ? "Our ground" : "Neighbor") : "Parcel"}${x.acres ? ` · ${x.acres < 10 ? x.acres : Math.round(x.acres)} ac` : ""}</button>` + (open ? `
       <div class="m-pi-body"><b>${esc(x.owner || "Owner not listed")}</b>${x.owner2 ? `<br>${esc(x.owner2)}` : ""}<br>${x.acres ? `${x.acres} acres · ` : ""}Wisconsin parcel map
-      ${state.isAdmin ? `<br><button type="button" class="linkish" data-act="ours">${x.ours ? "Not ours" : "Mark as ours"}</button>` : ""}</div>` : "");
+      ${state.isAdmin && ourRow ? `<br><button type="button" class="linkish" data-act="ours">${x.ours ? "Not ours" : "Mark as ours"}</button>` : ""}</div>` : "");
     chip.querySelector(".m-pi-head").addEventListener("click", () => parcelInfo(id, !open));
     on(chip, { ours: async () => {
       const { error } = await sb.from("parcels").update({ ours: !x.ours }).eq("id", x.id);
@@ -515,7 +580,7 @@
   function parcelOff() {
     parcelOn = null;
     ui.querySelector(".m-pinfo").hidden = true;
-    if (ready) map.setFilter("parcel-pick", ["==", ["get", "id"], ""]);
+    if (ready) { map.setFilter("parcel-pick", ["==", ["get", "id"], ""]); map.setFilter("wp-pick", ["==", ["get", "id"], ""]); }
   }
 
   // Taps on the map itself: a parcel, or nothing (close the card).
@@ -524,7 +589,7 @@
     if (adding || picking) return;
     closeCard();
     if (mw.on) { parcelOff(); return mwReadout(e.lngLat); }
-    const hit = prefs.show.parcels && map.queryRenderedFeatures(e.point, { layers: ["parcel-fill"] })[0];
+    const hit = prefs.show.parcels && (map.queryRenderedFeatures(e.point, { layers: ["parcel-fill"] })[0] || map.queryRenderedFeatures(e.point, { layers: ["wp-fill"] })[0]);
     if (hit && hit.properties.id !== parcelOn) parcelInfo(hit.properties.id);
     else parcelOff();
   });
@@ -670,6 +735,7 @@
       const k = x.dataset.show;
       if (k === "contours") prefs.contours = !prefs.contours; else prefs.show[k] = !prefs.show[k];
       savePrefs(); applyLayers(); draw(); layersCard();
+      if (k === "parcels") wpRefresh();
     }));
     on(el, { download: () => download(prop()), forget: () => forget(prop()) });
     if (dl) showProgress();
