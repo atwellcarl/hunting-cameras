@@ -3663,7 +3663,9 @@ const netError = e => !navigator.onLine || /failed to fetch|networkerror|network
 let outbox = (() => { try { return JSON.parse(localStorage.getItem(OUTBOX)) || []; } catch { return []; } })();
 const mustQueue = () => !navigator.onLine || outbox.length > 0;          // keep changes in order behind anything waiting
 function saveOutbox() { try { localStorage.setItem(OUTBOX, JSON.stringify(outbox)); } catch {} renderHeader(); }
-function queueOp(op) { outbox.push(op); saveOutbox(); }
+// Anything waiting to send makes the phone hold onto this app's storage: without "persist", iPhone may clear
+// a site's data when it's short on space, and the unsent change would go with it.
+function queueOp(op) { outbox.push(op); saveOutbox(); navigator.storage?.persist?.().catch(() => {}); }
 const REMOVE_TABLE = { deleteSit: "sits", deleteEvent: "sit_events", deleteSpot: "spots", deleteCamSpot: "camera_spots" };
 async function removeRow(kind, id) {
   const table = REMOVE_TABLE[kind];
