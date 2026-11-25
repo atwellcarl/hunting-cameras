@@ -234,7 +234,7 @@
   }
   style.layers.unshift({ id: "bg", type: "background", paint: { "background-color": "#1b2118" } });
   const fc = features => ({ type: "FeatureCollection", features });
-  for (const id of ["parcels", "cones", "paths", "mwind"]) style.sources[id] = { type: "geojson", data: fc([]) };
+  for (const id of ["parcels", "cones", "paths", "mwind", "mflow"]) style.sources[id] = { type: "geojson", data: fc([]) };
   // Modeled wind arrows: every 160 m zoomed out, 80 m, then 40 m close in. Color is speed; the scale runs to
   // the run's fastest wind above the trees, so ground level reads as calmer on the same scale.
   const mwColor = ["interpolate", ["linear"], ["get", "v"], 0, "#3b0f70", 5, "#8c2981", 10, "#de4968", 15, "#fe9f6d", 22, "#fcfdbf"];
@@ -255,6 +255,10 @@
         paint: { "line-color": "#000", "line-opacity": .5, "line-width": 4 }, layout: { "line-cap": "round" } },
       { id, type: "line", source: "mwind", filter: ["==", ["get", "lvl"], lvl], minzoom: min, maxzoom: max,
         paint: { "line-color": mwColor, "line-width": 2 }, layout: { "line-cap": "round" } }]),
+    { id: "mflow-case", type: "line", source: "mflow", layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#000", "line-width": 4.6, "line-opacity": ["*", .45, ["get", "a"]] } },
+    { id: "mflow", type: "line", source: "mflow", layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": mwColor, "line-width": 2.8, "line-opacity": ["get", "a"] } },
   );
 
   const start = boxOf(prop());
@@ -743,7 +747,7 @@
   // wind lens direction, else the wind now at the property's weather town. WindNinja's wind is 20 ft above
   // the vegetation; ground level brings it to 5 ft with the same canopy sheltering as wind_model.py.
   const mw = { on: !!prefs.mwind, height: prefs.mwHeight || "ground", leafOff: prefs.mwLeafOff ?? [10, 11, 0, 1, 2, 3].includes(new Date().getMonth()),
-    pick: prefs.mwPick || null, shown: null, cells: null, readout: "" };
+    pick: prefs.mwPick || null, shown: null, cells: null, readout: "", style: prefs.mwStyle || "moving" };
   const windSlug = p => p.toLowerCase().replace(/\s+/g, "");
   const windKey = (p, f) => `https://tiles.buckbook.invalid/wind/${windSlug(p)}/${f}`;
   // Runs never change once made, so they come from the phone's copy; the index lists which runs exist and
@@ -790,14 +794,14 @@
   }
   async function mwShow() {
     const p = prop(), pill = ui.querySelector(".m-wpill");
-    if (!mw.on) { pill.hidden = true; if (ready) map.getSource("mwind").setData(fc([])); if (lens) { lens = null; draw(); } return; }
+    if (!mw.on) { pill.hidden = true; flowStop(true); if (ready) map.getSource("mwind").setData(fc([])); if (lens) { lens = null; draw(); } return; }
     pill.hidden = false;
     let idx;
     try { idx = await windFile(p, "index.json"); }
     catch { mw.shown = null; map.getSource("mwind")?.setData(fc([])); pill.textContent = `No modeled wind for ${p} on this phone yet`; return; }
     const want = mw.pick;
     if (!want) {
-      mw.shown = null; map.getSource("mwind")?.setData(fc([]));
+      mw.shown = null; flowStop(true); map.getSource("mwind")?.setData(fc([]));
       if (lens) { lens = null; draw(); }
       pill.innerHTML = "<b>Tap to pick a wind</b>";
       return;
@@ -806,7 +810,7 @@
     if (lens?.dir !== want.dir) { lens = { dir: want.dir }; draw(); }
     const same = idx.runs.filter(r => r.dir === want.dir);
     if (!same.length) {
-      mw.shown = null; map.getSource("mwind")?.setData(fc([]));
+      mw.shown = null; flowStop(true); map.getSource("mwind")?.setData(fc([]));
       pill.innerHTML = `Nothing here yet for a ${esc(want.dir)} wind (have ${esc([...new Set(idx.runs.map(r => r.dir))].join(", "))})<br><b>Tap to pick another</b>`;
       return;
     }
@@ -836,8 +840,84 @@
       if (c.row % 4 === 0 && c.col % 4 === 0) arrow(c, 120, 2);
     });
     map.getSource("mwind")?.setData(fc(feats));
+    mwArrowsShown();
+    flowSetup(cells, grid.cols);
     drawLens(trees());                          // scent cones follow the modeled wind at each tree
     mwPill();
+  }
+  // Moving wind: short streaks drift with the modeled wind, faster where it's stronger, colored like the
+  // arrows, lying on the terrain in 3D. About 350 at a time over what's on screen; each fades out after a
+  // moment and starts again somewhere else. They run only while the wind is on and the map is showing.
+  const flow = { cells: null, cols: 0, inv: null, o: null, parts: [], raf: null, last: 0 };
+  function flowSetup(cells, cols) {
+    flow.cells = cells; flow.cols = cols;
+    // Cell positions as an affine grid: lon/lat -> (column, row), from the first cell and its two neighbours.
+    const a = cells[0], b = cells[1], c = cells[cols];
+    const ux = b.lon - a.lon, uy = b.lat - a.lat, vx = c.lon - a.lon, vy = c.lat - a.lat, det = ux * vy - uy * vx;
+    flow.o = a; flow.inv = [vy / det, -vx / det, -uy / det, ux / det];
+    flow.parts = [];
+    flowStart();
+  }
+  function flowCell(lon, lat) {
+    if (!flow.cells) return null;
+    const dx = lon - flow.o.lon, dy = lat - flow.o.lat, [p, q, r, t] = flow.inv;
+    const col = Math.round(p * dx + q * dy), row = Math.round(r * dx + t * dy), rows = flow.cells.length / flow.cols;
+    if (col < 0 || row < 0 || col >= flow.cols || row >= rows) return null;
+    return flow.cells[row * flow.cols + col];
+  }
+  // New streaks are spread evenly over the screen, not the map: in 3D the view reaches to the horizon, and
+  // spreading over the map would put most of them miles off. The top sixth (sky when tilted) is skipped.
+  function flowSpawn() {
+    const cv = map.getCanvas(), W = cv.clientWidth, H = cv.clientHeight;
+    for (let tries = 0; tries < 8; tries++) {
+      const ll = map.unproject([Math.random() * W, H * (map.getPitch() > 20 ? .17 : 0) + Math.random() * H * (map.getPitch() > 20 ? .83 : 1)]);
+      if (ll && flowCell(ll.lng, ll.lat)) return { pts: [[ll.lng, ll.lat]], age: Math.floor(Math.random() * 20), life: 40 + Math.random() * 50 };
+    }
+    return null;
+  }
+  function flowStep() {
+    if (!flow.cells || !ready) return;
+    const z = map.getZoom(), lat0 = map.getCenter().lat;
+    const mpp = 40075016 * Math.cos(lat0 * Math.PI / 180) / (512 * 2 ** z);       // metres per screen pixel, at the centre
+    const want = Math.round(Math.min(450, 260 + (z - 13) * 40));
+    while (flow.parts.length < want) { const p = flowSpawn(); if (!p) break; flow.parts.push(p); }
+    flow.parts.length = Math.min(flow.parts.length, want);
+    const feats = [];
+    flow.parts = flow.parts.map(p => {
+      const [lon, lat] = p.pts[p.pts.length - 1], c = flowCell(lon, lat);
+      if (!c || p.age > p.life) return flowSpawn() || p;
+      const v = mw.height === "ground" ? c.ground : c.above;
+      // About 2.2 screen pixels a step at 12 mph, whatever the zoom; still air barely creeps.
+      const d = Math.max(v, .4) / 12 * 2.2 * mpp, t = (c.from + 180) * Math.PI / 180;
+      p.pts.push([lon + Math.sin(t) * d / (111320 * Math.cos(lat * Math.PI / 180)), lat + Math.cos(t) * d / 111320]);
+      if (p.pts.length > 12) p.pts.shift();           // a tail of about 25 px at 12 mph
+      p.age++;
+      if (p.pts.length > 1) feats.push({ type: "Feature", properties: { v: +v.toFixed(1), a: +Math.min(1, p.age / 8, (p.life - p.age) / 12).toFixed(2) },
+        geometry: { type: "LineString", coordinates: p.pts } });
+      return p;
+    });
+    map.getSource("mflow")?.setData(fc(feats));
+  }
+  function flowStart() {
+    if (flow.raf || !flow.cells || !mw.on || mw.style === "arrows" || view.hidden || document.hidden) return;
+    const tick = time => {
+      flow.raf = requestAnimationFrame(tick);
+      if (time - flow.last < 40) return;                    // about 25 steps a second
+      flow.last = time; flowStep();
+    };
+    flow.raf = requestAnimationFrame(tick);
+  }
+  function flowStop(clear = false) {
+    if (flow.raf) cancelAnimationFrame(flow.raf);
+    flow.raf = null;
+    if (clear) { flow.cells = null; flow.parts = []; if (ready) map.getSource("mflow")?.setData(fc([])); }
+  }
+  document.addEventListener("visibilitychange", () => document.hidden ? flowStop() : flowStart());
+  // Arrows show for the Arrows and Both styles; Moving shows only the streaks.
+  function mwArrowsShown() {
+    if (!ready) return;
+    const vis = mw.style === "moving" ? "none" : "visible";
+    mwLayers.forEach(([id]) => { map.setLayoutProperty(id, "visibility", vis); map.setLayoutProperty(id + "-case", "visibility", vis); });
   }
   function mwPill() {
     const pill = ui.querySelector(".m-wpill"), s = mw.shown;
@@ -900,6 +980,7 @@
       <p class="label">Arrows</p>
       <div class="chips m-kinds"><button type="button" data-h="ground" aria-pressed="${mw.height === "ground"}">Ground Level</button><button type="button" data-h="above" aria-pressed="${mw.height === "above"}">Above Canopy</button></div>
       <div class="chips m-kinds" style="margin-top:6px"><button type="button" data-leaf="on" aria-pressed="${!mw.leafOff}">Leaves On</button><button type="button" data-leaf="off" aria-pressed="${mw.leafOff}">Leaves Off</button></div>
+      <div class="chips m-kinds" style="margin-top:6px">${[["moving", "Moving"], ["arrows", "Arrows"], ["both", "Both"]].map(([v, l]) => `<button type="button" data-style="${v}" aria-pressed="${mw.style === v}">${l}</button>`).join("")}</div>
       <div class="m-legend"><i></i><span>0</span><span>22+ mph</span></div>
       <div id="mRank"></div>
       ${btnRow(b("off", "Turn Off"))}`, "m-mwind");
@@ -920,6 +1001,11 @@
       day = x.dataset.day; el.querySelectorAll("[data-day]").forEach(y => y.setAttribute("aria-pressed", String(y === x)));
     }));
     el.querySelectorAll("[data-h]").forEach(x => x.addEventListener("click", () => { mw.height = x.dataset.h; prefs.mwHeight = mw.height; savePrefs(); mwShow().then(() => mwCard()); }));
+    el.querySelectorAll("[data-style]").forEach(x => x.addEventListener("click", () => {
+      mw.style = x.dataset.style; prefs.mwStyle = mw.style; savePrefs(); mwArrowsShown();
+      if (mw.style === "arrows") { flowStop(); map.getSource("mflow")?.setData(fc([])); } else flowStart();
+      el.querySelectorAll("[data-style]").forEach(y => y.setAttribute("aria-pressed", String(y === x)));
+    }));
     el.querySelectorAll("[data-leaf]").forEach(x => x.addEventListener("click", () => { mw.leafOff = x.dataset.leaf === "off"; prefs.mwLeafOff = mw.leafOff; savePrefs(); mwShow().then(() => mwCard()); }));
     on(el, {
       apply: () => apply({ dir: mwDraft.dir, mph: mwDraft.mph }),
@@ -1070,11 +1156,12 @@
       requestAnimationFrame(() => map.resize());
       if (prop() !== shownProp) { shownProp = prop(); parcelOff(); mw.readout = ""; mwPinAt(null); if (mw.on) mwShow(); if (!picking) closeCard(); const bx = boxOf(prop()); if (bx) map.fitBounds(bx, { padding: 20, duration: 0, bearing: squareBearing() }); }
       draw();
+      flowStart();                              // the moving wind, if it was on
       if (window.mapFocus) { const f = window.mapFocus; window.mapFocus = null; map.jumpTo({ center: [f.lon, f.lat], zoom: Math.max(map.getZoom(), 17) }); }
       // GPS only while the map is open, so it doesn't drain the phone; quietly, without moving the map.
       if (navigator.permissions?.query) navigator.permissions.query({ name: "geolocation" }).then(r => { if (r.state === "granted") locate(false); }).catch(() => {});
     },
-    hide() { stopLocate(); if (picking) endPick(null); },
+    hide() { stopLocate(); flowStop(); if (picking) endPick(null); },
     // Where was a sit? Resolves to { lat, lon, label? }, or null if cancelled (index.html's Mark on Map).
     pick(opts = {}) {
       return new Promise(resolve => {
